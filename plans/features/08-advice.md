@@ -1,0 +1,69 @@
+# 08 — Feature: Advice
+
+## The problem it solves
+
+It's 7pm. There are 740 calories and 82g of protein left in the budget. Deciding what to eat that fits is genuinely hard, and it's the moment people give up and order something that blows the day.
+
+One button: **"What should I eat?"**
+
+## Trigger
+
+On-demand only. A button on the home screen. No background generation, no daily push.
+
+Reasoning: every call costs money, and most days the user doesn't need it. Background generation for every user every day does not pay for itself. Proactive suggestions are parked for v2 once there's evidence people want them.
+
+## Endpoint
+
+```
+POST /api/advice/    → suggestions
+```
+
+Server-side, the request assembles context — the client sends nothing but the request itself:
+
+* Remaining calories, protein, fiber for today
+* Time of day (a 3pm suggestion differs from a 9pm one)
+* What's already been eaten today, so it doesn't suggest chicken again
+* Dietary constraints from onboarding
+* Optionally, recent days' entries to avoid repetition
+
+**Deriving context server-side rather than trusting the client** is the right call: it's authoritative, it can't be spoofed to manipulate output, and the prompt stays in one place.
+
+## Output shape
+
+Three suggestions, each with:
+
+* What to eat, specifically enough to act on
+* Rough macros for the suggestion
+* One line on why it fits the remaining budget
+
+Strict JSON, parsed and validated. Malformed responses are rejected and retried once, not shown raw.
+
+Three is deliberate — one feels arbitrary, five is a menu to agonize over.
+
+## Prompt considerations
+
+* The model must respect the remaining budget as a real constraint, not a suggestion. Explicit instruction plus post-validation that the suggested macros actually fit
+* Suggestions should be realistic and accessible — food a person can actually obtain and prepare tonight
+* If remaining protein is high and calories are low, that's a genuinely hard constraint and the model should say so rather than inventing something implausible
+* If the user is already well over on calories, the honest answer may be "you're over; here's a light option or stop here." An advice feature that never says that isn't useful
+
+## Cost control
+
+This endpoint plus photo analysis are the two money-spending paths in the app.
+
+* Count against the per-user monthly AI quota (see production hardening)
+* Rate limit per user — a handful of calls per day is plenty
+* Cache the response for a short window keyed on remaining macros, so double-taps don't double-charge
+
+## UI
+
+Bottom sheet or dedicated screen. Loading state matters — this takes a few seconds.
+
+Each suggestion should be tappable to pre-fill a manual entry, so acting on advice is one step rather than a re-type. Nice-to-have, not v1-blocking.
+
+## What you're learning here
+
+* Prompt engineering with real constraints and validation of the result against them
+* Server-side context assembly, and why it beats client-supplied context
+* Response caching and cost control on expensive endpoints
+* Designing an AI feature that degrades honestly instead of confidently making things up

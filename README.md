@@ -1,159 +1,85 @@
-# Turborepo starter
+# Macros Tracker
 
-This Turborepo starter is maintained by the Turborepo core team.
+A photo-based macro tracker. Snap or upload a photo of food, add a short
+description, an AI estimates calories / protein / fiber, and the entry persists
+against your daily targets — with a home dashboard, streaks, and an on-demand
+"what should I eat?" suggestion.
 
-## Using this example
+This is a **learning project** (levelling up React Native + Django end to end).
+The full plan lives in [`plans/`](./plans); start with
+[`plans/00-app-overview.md`](./plans/00-app-overview.md).
 
-Run the following command:
+## Repo layout
 
-```sh
-npx create-turbo@latest
+```
+macros-tracker/
+├── apps/
+│   ├── api/          # Django project (added in MAC-13)
+│   └── mobile/       # Expo / React Native app
+├── packages/
+│   └── api-client/   # generated React Query hooks + types — do NOT hand-edit
+├── plans/            # mirrors of the Linear project docs
+├── turbo.json        # Turborepo task pipeline
+└── package.json      # pnpm workspace root
 ```
 
-## What's inside?
+The load-bearing architectural decision is the typed API contract:
+Django serializers → drf-spectacular → `openapi.json` → Orval → typed React
+Query hooks consumed by the mobile app. See
+[`plans/01-architecture.md`](./plans/01-architecture.md).
 
-This Turborepo includes the following packages/apps:
+## Prerequisites
 
-### Apps and Packages
+- **Node** — the version pinned in [`.nvmrc`](./.nvmrc) (Node 22 LTS). Use
+  [nvm](https://github.com/nvm-sh/nvm), not Homebrew, so it doesn't fight your
+  PATH:
+  ```bash
+  nvm install   # reads .nvmrc
+  nvm use
+  ```
+- **pnpm** — managed via Corepack (pinned by the `packageManager` field in
+  `package.json`, no separate install needed):
+  ```bash
+  corepack enable
+  ```
+- **git** and, for repo/CI tasks, the **GitHub CLI** (`gh`).
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+Python 3.12+ and Docker are only needed once the Django app lands (MAC-13).
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## Setup from a clean clone
 
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```bash
+git clone git@github.com:DeProdigy/macros-tracker.git
+cd macros-tracker
+nvm use                 # match the pinned Node version
+corepack enable         # activate the pinned pnpm
+pnpm install            # install the workspace
+cp .env.example .env    # then fill in real values
 ```
 
-Without global `turbo`, use your package manager:
+## Common commands
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
-```
+All tasks are orchestrated by Turborepo from the repo root:
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+| Command             | What it does                             |
+| ------------------- | ---------------------------------------- |
+| `pnpm build`        | Build all apps and packages              |
+| `pnpm dev`          | Run all apps in dev mode                 |
+| `pnpm lint`         | ESLint across all packages               |
+| `pnpm check-types`  | TypeScript typecheck across all packages |
+| `pnpm test`         | Run all test suites                      |
+| `pnpm format`       | Format with Prettier                     |
+| `pnpm format:check` | Check formatting without writing         |
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+The repo is a skeleton — most pipelines are wired but have nothing to run until
+their apps are scaffolded in later tickets.
 
-```sh
-turbo build --filter=docs
-```
+## Tooling notes
 
-Without global `turbo`:
-
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+- **pnpm** over npm/yarn: best Turborepo workspace handling, and strict about
+  phantom dependencies.
+- If `pnpm install` rejects a just-published package on a
+  `minimumReleaseAge` supply-chain check, the dependency is newer than the
+  policy window — pin the previous, aged release rather than disabling the guard.
+- Everything under `packages/api-client/src` is generated output. Never edit it
+  by hand; regenerate it after any API change.

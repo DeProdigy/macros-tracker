@@ -36,3 +36,38 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Python (apps/api — see MAC-13)
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.python-version
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+*.sqlite3
+
+# Expo / React Native (apps/mobile)
+.expo/
+.expo-shared/
+web-build/
+*.orig.*
+# Native build output from expo prebuild — regenerated, not committed
+/apps/mobile/ios/
+/apps/mobile/android/
+# Signing material — never commit
+*.jks
+*.p8
+*.p12
+*.keystore
+*.mobileprovision
+
+# Env files — .env.example is committed, real .env files are not
+.env
+.env.*
+!.env.example

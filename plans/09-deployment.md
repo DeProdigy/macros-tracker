@@ -1,0 +1,106 @@
+# 09 — Deployment & Production Ops
+
+## Principle: deploy early, deploy always
+
+The walking skeleton ships to production around the sixth ticket — a health endpoint on Railway with a real Postgres, and an Expo build that talks to it. Every feature after that lands in a real environment.
+
+Deploying at the end of a project is how projects discover, at the end, that they don't deploy. Front-loading it also front-loads the learning that was an explicit goal here.
+
+## Backend hosting — Railway
+
+Why Railway over AWS for v1: managed Postgres, deploy on git push, environment variables in a UI, logs and metrics without configuration. AWS is more powerful and would consume weeks that were meant for Django and React Native. The abstraction can be traded down later if there's a reason.
+
+Setup:
+
+* Django service + Postgres service in one project
+* Auto-deploy on merge to `main`
+* Migrations run on deploy via a release command
+* Gunicorn/uvicorn as the app server; not `runserver`
+* Health check endpoint for the platform to probe
+
+## Object storage — Cloudflare R2
+
+S3-compatible, and no egress fees — which matters for an image-heavy app where every dashboard view pulls thumbnails.
+
+* Bucket private by default; access via presigned URLs only
+* Presigned PUT for uploads, presigned GET for reads
+* Lifecycle rule to purge orphaned objects
+* Deleting an entry deletes its object
+
+`django-storages` with the S3 backend pointed at R2's endpoint works directly.
+
+## Secrets and configuration
+
+* `django-environ` or equivalent; **no secrets in the repo, ever**
+* Distinct values per environment
+* `DEBUG = False` in production, full stop
+* `ALLOWED_HOSTS` set explicitly
+* `SECRET_KEY` generated per environment, never the dev default
+* Local dev uses `.env`, gitignored, with a committed `.env.example` documenting every required key
+
+The `.env.example` file is small and saves real time on every fresh setup.
+
+## Rate limiting
+
+DRF throttling, tighter on the endpoints that cost money:
+
+| Endpoint | Limit |
+| -- | -- |
+| Auth (login, register, reset) | Strict, per IP and per email |
+| `/api/entries/analyze/` | Per user, low ceiling |
+| `/api/advice/` | Per user, low ceiling |
+| Everything else | Generous default |
+
+## AI quotas
+
+The unit-economics problem: every photo analysis is a paid vision call. One user with a script can burn the API budget.
+
+* `ai_calls_this_month` counter on the user, reset monthly
+* Hard ceiling per user; beyond it, a clear message rather than a silent failure
+* The ceiling should be generous enough that normal use never touches it and abuse stops fast
+* Log spend per call so real cost per active user is measurable
+
+Knowing the actual cost per user is what makes any future pricing conversation possible.
+
+## Observability
+
+* **Sentry** on both Django and the Expo app — errors from TestFlight users are otherwise invisible
+* **Structured logging** with request IDs; JSON output in production
+* Log every AI call: latency, token count, cost, and whether the user subsequently edited the estimate. That last signal is the only honest measure of how good the estimates are
+* Railway's built-in metrics for the basics
+
+## Backups
+
+Railway's managed Postgres provides automated backups. Verify the retention window and **actually perform a restore once** — an untested backup is a hypothesis, not a backup.
+
+## Privacy and compliance
+
+Required before store submission:
+
+* **Privacy policy**, publicly hosted. The app handles photos and health-adjacent data, so this is not boilerplate
+* **Apple privacy nutrition labels** completed accurately in App Store Connect
+* Clear disclosure that food photos are sent to a third-party AI provider — users deserve to know, and reviewers will look
+* Account deletion path (see the auth doc)
+* Data export is not required for v1 but is worth considering
+
+## Mobile release pipeline
+
+* **EAS Build** for iOS builds
+* **EAS Submit** to push to App Store Connect
+* **TestFlight** as the real v1 milestone — the author plus a handful of friends using it daily
+* App Store submission is a separate later epic: screenshots, description, review guidelines, and the near-certainty of at least one rejection
+
+Do not treat store submission as a final ticket. It's a project.
+
+## Environment parity
+
+Local uses Docker Compose for Postgres so the database version matches production. The Django app itself runs natively for fast reloads — full containerization locally buys little for a solo developer and costs iteration speed.
+
+## What you're learning here
+
+* Production Django configuration and the settings that actually matter
+* Managed platform deployment and release commands
+* Object storage, presigned URLs, and lifecycle policies
+* Rate limiting and quota design as a cost-control discipline
+* Observability, and instrumenting the metrics that answer real questions
+* The full iOS release pipeline end to end

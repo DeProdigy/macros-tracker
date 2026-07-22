@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+.turbo
+.expo
+pnpm-lock.yaml
+# Generated output — never hand-formatted (see plans/01-architecture.md)
+packages/api-client/src
+# Verbatim mirrors of the Linear plan docs — kept byte-for-byte
+plans
+CLAUDE.md
