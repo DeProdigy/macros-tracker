@@ -69,12 +69,29 @@ All tasks are orchestrated by Turborepo from the repo root:
 | `pnpm dev`          | Run all apps in dev mode                 |
 | `pnpm lint`         | ESLint across all packages               |
 | `pnpm check-types`  | TypeScript typecheck across all packages |
-| `pnpm test`         | Run all test suites                      |
+| `pnpm test`         | Run **JS** test suites (mobile jest)     |
 | `pnpm format`       | Format with Prettier                     |
 | `pnpm format:check` | Check formatting without writing         |
 
-The repo is a skeleton — most pipelines are wired but have nothing to run until
-their apps are scaffolded in later tickets.
+## Testing
+
+There are two test suites, run separately:
+
+| Suite                    | Where         | Command                    | Notes                                             |
+| ------------------------ | ------------- | -------------------------- | ------------------------------------------------- |
+| **Mobile** (Jest + RNTL) | `apps/mobile` | `pnpm test` (or from root) | runs in Node, no Metro/device needed              |
+| **Backend** (pytest)     | `apps/api`    | `uv run pytest`            | needs Docker Postgres up (`docker compose up -d`) |
+
+Root-level `pnpm test` covers the **JS** packages only (turbo doesn't run the
+Python suite — the Django app isn't a pnpm workspace). So "everything" is:
+
+```bash
+pnpm test                       # mobile
+(cd apps/api && uv run pytest)  # backend
+```
+
+See [`apps/mobile/README.md`](./apps/mobile/README.md) and
+[`apps/api/README.md`](./apps/api/README.md) for per-app details.
 
 ## Tooling notes
 

@@ -1,56 +1,67 @@
-# Welcome to your Expo app 👋
+# Mobile (Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The React Native app — Expo (managed workflow), **expo-router** for file-based
+navigation, TypeScript strict. Talks to the Django API in `apps/api`.
 
-## Get started
+Pinned to **Expo SDK 56** (the version the App Store Expo Go currently supports;
+`create-expo-app` scaffolded SDK 57, which Expo Go rejected).
 
-1. Install dependencies
+## Prerequisites
 
-   ```bash
-   npm install
-   ```
+- **Node** (via [nvm](https://github.com/nvm-sh/nvm)) + **pnpm** (via Corepack) — see the repo root README.
+- **[Expo Go](https://expo.dev/go)** installed on your phone (App Store).
+- **watchman** recommended (`brew install watchman`) so Metro sees file changes.
+- Phone and Mac on the **same Wi-Fi** for Metro to connect.
 
-2. Start the app
+Docker/Postgres are **not** needed for the mobile app (that's the backend).
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Run it
 
 ```bash
-npm run reset-project
+pnpm install          # from the repo root (installs the whole workspace)
+cd apps/mobile
+pnpm dev              # start Metro (alias for `expo start`) -> scan the QR with Expo Go
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+You should see the "Macros Tracker" home screen. Edit files under `app/` — routing
+is folder structure (`app/index.tsx` -> `/`, `app/(auth)/login.tsx` -> `/login`).
 
-### Other setup steps
+## Layout
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```
+app/            expo-router routes (_layout, index, (auth)/ group)
+components/     shared components
+hooks/          shared hooks
+lib/            non-UI helpers (query-client.ts = the React Query client)
+app.config.ts   dynamic config; reads EXPO_PUBLIC_API_URL into extra.apiUrl
+app.json        static Expo config
+metro.config.js monorepo module resolution
+```
 
-## Learn more
+Config comes from the environment: set `EXPO_PUBLIC_API_URL` (see the repo-root
+`.env.example`). Anything with the `EXPO_PUBLIC_` prefix is inlined into the app
+bundle — **never put a secret there.**
 
-To learn more about developing your project with Expo, look at the following resources:
+## Tests (Jest + React Native Testing Library)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Runs in Node — **no Metro or device needed.**
 
-## Join the community
+```bash
+pnpm test                 # run once (jest)
+pnpm test -- --watch      # re-run on change
+pnpm test -- smoke        # only files matching "smoke"
+pnpm test -- -t "renders" # only tests whose name matches "renders"
+```
 
-Join our community of developers creating universal apps.
+Test files live in `__tests__/` (or `*.test.tsx`). The stack is jest-expo 56 +
+jest 29 + RNTL 13 + react-test-renderer, matched to Expo SDK 56.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Lint & types
+
+```bash
+pnpm lint           # eslint (inherits the root flat config)
+pnpm check-types    # tsc --noEmit
+```
+
+All four (`dev`/`lint`/`check-types`/`test`) also run from the repo root via
+Turborepo (e.g. `pnpm lint` at the root includes this package).
