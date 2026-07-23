@@ -1,0 +1,61 @@
+[project]
+name = "api"
+version = "0.1.0"
+description = "Macros Tracker Django API"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=6.0.7",
+    "django-environ>=0.14.0",
+    "djangorestframework>=3.17.1",
+    "psycopg[binary]>=3.3.4",
+]
+
+[dependency-groups]
+dev = [
+    "django-stubs>=6.0.7",
+    "djangorestframework-stubs>=3.17.0",
+    "mypy>=2.3.0",
+    "pytest>=9.1.1",
+    "pytest-django>=4.12.0",
+    "ruff>=0.15.22",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+# Generated migrations are not hand-maintained code.
+extend-exclude = ["**/migrations/**"]
+
+[tool.ruff.lint]
+# E/F: pycodestyle + pyflakes (the basics). I: import sorting (isort).
+# UP: pyupgrade (modern syntax). B: bugbear (likely bugs). DJ: Django-specific.
+select = ["E", "F", "I", "UP", "B", "DJ"]
+
+[tool.mypy]
+python_version = "3.12"
+# The Django plugin teaches mypy about model fields, managers, querysets, etc.;
+# the DRF plugin does the same for serializers/views.
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+# Only check our code (not the venv); migrations are generated.
+files = ["accounts", "config", "manage.py"]
+exclude = ['/migrations/']
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+[tool.django-stubs]
+# The plugin loads Django with these settings to introspect your models.
+django_settings_module = "config.settings.local"
+
+# django-environ ships no type stubs; don't error on the missing import.
+[[tool.mypy.overrides]]
+module = ["environ.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# pytest-django loads this settings module and manages a rolled-back test DB.
+DJANGO_SETTINGS_MODULE = "config.settings.local"
+# Reuse the test database between runs for speed (drop it with --create-db).
+addopts = "--reuse-db"
