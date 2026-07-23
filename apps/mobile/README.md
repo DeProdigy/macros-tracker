@@ -3,13 +3,18 @@
 The React Native app — Expo (managed workflow), **expo-router** for file-based
 navigation, TypeScript strict. Talks to the Django API in `apps/api`.
 
-Pinned to **Expo SDK 56** (the version the App Store Expo Go currently supports;
-`create-expo-app` scaffolded SDK 57, which Expo Go rejected).
+On **Expo SDK 57**. Track the latest SDK rather than pinning back to match an
+older Expo Go: iOS Expo Go runs only the newest SDK, so the project and a
+current Expo Go stay aligned by both moving forward. MAC-20 replaces Expo Go
+with an EAS dev build, which embeds its own runtime and drops the constraint.
 
 ## Prerequisites
 
 - **Node** (via [nvm](https://github.com/nvm-sh/nvm)) + **pnpm** (via Corepack) — see the repo root README.
-- **[Expo Go](https://expo.dev/go)** installed on your phone (App Store).
+- **[Expo Go](https://expo.dev/go)** installed on your phone (App Store), and
+  **up to date** — check the supported SDK under Settings in the app. An older
+  Expo Go rejects the project before it loads any JS, which reads like a
+  connection failure but is a version mismatch.
 - **watchman** recommended (`brew install watchman`) so Metro sees file changes.
 - Phone and Mac on the **same Wi-Fi** for Metro to connect.
 
@@ -53,8 +58,8 @@ pnpm test -- smoke        # only files matching "smoke"
 pnpm test -- -t "renders" # only tests whose name matches "renders"
 ```
 
-Test files live in `__tests__/` (or `*.test.tsx`). The stack is jest-expo 56 +
-jest 29 + RNTL 13 + react-test-renderer, matched to Expo SDK 56.
+Test files live in `__tests__/` (or `*.test.tsx`). The stack is jest-expo 57 +
+jest 29 + RNTL 13 + react-test-renderer, matched to Expo SDK 57.
 
 ## Lint & types
 
