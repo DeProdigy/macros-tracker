@@ -45,9 +45,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "eslint .",
-    "check-types": "tsc --noEmit",
-    "test": "jest --passWithNoTests"
+    "check-types": "tsc --noEmit"
   },
+  "//jest": "jest + jest-expo + RNTL are installed and preset-configured below, but the jest-expo preset currently fails to initialize under the pnpm-hoisted monorepo (expo winter runtime 'import outside scope'). Re-add the `test` script + a smoke test once that's resolved.",
   "jest": {
     "preset": "jest-expo"
   },
