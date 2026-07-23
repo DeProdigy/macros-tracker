@@ -1,3 +1,6 @@
 packages:
   - "apps/*"
   - "packages/*"
+allowBuilds:
+  # Native module resolver pulled in transitively by the JS toolchain.
+  unrs-resolver: true
