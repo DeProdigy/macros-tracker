@@ -4,3 +4,25 @@ packages:
 allowBuilds:
   # Native module resolver pulled in transitively by the JS toolchain.
   unrs-resolver: true
+minimumReleaseAgeExclude:
+  - '@expo/cli@56.1.21'
+  - '@expo/config-plugins@56.0.14'
+  - '@expo/config@56.0.13'
+  - '@expo/fingerprint@0.19.9'
+  - '@expo/image-utils@0.10.4'
+  - '@expo/metro-config@56.0.18'
+  - '@expo/prebuild-config@56.0.21'
+  - '@expo/require-utils@56.1.6'
+  - '@expo/router-server@56.0.17'
+  - babel-preset-expo@56.0.18
+  - expo-asset@56.0.21
+  - expo-constants@56.0.22
+  - expo-modules-autolinking@56.0.21
+  - expo-modules-core@56.0.22
+  - expo@56.0.17
+  - '@expo/metro-runtime@56.0.18'
+  - '@expo/ui@56.0.23'
+  - expo-linking@56.0.16
+  - expo-router@56.2.16
+  - expo-splash-screen@56.0.14
+  - expo-web-browser@56.0.6
