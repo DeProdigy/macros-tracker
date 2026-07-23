@@ -9,7 +9,8 @@ this file enforces is in
 
 ---
 
-This is a learning project. The owner is levelling up React Native and Django.
+This is a learning project. The owner is levelling up React Native and Django,
+coming from a Ruby on Rails background.
 
 For tickets labeled `you-implement`:
 - Do NOT write implementation code unless explicitly asked
@@ -20,6 +21,9 @@ For tickets labeled `auto-ok`:
 - Implement freely
 
 Always:
+- When explaining or introducing any Django, DRF, React Native, TypeScript, or
+  tooling concept, give the Ruby on Rails (or Rails-ecosystem) equivalent so new
+  concepts map onto what the owner already knows
 - Regenerate packages/api-client after any API change
 - Explicit DRF serializers, never fields = "__all__"
 - Business logic in services.py, thin views
