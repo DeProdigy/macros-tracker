@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     # Local apps
-    # "accounts",  # uncomment once the accounts app + User model exist (MAC-13)
+    "accounts",
 ]
 
 MIDDLEWARE = [
@@ -90,9 +90,8 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# Custom user model — REQUIRED before the first migration is ever run.
-# Uncomment once accounts.User exists (email as USERNAME_FIELD; see plan doc 02).
-# AUTH_USER_MODEL = "accounts.User"
+# Custom user model — set before the first migration is ever run.
+AUTH_USER_MODEL = "accounts.User"
 
 
 # Internationalization — everything stored in UTC (see plan doc 02).
