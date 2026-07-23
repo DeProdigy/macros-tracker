@@ -10,7 +10,8 @@
 services:
   db:
     image: postgres:16
-    container_name: macros-tracker-db
+    # No container_name: let Compose project-namespace it (avoids collisions
+    # across multiple checkouts/worktrees). Reference it by service: `db`.
     # These match the DATABASE_URL default in apps/api/config/settings/base.py,
     # so `migrate` works with no extra configuration.
     environment:

@@ -23,7 +23,10 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
-# HSTS — start conservative and raise once you've confirmed HTTPS everywhere.
-SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365  # 1 year
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+# HSTS is sticky and hard to roll back (browsers cache it; preload is a pain to
+# undo; includeSubDomains forces HTTPS on every subdomain). So it ships OFF and
+# is ramped up deliberately via env: short max-age → confirm → raise to a year →
+# only then includeSubDomains → preload.
+SECURE_HSTS_SECONDS = env.int("DJANGO_SECURE_HSTS_SECONDS", default=0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", default=False)
+SECURE_HSTS_PRELOAD = env.bool("DJANGO_SECURE_HSTS_PRELOAD", default=False)
