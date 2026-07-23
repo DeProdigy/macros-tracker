@@ -6,7 +6,7 @@ from django.contrib.auth.models import (
 from django.db import models
 
 
-class UserManager(BaseUserManager):
+class UserManager(BaseUserManager["User"]):
     """Manager for the custom User.
 
     Django's default manager assumes a ``username`` field, so a custom user
@@ -53,9 +53,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_email_verified = models.BooleanField(default=False)
     # Apple's stable subject claim. null so non-Apple users don't collide on the
     # unique constraint (in Postgres, NULLs are never equal to each other).
-    apple_user_id = models.CharField(
-        max_length=255, unique=True, null=True, blank=True
-    )
+    apple_user_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     # IANA timezone name (e.g. "America/New_York"), never a numeric offset —
     # offsets break across DST.
     timezone = models.CharField(max_length=64, default="UTC")

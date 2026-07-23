@@ -1,0 +1,31 @@
+# Local development database.
+#
+# Postgres runs in Docker; the Django app runs natively (see plans/01-architecture.md).
+# The version is pinned to match Railway's managed Postgres in production.
+#
+#   docker compose up -d        # start the database
+#   docker compose down         # stop it (data is kept in the pgdata volume)
+#   docker compose down -v      # stop AND wipe the volume — clean slate
+
+services:
+  db:
+    image: postgres:16
+    container_name: macros-tracker-db
+    # These match the DATABASE_URL default in apps/api/config/settings/base.py,
+    # so `migrate` works with no extra configuration.
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: macros_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d macros_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

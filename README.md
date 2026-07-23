@@ -44,7 +44,9 @@ Query hooks consumed by the mobile app. See
   ```
 - **git** and, for repo/CI tasks, the **GitHub CLI** (`gh`).
 
-Python 3.12+ and Docker are only needed once the Django app lands (MAC-13).
+The backend (`apps/api`) additionally needs **Python 3.12+** (via [uv](https://docs.astral.sh/uv/))
+and **Docker** for its Postgres database — see [`apps/api/README.md`](./apps/api/README.md)
+for the backend quickstart (`docker compose up`, migrations, dev server).
 
 ## Setup from a clean clone
 

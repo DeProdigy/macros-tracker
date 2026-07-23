@@ -3,7 +3,9 @@ dist
 build
 .turbo
 .expo
+.venv
 pnpm-lock.yaml
+uv.lock
 # Generated output — never hand-formatted (see plans/01-architecture.md)
 packages/api-client/src
 # Verbatim mirrors of the Linear plan docs — kept byte-for-byte
