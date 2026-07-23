@@ -3,6 +3,7 @@ dist
 build
 .turbo
 .expo
+expo-env.d.ts
 .venv
 pnpm-lock.yaml
 uv.lock
