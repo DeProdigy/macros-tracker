@@ -4,6 +4,10 @@ packages:
 allowBuilds:
   # Native module resolver pulled in transitively by the JS toolchain.
   unrs-resolver: true
+  # Orval loads orval.config.ts through esbuild, which needs its native binary.
+  esbuild: true
+  # Analytics-only postinstall pulled in transitively; nothing depends on it.
+  '@scarf/scarf': false
 minimumReleaseAgeExclude:
   - '@expo/cli@56.1.21'
   - '@expo/config-plugins@56.0.14'

@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "DOM"],
+    "types": []
+  },
+  "include": ["index.ts", "http-client.ts", "env.d.ts", "orval.config.ts", "src/**/*.ts"]
+}

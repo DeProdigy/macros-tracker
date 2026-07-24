@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party
     "rest_framework",
+    "drf_spectacular",
     # Local apps
     "accounts",
 ]
@@ -119,4 +120,30 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
     ],
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
+    # drf-spectacular introspects views/serializers to emit the OpenAPI schema
+    # that packages/api-client generates its typed hooks from.
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# OpenAPI schema generation (drf-spectacular).
+#
+# The emitted schema is the contract the mobile client is generated from, so
+# these settings are chosen for generator-friendliness, not human readability.
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Macros Tracker API",
+    "DESCRIPTION": "Typed contract consumed by apps/mobile via packages/api-client.",
+    "VERSION": "0.1.0",
+    # Split request and response into separate components. Without this a single
+    # schema serves both, which forces every field optional — technically true,
+    # but it makes the generated types accept anything and catch nothing.
+    "COMPONENT_SPLIT_REQUEST": True,
+    # The schema is served from its own endpoint; keep it out of the API surface.
+    "SERVE_INCLUDE_SCHEMA": False,
+    # Strip the routing prefix so generated hook names aren't prefixed with
+    # ApiV1... — operationIds are set explicitly per view via @extend_schema.
+    "SCHEMA_PATH_PREFIX": "/api",
+    # Deterministic ordering. The generated client is committed, so unstable
+    # output would show up as phantom diffs and break the MAC-16 drift check.
+    "SORT_OPERATIONS": True,
+    "SORT_OPERATION_PARAMETERS": True,
 }

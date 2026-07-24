@@ -20,6 +20,14 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "generate:api": {
+      // @macros/api-client depends on `api`, so ^generate:api runs Django's
+      // schema emission before Orval consumes the resulting openapi.json.
+      "dependsOn": ["^generate:api"],
+      // Never cached. A stale hit would serve an out-of-date client, which is
+      // precisely the drift this pipeline exists to prevent.
+      "cache": false
     }
   }
 }
