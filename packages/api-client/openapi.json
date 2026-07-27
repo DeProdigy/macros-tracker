@@ -1,0 +1,74 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Macros Tracker API",
+        "version": "0.1.0",
+        "description": "Typed contract consumed by apps/mobile via packages/api-client."
+    },
+    "paths": {
+        "/api/ping/": {
+            "get": {
+                "operationId": "ping",
+                "description": "Returns a small fixed-shape payload confirming the API is reachable and able to serialize a response. Requires no authentication and touches no database, so it is safe to call from an unauthenticated client and as a container health check.",
+                "summary": "API liveness probe",
+                "tags": [
+                    "system"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Ping"
+                                },
+                                "examples": {
+                                    "Healthy": {
+                                        "value": {
+                                            "status": "ok",
+                                            "version": "0.1.0",
+                                            "timestamp": "2026-07-23T12:34:56Z"
+                                        },
+                                        "summary": "Normal response",
+                                        "description": "What a reachable API returns."
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Ping": {
+                "type": "object",
+                "description": "Response body for the API liveness probe.\n\nFields are declared explicitly (never `fields = \"__all__\"`) so the emitted\nOpenAPI schema is precise enough to generate useful client types from.",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "description": "Always `ok` when the API is reachable."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "API version string, mirroring SPECTACULAR_SETTINGS['VERSION']."
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Server time in UTC (ISO 8601) when the request was handled."
+                    }
+                },
+                "required": [
+                    "status",
+                    "timestamp",
+                    "version"
+                ]
+            }
+        }
+    }
+}

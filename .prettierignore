@@ -9,6 +9,9 @@ pnpm-lock.yaml
 uv.lock
 # Generated output — never hand-formatted (see plans/01-architecture.md)
 packages/api-client/src
+# Emitted verbatim by `manage.py spectacular`; reformatting it here would fight
+# the generator and show up as drift in CI (MAC-16).
+packages/api-client/openapi.json
 # Verbatim mirrors of the Linear plan docs — kept byte-for-byte
 plans
 CLAUDE.md

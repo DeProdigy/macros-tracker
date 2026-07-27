@@ -1,0 +1,24 @@
+{
+  "name": "@macros/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generated typed API client. Do not hand-edit src/ — it is build output.",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "generate:api": "orval --config orval.config.ts",
+    "lint": "eslint .",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.101.4"
+  },
+  "devDependencies": {
+    "api": "workspace:*",
+    "orval": "^7.13.2",
+    "typescript": "~6.0.3"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turborepo shim for the Django API. Python deps live in pyproject.toml; this file exists so the schema-generation step is a node in the Turbo task graph.",
+  "scripts": {
+    "generate:api": "uv run python manage.py spectacular --format openapi-json --fail-on-warn --file ../../packages/api-client/openapi.json"
+  }
+}
