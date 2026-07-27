@@ -47,6 +47,26 @@ Config comes from the environment: set `EXPO_PUBLIC_API_URL` (see the repo-root
 `.env.example`). Anything with the `EXPO_PUBLIC_` prefix is inlined into the app
 bundle — **never put a secret there.**
 
+### Pointing the app at Django from a physical device
+
+`EXPO_PUBLIC_API_URL` defaults to `http://localhost:8000`, which is correct for
+the iOS simulator and web, but **wrong on a real phone**: there `localhost` is
+the phone itself, not the Mac running Django. The home screen's "API status"
+card reads `unreachable` and nothing else explains why.
+
+Set it to your Mac's LAN IP (`ipconfig getifaddr en0`):
+
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.1.x:8000 pnpm dev
+```
+
+Two things have to agree for that to work:
+
+- Django must listen beyond loopback: `uv run python manage.py runserver 0.0.0.0:8000`.
+- That IP must be in `ALLOWED_HOSTS` in `apps/api/config/settings/local.py`,
+  which lists only `localhost`, `127.0.0.1` and `0.0.0.0` by default. Django
+  answers a missing host with `DisallowedHost`, not a connection error.
+
 ## Tests (Jest + React Native Testing Library)
 
 Runs in Node — **no Metro or device needed.**

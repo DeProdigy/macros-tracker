@@ -8,6 +8,7 @@ anything with real logic belongs in the owning app's `services.py`.
 from datetime import UTC, datetime
 from typing import Any
 
+from django.conf import settings
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -16,6 +17,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from config.serializers import PingSerializer
+
+# Single source of truth for the API version. SPECTACULAR_SETTINGS already owns
+# it (it stamps the emitted OpenAPI document), so the endpoint reads it from
+# there rather than repeating the literal. Duplicating it would let the response
+# and the schema drift apart on the first version bump, silently — the response
+# would claim one version while the contract clients generate from claims
+# another.
+# `str()` because Django types settings dicts as `dict[str, object]`; the value
+# is a string by construction in base.py.
+API_VERSION: str = str(settings.SPECTACULAR_SETTINGS["VERSION"])
 
 
 class PingView(APIView):
@@ -52,7 +63,7 @@ class PingView(APIView):
                 description="What a reachable API returns.",
                 value={
                     "status": "ok",
-                    "version": "0.1.0",
+                    "version": API_VERSION,
                     "timestamp": "2026-07-23T12:34:56Z",
                 },
                 response_only=True,
@@ -64,7 +75,7 @@ class PingView(APIView):
         serializer = PingSerializer(
             {
                 "status": "ok",
-                "version": "0.1.0",
+                "version": API_VERSION,
                 "timestamp": datetime.now(UTC),
             }
         )

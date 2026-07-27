@@ -46,7 +46,17 @@ export const customFetch = async <T>(url: string, options: RequestInit = {}): Pr
 
   // 204 and other empty-body responses have nothing to parse.
   const raw = await response.text();
-  const body: unknown = raw ? JSON.parse(raw) : undefined;
+  let body: unknown;
+  try {
+    body = raw ? JSON.parse(raw) : undefined;
+  } catch {
+    // Not every failure comes back as JSON: Django's HTML debug page, a proxy
+    // 502, a load balancer timeout. Parsing must not throw here or the status
+    // below is lost and callers get an opaque SyntaxError instead of ApiError
+    // — worst precisely when the failure is worst. Keep the raw text as the
+    // body so the status stays actionable.
+    body = raw;
+  }
 
   if (!response.ok) {
     throw new ApiError(response.status, body);

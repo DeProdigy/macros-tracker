@@ -12,50 +12,63 @@ None of these touch the database, so none take `django_db`.
 from datetime import datetime
 
 import pytest
+from django.conf import settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
 
 @pytest.fixture
-def client() -> APIClient:
+def api_client() -> APIClient:
+    """Deliberately not named `client`: that would shadow pytest-django's own
+    fixture, and a later test wanting the plain Django test client would get
+    DRF's APIClient instead without anything saying so."""
     return APIClient()
 
 
 # --- HTTP behaviour ---------------------------------------------------------
 
 
-def test_ping_returns_200_unauthenticated(client: APIClient):
+def test_ping_returns_200_unauthenticated(api_client: APIClient):
     """The project default is IsAuthenticated; ping must opt out of it."""
-    response = client.get(reverse("ping"))
+    response = api_client.get(reverse("ping"))
 
     assert response.status_code == status.HTTP_200_OK
 
 
-def test_ping_returns_exactly_the_documented_fields(client: APIClient):
+def test_ping_returns_exactly_the_documented_fields(api_client: APIClient):
     """Guards the contract: extra or missing keys mean the generated type lies."""
-    response = client.get(reverse("ping"))
+    response = api_client.get(reverse("ping"))
 
     assert set(response.json()) == {"status", "version", "timestamp"}
 
 
-def test_ping_reports_ok_status(client: APIClient):
-    response = client.get(reverse("ping"))
+def test_ping_reports_ok_status(api_client: APIClient):
+    response = api_client.get(reverse("ping"))
 
     assert response.json()["status"] == "ok"
 
 
-def test_ping_version_is_a_non_empty_string(client: APIClient):
-    response = client.get(reverse("ping"))
-    version = response.json()["version"]
+def test_ping_reports_the_configured_api_version(api_client: APIClient):
+    """Pins the response to the same literal the OpenAPI document is stamped
+    with. Asserting only non-emptiness would let the endpoint and the schema
+    drift to different versions without failing."""
+    response = api_client.get(reverse("ping"))
 
-    assert isinstance(version, str)
-    assert version
+    assert response.json()["version"] == settings.SPECTACULAR_SETTINGS["VERSION"]
 
 
-def test_ping_timestamp_is_parseable_and_timezone_aware(client: APIClient):
+def test_ping_version_matches_the_emitted_schema_version(api_client: APIClient, schema: dict):
+    """The client is generated from the schema's version; the endpoint reports
+    its own. This is the assertion that catches them diverging."""
+    response = api_client.get(reverse("ping"))
+
+    assert response.json()["version"] == schema["info"]["version"]
+
+
+def test_ping_timestamp_is_parseable_and_timezone_aware(api_client: APIClient):
     """The generated TS type is `string`; it still has to be a real datetime."""
-    response = client.get(reverse("ping"))
+    response = api_client.get(reverse("ping"))
 
     parsed = datetime.fromisoformat(response.json()["timestamp"])
 
@@ -63,9 +76,9 @@ def test_ping_timestamp_is_parseable_and_timezone_aware(client: APIClient):
 
 
 @pytest.mark.parametrize("method", ["post", "put", "patch", "delete"])
-def test_ping_rejects_non_get_methods(client: APIClient, method: str):
+def test_ping_rejects_non_get_methods(api_client: APIClient, method: str):
     """Only GET is declared in the schema, so only GET may be routed."""
-    response = getattr(client, method)(reverse("ping"))
+    response = getattr(api_client, method)(reverse("ping"))
 
     assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
