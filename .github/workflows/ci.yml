@@ -1,0 +1,191 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same branch makes the in-flight run irrelevant. Never
+# cancel main — those runs are the record of what landed.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  # Pinned rather than floating: a Python minor bump should be a deliberate
+  # commit, not a silent change in what CI validates. pyproject requires >=3.12.
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Python: ruff, mypy, pytest. Needs a real Postgres — pytest-django creates
+  # and migrates a test database.
+  # ---------------------------------------------------------------------------
+  python:
+    name: Python (ruff, mypy, pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: macros_tracker
+        ports:
+          - 5432:5432
+        # Without this the job races the container: steps start while Postgres
+        # is still initialising and connections are refused.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.local
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/macros_tracker
+
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          # Keyed on the lockfile, so a dependency change invalidates the cache
+          # instead of serving stale wheels that don't reproduce locally.
+          cache-dependency-glob: apps/api/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked --all-groups
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Typecheck (mypy)
+        run: uv run mypy
+
+      - name: Test (pytest)
+        # --create-db overrides the --reuse-db in pyproject: on a fresh runner
+        # there is nothing to reuse, and reuse semantics would mask migrations
+        # that only fail against an empty database.
+        run: uv run pytest --create-db
+
+  # ---------------------------------------------------------------------------
+  # Node: eslint, prettier, tsc, jest. No database involved.
+  # ---------------------------------------------------------------------------
+  node:
+    name: Node (eslint, prettier, tsc, jest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Enable Corepack
+        # Corepack bundled with Node can carry outdated signing keys and reject
+        # recent pnpm releases; installing the current one first avoids that.
+        run: |
+          npm install --global corepack@latest
+          corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          # Caches the pnpm store, keyed on pnpm-lock.yaml.
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (eslint)
+        run: pnpm lint
+
+      - name: Format check (prettier)
+        run: pnpm format:check
+
+      - name: Typecheck (tsc)
+        run: pnpm check-types
+
+      - name: Test (jest)
+        run: pnpm test
+
+  # ---------------------------------------------------------------------------
+  # api-client drift: the guard that keeps the typed contract honest.
+  #
+  # Needs BOTH toolchains. `pnpm generate:api` fans out through Turbo to the
+  # `api` shim package, whose script is `uv run python manage.py spectacular`.
+  # It is not a Node-only job.
+  #
+  # No Postgres service: `spectacular` loads Django settings but never opens a
+  # connection (verified against an unreachable DATABASE_URL).
+  # ---------------------------------------------------------------------------
+  api-client-drift:
+    name: api-client drift check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.local
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+
+      - name: Enable Corepack
+        run: |
+          npm install --global corepack@latest
+          corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install Python dependencies
+        run: uv sync --locked --all-groups
+        working-directory: apps/api
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Split from the diff check on purpose. A failure here is a *schema*
+      # problem, not a stale-client problem, and the two need different fixes.
+      - name: Regenerate the API client
+        run: |
+          if ! pnpm generate:api; then
+            echo "::error title=Schema generation failed::\`pnpm generate:api\` did not complete. The spectacular step runs with --fail-on-warn, so unannotated serializers / views fail generation before any diff is computed. Fix the schema warnings printed above (usually a missing serializer_class or an @extend_schema annotation) — regenerating the client will not help until generation succeeds."
+            exit 1
+          fi
+
+      - name: Fail on drift
+        run: |
+          # --intent-to-add so newly generated, still-untracked files show up in
+          # `git diff`; a new endpoint often means a brand-new model file.
+          git add --intent-to-add packages/api-client
+          if ! git diff --exit-code -- packages/api-client; then
+            echo "::error title=api-client is stale::The generated client does not match the current API schema. The API changed without regenerating. Run \`pnpm generate:api\` locally, commit the resulting changes under packages/api-client, and push. The diff above is exactly what that command produces."
+            exit 1
+          fi
+          echo "api-client is in sync with the API schema."
