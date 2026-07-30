@@ -13,7 +13,7 @@ Fields are declared explicitly (never `fields = "__all__"`) so the emitted
 OpenAPI schema is precise enough to generate useful client types from.
  */
 export interface Ping {
-  /** Always `ok` when the API is reachable. */
+  /** Always `ok` when the API is reachable. Proves the CI drift check. */
   status: string;
   /** API version string, mirroring SPECTACULAR_SETTINGS['VERSION']. */
   version: string;

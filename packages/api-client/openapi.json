@@ -51,7 +51,7 @@
                 "properties": {
                     "status": {
                         "type": "string",
-                        "description": "Always `ok` when the API is reachable."
+                        "description": "Always `ok` when the API is reachable. Proves the CI drift check."
                     },
                     "version": {
                         "type": "string",
