@@ -16,7 +16,7 @@ class PingSerializer(serializers.Serializer):
     """
 
     status = serializers.CharField(
-        help_text="Always `ok` when the API is reachable.",
+        help_text="Always `ok` when the API is reachable. Proves the CI drift check.",
     )
     version = serializers.CharField(
         help_text="API version string, mirroring SPECTACULAR_SETTINGS['VERSION'].",
