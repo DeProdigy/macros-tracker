@@ -1,5 +1,7 @@
 # Macros Tracker
 
+[![CI](https://github.com/DeProdigy/macros-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/DeProdigy/macros-tracker/actions/workflows/ci.yml)
+
 A photo-based macro tracker. Snap or upload a photo of food, add a short
 description, an AI estimates calories / protein / fiber, and the entry persists
 against your daily targets — with a home dashboard, streaks, and an on-demand
