@@ -6,6 +6,65 @@
         "description": "Typed contract consumed by apps/mobile via packages/api-client."
     },
     "paths": {
+        "/api/health/": {
+            "get": {
+                "operationId": "health",
+                "description": "Reports whether the API can serve traffic. Unlike `/api/ping/`, this executes a real query against the database and returns HTTP 503 if that query fails, so an orchestrator can pull the instance out of rotation. Requires no authentication.\n\nIntended for platform health probes rather than for clients.",
+                "summary": "Deployment health check",
+                "tags": [
+                    "system"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Health"
+                                },
+                                "examples": {
+                                    "Healthy": {
+                                        "value": {
+                                            "status": "ok",
+                                            "database": true,
+                                            "version": "0.1.0",
+                                            "timestamp": "2026-07-23T12:34:56Z"
+                                        },
+                                        "summary": "Database reachable",
+                                        "description": "Every dependency check passed; the instance can serve traffic."
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Health"
+                                },
+                                "examples": {
+                                    "Unhealthy": {
+                                        "value": {
+                                            "status": "unhealthy",
+                                            "database": false,
+                                            "version": "0.1.0",
+                                            "timestamp": "2026-07-23T12:34:56Z"
+                                        },
+                                        "summary": "Database unreachable",
+                                        "description": "The process is running but its query failed. Served with 503 so the platform treats the instance as unavailable."
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/ping/": {
             "get": {
                 "operationId": "ping",
@@ -45,6 +104,47 @@
     },
     "components": {
         "schemas": {
+            "Health": {
+                "type": "object",
+                "description": "Response body for the deployment health check.\n\nDistinct from `PingSerializer` on purpose. Ping answers \"is the process\nup?\"; health answers \"can this process actually serve a request?\", which\nmeans proving the database is reachable. They report different things and a\nshared shape would blur that.",
+                "properties": {
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/HealthStatusEnum"
+                            }
+                        ],
+                        "description": "`ok` when every dependency check passed, `unhealthy` otherwise. An `unhealthy` body is always served with HTTP 503, never 200.\n\n* `ok` - ok\n* `unhealthy` - unhealthy"
+                    },
+                    "database": {
+                        "type": "boolean",
+                        "description": "Whether a real query against the default database succeeded. This is an executed round-trip, not a check that settings are present."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "API version string, mirroring SPECTACULAR_SETTINGS['VERSION']."
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Server time in UTC (ISO 8601) when the check was performed."
+                    }
+                },
+                "required": [
+                    "database",
+                    "status",
+                    "timestamp",
+                    "version"
+                ]
+            },
+            "HealthStatusEnum": {
+                "enum": [
+                    "ok",
+                    "unhealthy"
+                ],
+                "type": "string",
+                "description": "* `ok` - ok\n* `unhealthy` - unhealthy"
+            },
             "Ping": {
                 "type": "object",
                 "description": "Response body for the API liveness probe.\n\nFields are declared explicitly (never `fields = \"__all__\"`) so the emitted\nOpenAPI schema is precise enough to generate useful client types from.",

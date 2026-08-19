@@ -44,6 +44,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # production.py inserts WhiteNoise directly after SecurityMiddleware.
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -103,7 +104,15 @@ USE_TZ = True
 
 
 # Static files
+#
+# This is an API — only the Django admin and the Swagger UI need static assets.
+# WhiteNoise serves them straight from the app process, which is why there is no
+# CDN or S3 bucket here: the volume is a handful of admin CSS files, and adding
+# object storage for that would be cost without benefit.
 STATIC_URL = "static/"
+# Where `collectstatic` writes. Gitignored and built during the container image
+# build, not committed — it's derived output.
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -146,4 +155,12 @@ SPECTACULAR_SETTINGS = {
     # output would show up as phantom diffs and break the MAC-16 drift check.
     "SORT_OPERATIONS": True,
     "SORT_OPERATION_PARAMETERS": True,
+    # Enums are hoisted into shared components named after the *field*, so a
+    # bare `status` ChoiceField becomes `StatusEnum` — a name the next
+    # serializer with a `status` field would collide with, forcing one of them
+    # to be renamed and churning the generated client over an unrelated change.
+    # Naming them explicitly keeps the collision from ever arising.
+    "ENUM_NAME_OVERRIDES": {
+        "HealthStatusEnum": "config.serializers.HEALTH_STATUS_CHOICES",
+    },
 }

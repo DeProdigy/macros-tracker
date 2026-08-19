@@ -18,11 +18,134 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { Ping } from "./model";
+import type { Health, Ping } from "./model";
 
 import { customFetch } from "../http-client";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * Reports whether the API can serve traffic. Unlike `/api/ping/`, this executes a real query against the database and returns HTTP 503 if that query fails, so an orchestrator can pull the instance out of rotation. Requires no authentication.
+
+Intended for platform health probes rather than for clients.
+ * @summary Deployment health check
+ */
+export type healthResponse200 = {
+  data: Health;
+  status: 200;
+};
+
+export type healthResponse503 = {
+  data: Health;
+  status: 503;
+};
+
+export type healthResponseSuccess = healthResponse200 & {
+  headers: Headers;
+};
+export type healthResponseError = healthResponse503 & {
+  headers: Headers;
+};
+
+export type healthResponse = healthResponseSuccess | healthResponseError;
+
+export const getHealthUrl = () => {
+  return `/api/health/`;
+};
+
+export const health = async (options?: RequestInit): Promise<healthResponse> => {
+  return customFetch<healthResponse>(getHealthUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getHealthQueryKey = () => {
+  return [`/api/health/`] as const;
+};
+
+export const getHealthQueryOptions = <
+  TData = Awaited<ReturnType<typeof health>>,
+  TError = Health,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof health>>, TError, TData>>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getHealthQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof health>>> = ({ signal }) =>
+    health({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof health>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type HealthQueryResult = NonNullable<Awaited<ReturnType<typeof health>>>;
+export type HealthQueryError = Health;
+
+export function useHealth<TData = Awaited<ReturnType<typeof health>>, TError = Health>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof health>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof health>>,
+          TError,
+          Awaited<ReturnType<typeof health>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useHealth<TData = Awaited<ReturnType<typeof health>>, TError = Health>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof health>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof health>>,
+          TError,
+          Awaited<ReturnType<typeof health>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useHealth<TData = Awaited<ReturnType<typeof health>>, TError = Health>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof health>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Deployment health check
+ */
+
+export function useHealth<TData = Awaited<ReturnType<typeof health>>, TError = Health>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof health>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getHealthQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
 
 /**
  * Returns a small fixed-shape payload confirming the API is reachable and able to serialize a response. Requires no authentication and touches no database, so it is safe to call from an unauthenticated client and as a container health check.

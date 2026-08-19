@@ -49,6 +49,8 @@ venv/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+# collectstatic output — built during the Docker image build, never committed
+/apps/api/staticfiles/
 htmlcov/
 *.sqlite3
 

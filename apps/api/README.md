@@ -84,6 +84,72 @@ uv run ruff format .        # format
 uv run mypy                 # type-check
 ```
 
+## Deployment (Railway)
+
+Deployed to Railway: a Django service plus a managed Postgres 16, auto-deploying
+on merge to `main`. See [`plans/09-deployment.md`](../../plans/09-deployment.md).
+
+The service's **root directory is set to `apps/api`**. Without that, Railway's
+builder sees the repo-root `package.json` and tries to build a Node app.
+
+| File            | Role                                                                       |
+| --------------- | -------------------------------------------------------------------------- |
+| `Dockerfile`    | Build (`uv sync --locked --no-dev`, `collectstatic`) and the start command |
+| `.dockerignore` | Keeps secrets, the local venv, and test files out of the image             |
+| `railway.json`  | Builder, release command, health check path                                |
+
+`railway.json` is JSON and cannot carry comments, so its choices are recorded here:
+
+- **`builder: DOCKERFILE`** — auto-detection has to guess the Python package
+  manager. This project uses `uv` with a committed lockfile that is only worth
+  having if it is installed with `--locked`.
+- **`preDeployCommand: migrate`** — migrations belong in the release command, not
+  the start command. Start commands run on every container restart, so two
+  replicas restarting would race each other on the migration table. A release
+  command runs once, before the new deploy takes traffic.
+- **no `startCommand`** — gunicorn is defined once, as the Dockerfile's `CMD`, so
+  `docker run` locally behaves exactly like Railway. Setting it in both places
+  invites drift. It also has to be shell-form: Railway injects `$PORT` but does
+  not run the start command through a shell, so an exec-form gunicorn gets the
+  literal string `$PORT` and exits with `'$PORT' is not a valid port number`.
+- **`healthcheckPath: /api/health/`** — runs a real `SELECT 1`. `/api/ping/`
+  deliberately touches no database, so it would report green while the app
+  could not serve a single request.
+
+### Environment variables
+
+All values live in Railway, none in the repo. `.env.example` at the repo root is
+the full list; the ones that must be set for a deploy to work at all:
+
+| Variable                 | Value                                             |
+| ------------------------ | ------------------------------------------------- |
+| `DJANGO_SETTINGS_MODULE` | `config.settings.production`                      |
+| `DJANGO_SECRET_KEY`      | Freshly generated, never the dev default          |
+| `DJANGO_ALLOWED_HOSTS`   | The app domain **plus `healthcheck.railway.app`** |
+| `DATABASE_URL`           | Injected automatically once Postgres is linked    |
+
+Two failure modes worth knowing, because both look like an app bug and are not:
+
+- Omitting `healthcheck.railway.app` from `ALLOWED_HOSTS` makes every health
+  probe a 400, so the deploy never goes live.
+- `SECURE_SSL_REDIRECT` would 301 those probes, since they arrive over plain
+  HTTP on the internal network. `production.py` exempts the health path via
+  `SECURE_REDIRECT_EXEMPT`.
+
+### Verifying production settings
+
+```bash
+# Run the deployment checklist against production settings. The required vars
+# have no fallbacks by design, so they must be supplied.
+DJANGO_SETTINGS_MODULE=config.settings.production \
+DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(50))')" \
+DJANGO_ALLOWED_HOSTS=example.com \
+DJANGO_SECURE_HSTS_SECONDS=31536000 \
+  uv run python manage.py check --deploy
+
+railway logs      # live deploy logs — far easier than diagnosing after the fact
+```
+
 ## Database
 
 Postgres lives in the `pgdata` Docker volume and survives restarts.
