@@ -1,7 +1,15 @@
 # Local development database.
 #
 # Postgres runs in Docker; the Django app runs natively (see plans/01-architecture.md).
-# The version is pinned to match Railway's managed Postgres in production.
+# The version is pinned to match Railway's managed Postgres in production, and
+# .github/workflows/ci.yml pins the same tag. All three move together or the
+# suite is validating a different major than the one that serves traffic.
+#
+# Changing that major is not just an edit here: a Postgres data directory is
+# written by one major version and later ones refuse to read it, so the server
+# will not start until the volume is wiped ("database files are incompatible
+# with server"). Locally that means `down -v`; on Railway it means deleting the
+# volume, or a dump/restore once there is data worth keeping.
 #
 #   docker compose up -d        # start the database
 #   docker compose down         # stop it (data is kept in the pgdata volume)
@@ -9,7 +17,7 @@
 
 services:
   db:
-    image: postgres:16
+    image: postgres:18
     # No container_name: let Compose project-namespace it (avoids collisions
     # across multiple checkouts/worktrees). Reference it by service: `db`.
     # These match the DATABASE_URL default in apps/api/config/settings/base.py,
@@ -21,7 +29,11 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # /var/lib/postgresql, NOT /var/lib/postgresql/data. The 18+ images store
+      # data in a major-version-specific subdirectory so that pg_upgrade can see
+      # both versions inside one mount; mounting the old `/data` path makes the
+      # container refuse to start and report it as an "unused mount/volume".
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d macros_tracker"]
       interval: 5s

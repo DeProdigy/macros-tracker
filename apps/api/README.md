@@ -12,7 +12,7 @@ The Django + DRF backend. Postgres runs in Docker; the Django app runs natively
 ## Quickstart (from a clean clone)
 
 ```bash
-# 1. Start Postgres (from the repo root — pins postgres:16, matches production)
+# 1. Start Postgres (from the repo root — pins postgres:18, matches production)
 docker compose up -d
 
 # 2. Install dependencies into the project venv (Python 3.12)
@@ -86,7 +86,7 @@ uv run mypy                 # type-check
 
 ## Deployment (Railway)
 
-Deployed to Railway: a Django service plus a managed Postgres 16, auto-deploying
+Deployed to Railway: a Django service plus a managed Postgres 18, auto-deploying
 on merge to `main`. See [`plans/09-deployment.md`](../../plans/09-deployment.md).
 
 The service's **root directory is set to `apps/api`**. Without that, Railway's
