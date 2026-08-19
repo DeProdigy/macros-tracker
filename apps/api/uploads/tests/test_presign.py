@@ -16,6 +16,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 
 from uploads import services
@@ -166,7 +167,7 @@ def test_key_is_namespaced_under_the_requesting_user(auth_client: APIClient, use
     than a reconciliation between the bucket and the database."""
     key = presign(auth_client).json()["key"]
 
-    assert key.startswith(f"entries/{user.pk}/")
+    assert key.startswith(f"pending/{user.pk}/")
 
 
 def test_key_ignores_any_user_id_the_client_supplies(auth_client: APIClient, user, other_user):
@@ -174,7 +175,7 @@ def test_key_ignores_any_user_id_the_client_supplies(auth_client: APIClient, use
     could write into another user's namespace by asking."""
     response = presign(auth_client, user_id=other_user.pk)
 
-    assert response.json()["key"].startswith(f"entries/{user.pk}/")
+    assert response.json()["key"].startswith(f"pending/{user.pk}/")
 
 
 def test_key_extension_follows_the_declared_content_type(auth_client: APIClient):
@@ -249,6 +250,81 @@ def test_signature_covers_content_type_and_length(auth_client: APIClient):
 
 def test_max_bytes_is_echoed_so_clients_can_fail_fast(auth_client: APIClient, settings):
     assert presign(auth_client).json()["max_bytes"] == settings.R2_MAX_UPLOAD_BYTES
+
+
+# --- Promotion --------------------------------------------------------------
+#
+# Uploads land under pending/ and only move to entries/ once something
+# references them. The lifecycle rule expires pending/, so a promotion that
+# silently fails means a photo deleted a week later.
+
+
+def test_promote_moves_a_pending_key_to_the_entries_prefix(db, monkeypatch):
+    calls = {}
+
+    class FakeClient:
+        def copy_object(self, **kwargs):
+            calls["copy"] = kwargs
+
+        def delete_object(self, **kwargs):
+            calls["delete"] = kwargs
+
+    monkeypatch.setattr(services, "_client", lambda: FakeClient())
+
+    result = services.promote_object(key="pending/7/abc.jpg", user_id=7)
+
+    assert result == "entries/7/abc.jpg"
+    assert calls["copy"]["Key"] == "entries/7/abc.jpg"
+    assert calls["copy"]["CopySource"]["Key"] == "pending/7/abc.jpg"
+    assert calls["delete"]["Key"] == "pending/7/abc.jpg"
+
+
+def test_promote_rejects_another_users_pending_key(db, monkeypatch):
+    """The key arrives from the client. Parsing the owner out of it instead of
+    checking it would let anyone promote someone else's upload into their own
+    namespace just by passing the key."""
+    monkeypatch.setattr(services, "_client", lambda: pytest.fail("must not reach storage"))
+
+    with pytest.raises(ValidationError):
+        services.promote_object(key="pending/999/abc.jpg", user_id=7)
+
+
+def test_promote_rejects_a_key_outside_the_pending_prefix(db, monkeypatch):
+    """Guards against promoting an already-permanent object, or anything the
+    client invented, back through the copy path."""
+    monkeypatch.setattr(services, "_client", lambda: pytest.fail("must not reach storage"))
+
+    with pytest.raises(ValidationError):
+        services.promote_object(key="entries/7/abc.jpg", user_id=7)
+
+
+def test_promote_rejects_a_traversal_attempt(db, monkeypatch):
+    monkeypatch.setattr(services, "_client", lambda: pytest.fail("must not reach storage"))
+
+    with pytest.raises(ValidationError):
+        services.promote_object(key="pending/7/../../etc/passwd", user_id=70)
+
+
+def test_promoted_key_is_the_presigned_key_with_the_prefix_swapped(
+    auth_client: APIClient, user, monkeypatch
+):
+    """End to end across both halves: whatever presign hands out must be
+    promotable, or uploads silently expire after the lifecycle window."""
+
+    class FakeClient:
+        def copy_object(self, **kwargs):
+            pass
+
+        def delete_object(self, **kwargs):
+            pass
+
+    key = presign(auth_client).json()["key"]
+    monkeypatch.setattr(services, "_client", lambda: FakeClient())
+
+    promoted = services.promote_object(key=key, user_id=user.pk)
+
+    assert promoted.startswith(f"entries/{user.pk}/")
+    assert promoted.removeprefix("entries/") == key.removeprefix("pending/")
 
 
 # --- Download presigning ----------------------------------------------------

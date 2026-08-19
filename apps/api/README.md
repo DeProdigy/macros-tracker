@@ -150,6 +150,55 @@ DJANGO_SECURE_HSTS_SECONDS=31536000 \
 railway logs      # live deploy logs — far easier than diagnosing after the fact
 ```
 
+## Object storage (Cloudflare R2)
+
+Food photos live in a **private** R2 bucket. Nothing is ever served from it
+directly — reads and writes both go through presigned URLs minted by
+`uploads/services.py`.
+
+Uploads go client → R2, never through Django. A photo proxied through the app
+server occupies a gunicorn worker for the whole transfer on a mobile connection;
+two concurrent uploads would consume both workers and start failing the health
+check.
+
+### The two prefixes
+
+| Prefix                     | Meaning                             | Lifecycle        |
+| -------------------------- | ----------------------------------- | ---------------- |
+| `pending/{user_id}/{uuid}` | Uploaded, nothing references it yet | Expires after 7d |
+| `entries/{user_id}/{uuid}` | Promoted once an entry points at it | Kept             |
+
+This split exists because R2 lifecycle rules match on **prefix and age only** —
+they cannot know whether a row in Postgres references an object. A rule
+expiring `entries/` would delete every user's photos on their 7th day. Objects
+under `pending/` are unclaimed by definition, so expiring that prefix is always
+correct.
+
+`services.promote_object()` copies pending → entries and deletes the pending
+copy. The copy is server-side inside R2, so no bytes cross the network and there
+is no egress charge. E4 calls it when an entry is saved; until then the orphan —
+a client that presigns, uploads, then crashes before saving — is reclaimed
+automatically.
+
+### Managing the bucket
+
+Requires [wrangler](https://developers.cloudflare.com/workers/wrangler/)
+(`npm i -g wrangler`, then `wrangler login`). Deliberately not a repo
+dependency: it is an operator tool, not part of the build.
+
+```bash
+wrangler r2 bucket lifecycle list macros-tracker
+
+# The rule that is currently applied — recorded so it can be recreated:
+wrangler r2 bucket lifecycle add macros-tracker "expire-unclaimed-uploads" \
+  "pending/" --expire-days 7
+```
+
+The API token used by Django is scoped to this **one bucket** with Object Read
+& Write — never account-wide. Lifecycle rules are bucket _configuration_ and
+need a broader credential, which is why they are applied with `wrangler login`
+rather than the application's token.
+
 ## Database
 
 Postgres lives in the `pgdata` Docker volume and survives restarts.
