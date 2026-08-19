@@ -19,12 +19,15 @@ from django.contrib import admin
 from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
-from config.views import PingView
+from config.views import HealthView, PingView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     # --- API ---
     path("api/ping/", PingView.as_view(), name="ping"),
+    # Probed by Railway's health check (see apps/api/railway.json). Unlike
+    # ping, this one queries the database.
+    path("api/health/", HealthView.as_view(), name="health"),
     # --- OpenAPI schema ---
     # The committed packages/api-client/openapi.json is generated from the same
     # introspection via `manage.py spectacular`; these routes are for humans.
