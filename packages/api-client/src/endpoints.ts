@@ -5,20 +5,23 @@
  * Typed contract consumed by apps/mobile via packages/api-client.
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { Health, Ping } from "./model";
+import type { Health, Ping, PresignUploadRequestRequest, PresignUploadResponse } from "./model";
 
 import { customFetch } from "../http-client";
 
@@ -258,3 +261,113 @@ export function usePing<TData = Awaited<ReturnType<typeof ping>>, TError = unkno
 
   return query;
 }
+
+/**
+ * Returns a short-lived presigned PUT URL and the object key the upload will land at.
+
+The client uploads straight to object storage rather than through this API, so a slow mobile connection never occupies a server worker. The declared content type and length are signed into the URL: the subsequent PUT must match both exactly or storage rejects it.
+
+Store the returned `key` against the entry. The URL expires; the key does not.
+ * @summary Authorise a direct photo upload
+ */
+export type presignUploadResponse200 = {
+  data: PresignUploadResponse;
+  status: 200;
+};
+
+export type presignUploadResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type presignUploadResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type presignUploadResponseSuccess = presignUploadResponse200 & {
+  headers: Headers;
+};
+export type presignUploadResponseError = (presignUploadResponse400 | presignUploadResponse401) & {
+  headers: Headers;
+};
+
+export type presignUploadResponse = presignUploadResponseSuccess | presignUploadResponseError;
+
+export const getPresignUploadUrl = () => {
+  return `/api/uploads/presign/`;
+};
+
+export const presignUpload = async (
+  presignUploadRequestRequest: PresignUploadRequestRequest,
+  options?: RequestInit,
+): Promise<presignUploadResponse> => {
+  return customFetch<presignUploadResponse>(getPresignUploadUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(presignUploadRequestRequest),
+  });
+};
+
+export const getPresignUploadMutationOptions = <TError = void, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof presignUpload>>,
+    TError,
+    { data: PresignUploadRequestRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof presignUpload>>,
+  TError,
+  { data: PresignUploadRequestRequest },
+  TContext
+> => {
+  const mutationKey = ["presignUpload"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof presignUpload>>,
+    { data: PresignUploadRequestRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return presignUpload(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PresignUploadMutationResult = NonNullable<Awaited<ReturnType<typeof presignUpload>>>;
+export type PresignUploadMutationBody = PresignUploadRequestRequest;
+export type PresignUploadMutationError = void;
+
+/**
+ * @summary Authorise a direct photo upload
+ */
+export const usePresignUpload = <TError = void, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof presignUpload>>,
+      TError,
+      { data: PresignUploadRequestRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof presignUpload>>,
+  TError,
+  { data: PresignUploadRequestRequest },
+  TContext
+> => {
+  const mutationOptions = getPresignUploadMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};

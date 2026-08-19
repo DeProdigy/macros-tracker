@@ -16,7 +16,7 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from config.views import HealthView, PingView
@@ -28,6 +28,9 @@ urlpatterns = [
     # Probed by Railway's health check (see apps/api/railway.json). Unlike
     # ping, this one queries the database.
     path("api/health/", HealthView.as_view(), name="health"),
+    # Presigned object-storage URLs (MAC-19). Owns its own routes so the app
+    # stays self-contained as more of them appear.
+    path("api/uploads/", include("uploads.urls")),
     # --- OpenAPI schema ---
     # The committed packages/api-client/openapi.json is generated from the same
     # introspection via `manage.py spectacular`; these routes are for humans.

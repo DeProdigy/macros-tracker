@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     # Local apps
     "accounts",
+    "uploads",
 ]
 
 MIDDLEWARE = [
@@ -115,6 +116,51 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# Object storage — Cloudflare R2 (food photos, see plan doc 09).
+#
+# R2 is S3-compatible, so django-storages' S3 backend drives it; what differs is
+# the endpoint and two settings that produce opaque errors when wrong:
+#
+#   * SIGNATURE_VERSION must be s3v4. R2 rejects earlier signing, and the
+#     failure surfaces as a generic auth error rather than "wrong signature
+#     version", which sends you looking at your credentials instead.
+#   * REGION must be the literal "auto". R2 has no regions; an AWS region name
+#     is accepted at signing time and then fails at request time.
+#
+# The bucket is private and stays private. Nothing is ever served from it
+# directly — reads and writes both go through presigned URLs (see uploads/).
+R2_ACCOUNT_ID = env("R2_ACCOUNT_ID", default="")
+R2_BUCKET_NAME = env("R2_BUCKET_NAME", default="")
+R2_ACCESS_KEY_ID = env("R2_ACCESS_KEY_ID", default="")
+R2_SECRET_ACCESS_KEY = env("R2_SECRET_ACCESS_KEY", default="")
+# Derived from the account ID, but overridable — R2 also issues per-bucket
+# endpoints, and tests point this at a local stub.
+R2_ENDPOINT_URL = env(
+    "R2_ENDPOINT_URL",
+    default=(f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com" if R2_ACCOUNT_ID else ""),
+)
+
+# Presigned URL lifetimes. A presigned URL is a bearer credential: anyone
+# holding it has access for its full lifetime, so these are deliberately short.
+# Uploads are seconds-of-work and get minutes; reads are rendered in a list view
+# that may sit on screen a while, so they get longer but still expire.
+R2_UPLOAD_URL_EXPIRY_SECONDS = env.int("R2_UPLOAD_URL_EXPIRY_SECONDS", default=300)
+R2_DOWNLOAD_URL_EXPIRY_SECONDS = env.int("R2_DOWNLOAD_URL_EXPIRY_SECONDS", default=3600)
+
+# Upload constraints, enforced before anything is signed. Without a ceiling a
+# client can PUT hundreds of megabytes and you pay to store something you never
+# wanted; without a type allowlist the bucket accepts anything at all.
+R2_MAX_UPLOAD_BYTES = env.int("R2_MAX_UPLOAD_BYTES", default=10 * 1024 * 1024)
+# Maps accepted content types to the extension used in the object key. HEIC is
+# included because it is the iPhone camera default.
+R2_ALLOWED_UPLOAD_TYPES = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/heic": "heic",
+}
 
 
 # Django REST Framework — sane defaults: authenticated by default, JSON in/out.

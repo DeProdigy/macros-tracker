@@ -100,6 +100,81 @@
                     }
                 }
             }
+        },
+        "/api/uploads/presign/": {
+            "post": {
+                "operationId": "presignUpload",
+                "description": "Returns a short-lived presigned PUT URL and the object key the upload will land at.\n\nThe client uploads straight to object storage rather than through this API, so a slow mobile connection never occupies a server worker. The declared content type and length are signed into the URL: the subsequent PUT must match both exactly or storage rejects it.\n\nStore the returned `key` against the entry. The URL expires; the key does not.",
+                "summary": "Authorise a direct photo upload",
+                "tags": [
+                    "uploads"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PresignUploadRequestRequest"
+                            },
+                            "examples": {
+                                "A2MBJPEG": {
+                                    "value": {
+                                        "content_type": "image/jpeg",
+                                        "content_length": 2097152
+                                    },
+                                    "summary": "Typical request",
+                                    "description": "What the mobile client sends before uploading a camera photo."
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PresignUploadRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PresignUploadRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PresignUploadResponse"
+                                },
+                                "examples": {
+                                    "SignedAuthorisation": {
+                                        "value": {
+                                            "url": "https://<account>.r2.cloudflarestorage.com/bucket/entries/1/...",
+                                            "key": "entries/1/2f1c9e04-0d5c-4a51-9f0a-3b7c2e6a1d88.jpg",
+                                            "expires_in": 300,
+                                            "max_bytes": 10485760
+                                        },
+                                        "summary": "Successful response",
+                                        "description": "`url` is a bearer credential valid for `expires_in` seconds. `key` is what gets persisted."
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "401": {
+                        "description": "No response body"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -168,6 +243,62 @@
                     "timestamp",
                     "version"
                 ]
+            },
+            "PresignUploadRequestRequest": {
+                "type": "object",
+                "description": "What the client must state before an upload is authorised.\n\nBoth fields are required. Letting either default would mean signing a URL\nwhose constraints the client never committed to, which is the same as not\nconstraining it.",
+                "properties": {
+                    "content_type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "MIME type of the file about to be uploaded. Must be one of the supported image types; the PUT is rejected if it does not match."
+                    },
+                    "content_length": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Exact size in bytes of the file about to be uploaded. Signed into the URL, so the PUT must send precisely this many bytes."
+                    }
+                },
+                "required": [
+                    "content_length",
+                    "content_type"
+                ]
+            },
+            "PresignUploadResponse": {
+                "type": "object",
+                "description": "The signed authorisation handed back to the client.",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Presigned S3 PUT URL. Treat as a credential: anyone holding it can upload to this key until it expires."
+                    },
+                    "key": {
+                        "type": "string",
+                        "description": "Object key the upload will land at. Store this against the entry — it is the durable identifier, whereas the URL expires."
+                    },
+                    "expires_in": {
+                        "type": "integer",
+                        "description": "Seconds until the URL stops being accepted."
+                    },
+                    "max_bytes": {
+                        "type": "integer",
+                        "description": "Server-side upload ceiling, echoed so a client can fail fast locally instead of discovering it on a rejected PUT."
+                    }
+                },
+                "required": [
+                    "expires_in",
+                    "key",
+                    "max_bytes",
+                    "url"
+                ]
+            }
+        },
+        "securitySchemes": {
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "sessionid"
             }
         }
     }
