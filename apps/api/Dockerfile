@@ -62,6 +62,22 @@ RUN DJANGO_SECRET_KEY="build-time-only-not-a-real-secret" \
 # Documentation only — Railway injects $PORT and routes to it regardless.
 EXPOSE 8000
 
-# Overridden by railway.json's startCommand in deployment; kept so that
-# `docker run` on this image locally does the same thing Railway does.
-CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000}"]
+# The single definition of how the app is served: railway.json deliberately sets
+# no startCommand, so `docker run` locally does exactly what Railway does and
+# the two cannot drift.
+#
+# The `sh -c` wrapper is load-bearing. Railway injects $PORT but does not run
+# the start command through a shell, so an exec-form gunicorn would receive the
+# literal string "$PORT" and exit with "'$PORT' is not a valid port number".
+# The ${PORT:-8000} default is what makes the same image runnable locally.
+#
+# - --workers 2: gunicorn is a pre-fork server, so a single worker serializes
+#   every request; two is the floor at which a slow request cannot block the
+#   health check and take down an otherwise fine instance.
+# - --forwarded-allow-ips '*': makes gunicorn trust X-Forwarded-* from Railway's
+#   proxy, which production.py's SECURE_PROXY_SSL_HEADER depends on to tell
+#   HTTPS from HTTP. Safe only because nothing but that proxy can reach the
+#   container.
+# - --access-logfile/--error-logfile -: gunicorn logs to files by default, which
+#   in a container means logs that exist nowhere anyone can read them.
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 60 --access-logfile - --error-logfile - --forwarded-allow-ips '*'"]

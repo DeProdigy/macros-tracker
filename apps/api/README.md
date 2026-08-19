@@ -92,11 +92,11 @@ on merge to `main`. See [`plans/09-deployment.md`](../../plans/09-deployment.md)
 The service's **root directory is set to `apps/api`**. Without that, Railway's
 builder sees the repo-root `package.json` and tries to build a Node app.
 
-| File            | Role                                                           |
-| --------------- | -------------------------------------------------------------- |
-| `Dockerfile`    | Build: `uv sync --locked --no-dev`, then `collectstatic`       |
-| `.dockerignore` | Keeps secrets, the local venv, and test files out of the image |
-| `railway.json`  | Release command, start command, health check path              |
+| File            | Role                                                                       |
+| --------------- | -------------------------------------------------------------------------- |
+| `Dockerfile`    | Build (`uv sync --locked --no-dev`, `collectstatic`) and the start command |
+| `.dockerignore` | Keeps secrets, the local venv, and test files out of the image             |
+| `railway.json`  | Builder, release command, health check path                                |
 
 `railway.json` is JSON and cannot carry comments, so its choices are recorded here:
 
@@ -107,10 +107,11 @@ builder sees the repo-root `package.json` and tries to build a Node app.
   the start command. Start commands run on every container restart, so two
   replicas restarting would race each other on the migration table. A release
   command runs once, before the new deploy takes traffic.
-- **`startCommand: gunicorn`** — not `runserver`, which is single-threaded, does
-  no process management, and is explicitly not for production. `--forwarded-allow-ips '*'`
-  makes gunicorn trust Railway's proxy headers; it is safe here only because
-  nothing but that proxy can reach the container.
+- **no `startCommand`** — gunicorn is defined once, as the Dockerfile's `CMD`, so
+  `docker run` locally behaves exactly like Railway. Setting it in both places
+  invites drift. It also has to be shell-form: Railway injects `$PORT` but does
+  not run the start command through a shell, so an exec-form gunicorn gets the
+  literal string `$PORT` and exits with `'$PORT' is not a valid port number`.
 - **`healthcheckPath: /api/health/`** — runs a real `SELECT 1`. `/api/ping/`
   deliberately touches no database, so it would report green while the app
   could not serve a single request.
