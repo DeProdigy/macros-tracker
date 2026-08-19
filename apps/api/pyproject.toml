@@ -8,6 +8,7 @@ dependencies = [
     "django>=6.0.7",
     "django-environ>=0.14.0",
     "djangorestframework>=3.17.1",
+    "django-storages[s3]>=1.14.6",
     "drf-spectacular>=0.28",
     "gunicorn>=23.0.0",
     "psycopg[binary]>=3.3.4",
@@ -41,7 +42,7 @@ python_version = "3.12"
 # the DRF plugin does the same for serializers/views.
 plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
 # Only check our code (not the venv); migrations are generated.
-files = ["accounts", "config", "manage.py"]
+files = ["accounts", "config", "uploads", "manage.py"]
 exclude = ['/migrations/']
 check_untyped_defs = true
 warn_redundant_casts = true
@@ -52,9 +53,11 @@ no_implicit_optional = true
 # The plugin loads Django with these settings to introspect your models.
 django_settings_module = "config.settings.local"
 
-# django-environ ships no type stubs; don't error on the missing import.
+# django-environ and boto3 ship no type stubs; don't error on the missing
+# imports. (boto3-stubs exists but pulls a large generated package for the two
+# signing calls in uploads/services.py — not worth the dependency yet.)
 [[tool.mypy.overrides]]
-module = ["environ.*"]
+module = ["environ.*", "boto3.*", "botocore.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
