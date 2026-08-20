@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import jwt
+import jwt.exceptions
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
@@ -265,7 +266,25 @@ def verify_apple_identity_token(token: str, *, expected_nonce: str) -> AppleIden
         raise ImproperlyConfigured("APPLE_CLIENT_ID must be set to verify Apple identity tokens.")
 
     kid = _unverified_kid(token)
-    public_key = RSAAlgorithm.from_jwk(_signing_jwk(kid))
+
+    try:
+        public_key = RSAAlgorithm.from_jwk(_signing_jwk(kid))
+    except (jwt.InvalidKeyError, ValueError, TypeError, KeyError) as exc:
+        # A matching `kid` is not the same as a usable RSA key. _find_key only
+        # matches on `kid`, so any JWKS entry that is not a well-formed RSA
+        # public key lands here -- most plausibly the day Apple publishes an EC
+        # key, which raises "Not an RSA key".
+        #
+        # This needs its own clause because InvalidKeyError does *not* subclass
+        # InvalidTokenError, so none of the handlers below would catch it, and
+        # it is raised outside their try block regardless. Left alone it escapes
+        # as a 500 and breaks this module's one promise: every failure is a
+        # ValidationError.
+        #
+        # Its own code rather than folding into `unknown_key`, so an Apple
+        # algorithm migration reads as exactly that in the logs instead of
+        # hiding among ordinary unrecognised-kid noise.
+        raise _reject("unusable_key", "Token was signed with an unsupported key.") from exc
 
     try:
         claims = jwt.decode(
@@ -285,6 +304,11 @@ def verify_apple_identity_token(token: str, *, expected_nonce: str) -> AppleIden
         raise _reject("invalid_issuer", "Identity token was not issued by Apple.") from exc
     except jwt.MissingRequiredClaimError as exc:
         raise _reject("missing_claim", "Identity token is missing a required claim.") from exc
+    # PyJWT type-checks `sub` on its own and raises this. Mapped explicitly
+    # rather than left to the backstop below, so an unusable subject reports the
+    # same code as an absent one instead of the vague `invalid_token`.
+    except jwt.exceptions.InvalidSubjectError as exc:
+        raise _reject("missing_claim", "Identity token is missing a required claim.") from exc
     # InvalidSignatureError subclasses DecodeError, and InvalidAlgorithmError is
     # the rejection for `alg: none` and for HS256 confusion. All three are the
     # signature layer refusing the token, so they share a code -- and this clause
@@ -300,7 +324,15 @@ def verify_apple_identity_token(token: str, *, expected_nonce: str) -> AppleIden
 
     _verify_nonce(claims, expected_nonce)
 
+    # PyJWT covers `sub` being absent (MissingRequiredClaimError) and being a
+    # non-string (InvalidSubjectError), both handled above. It accepts the empty
+    # string, which is the one gap: AppleIdentity declares `subject: str` and
+    # MAC-27 uses it as the account join key, so an empty subject would become a
+    # database lookup for "" and match the wrong thing or nothing at all.
     subject = claims["sub"]
+    if not isinstance(subject, str) or not subject:
+        raise _reject("missing_claim", "Identity token is missing a required claim.")
+
     email = claims.get("email")
     return AppleIdentity(
         subject=subject,

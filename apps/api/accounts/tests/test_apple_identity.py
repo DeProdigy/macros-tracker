@@ -111,7 +111,7 @@ def make_token(
     issuer: str | None = services.APPLE_ISSUER,
     expires_in: int = 600,
     nonce: str | None = HASHED_NONCE,
-    subject: str | None = "000123.abcdef.4567",
+    subject: Any = "000123.abcdef.4567",
     email: str | None = "user@example.com",
     drop: tuple[str, ...] = (),
 ) -> str:
@@ -373,6 +373,56 @@ def test_token_header_without_a_kid_is_rejected(apple_key, fetch):
         verify(token)
 
     assert code_of(exc_info) == "malformed_token"
+
+
+# --- unusable keys -----------------------------------------------------------
+
+
+def test_matching_kid_that_is_not_an_rsa_key_is_rejected(apple_key, fetch, monkeypatch):
+    """A matching `kid` is not the same as a usable key. The realistic version
+    of this is the day Apple publishes an EC key: PyJWT's InvalidKeyError does
+    not subclass InvalidTokenError and is raised outside the decode block, so
+    without its own clause it escapes as a 500."""
+    fetch.jwks = {"keys": [{"kty": "EC", "crv": "P-256", "x": "a", "y": "b", "kid": APPLE_KID}]}
+
+    with pytest.raises(ValidationError) as exc_info:
+        verify(make_token(apple_key))
+
+    assert code_of(exc_info) == "unusable_key"
+
+
+def test_matching_kid_with_a_truncated_key_is_rejected(apple_key, fetch):
+    """Same clause, different shape: the right `kty` with the key material
+    missing."""
+    fetch.jwks = {"keys": [{"kty": "RSA", "kid": APPLE_KID, "alg": "RS256"}]}
+
+    with pytest.raises(ValidationError) as exc_info:
+        verify(make_token(apple_key))
+
+    assert code_of(exc_info) == "unusable_key"
+
+
+@pytest.mark.parametrize("subject", [12345, ["a"], {"s": 1}])
+def test_non_string_subject_is_rejected(apple_key, fetch, subject):
+    """PyJWT type-checks `sub` itself and raises InvalidSubjectError. Mapped to
+    the same code as an absent claim rather than the generic backstop."""
+    token = make_token(apple_key, subject=subject)
+
+    with pytest.raises(ValidationError) as exc_info:
+        verify(token)
+
+    assert code_of(exc_info) == "missing_claim"
+
+
+def test_empty_subject_is_rejected(apple_key, fetch):
+    """The gap PyJWT leaves. It accepts "" as a valid string subject, which
+    would become a database lookup for an empty account key."""
+    token = make_token(apple_key, subject="")
+
+    with pytest.raises(ValidationError) as exc_info:
+        verify(token)
+
+    assert code_of(exc_info) == "missing_claim"
 
 
 # --- configuration -----------------------------------------------------------
