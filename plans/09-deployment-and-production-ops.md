@@ -2,7 +2,7 @@
 linear_id: 5ef505b1-e867-495a-befd-17e7be52fb42
 linear_title: "09 — Deployment & Production Ops"
 linear_url: https://linear.app/hintology/document/09-deployment-and-production-ops-90968f6ad784
-linear_updated_at: 2026-07-22T02:18:47.741Z
+linear_updated_at: 2026-08-20T04:02:38.250Z
 generated: true
 ---
 
@@ -55,9 +55,10 @@ DRF throttling, tighter on the endpoints that cost money:
 
 | Endpoint | Limit |
 | -- | -- |
-| Auth (login, register, reset) | Strict, per IP and per email |
-| `/api/entries/analyze/` | Per user, low ceiling |
-| `/api/advice/` | Per user, low ceiling |
+| `POST /api/auth/sessions/` | Strict, per IP |
+| `POST /api/analyses/` | Per user, low ceiling |
+| `POST /api/targets/proposals/` | Per user, low ceiling |
+| `POST /api/advice/` | Per user, low ceiling |
 | Everything else | Generous default |
 
 ## AI quotas

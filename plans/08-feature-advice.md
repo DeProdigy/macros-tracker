@@ -2,7 +2,7 @@
 linear_id: 72b7ee80-3099-42e5-a057-1ca9f8a3b3e3
 linear_title: "08 — Feature: Advice"
 linear_url: https://linear.app/hintology/document/08-feature-advice-623b2a0b1e4a
-linear_updated_at: 2026-08-19T23:47:50.032Z
+linear_updated_at: 2026-08-20T04:02:53.858Z
 generated: true
 ---
 
@@ -24,8 +24,10 @@ Reasoning: every call costs money, and most days the user doesn't need it. Backg
 ## Endpoint
 
 ```
-POST /api/advice/    → suggestions
+POST /api/advice/    → one advice object containing three suggestions
 ```
+
+Reviewed in the 20 Aug 2026 route audit and **kept**. The mass noun is a wart, but the semantics are right: one POST creates one advice resource, and the three suggestions are fields on it rather than three separately created things. `POST /api/suggestions/` would read better and describe the response worse, since a POST to a collection is understood to create one member.
 
 Server-side, the request assembles context — the client sends nothing but the request itself:
 

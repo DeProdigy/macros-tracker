@@ -67,7 +67,7 @@ def auth_client(api_client: APIClient, user) -> APIClient:
 def presign(client: APIClient, **overrides):
     payload = {"content_type": "image/jpeg", "content_length": 1024}
     payload.update(overrides)
-    return client.post(reverse("uploads:presign"), payload, format="json")
+    return client.post(reverse("uploads:create"), payload, format="json")
 
 
 # --- Authentication ---------------------------------------------------------
@@ -151,7 +151,7 @@ def test_presign_rejects_non_positive_lengths(auth_client: APIClient, content_le
 def test_presign_requires_both_fields(auth_client: APIClient):
     """Defaulting either would mean signing constraints the client never
     committed to, which is the same as not constraining it."""
-    response = auth_client.post(reverse("uploads:presign"), {}, format="json")
+    response = auth_client.post(reverse("uploads:create"), {}, format="json")
 
     body = response.json()
 
@@ -349,7 +349,7 @@ def test_download_urls_live_longer_than_upload_urls(settings):
 @pytest.mark.parametrize("method", ["get", "put", "patch", "delete"])
 def test_presign_rejects_non_post_methods(auth_client: APIClient, method: str):
     """Only POST is declared in the schema, so only POST may be routed."""
-    response = getattr(auth_client, method)(reverse("uploads:presign"))
+    response = getattr(auth_client, method)(reverse("uploads:create"))
 
     assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
@@ -366,13 +366,13 @@ def schema() -> dict:
 
 def test_schema_uses_the_explicit_operation_id(schema: dict):
     """Drives the generated hook name (`usePresignUpload`)."""
-    assert schema["paths"]["/api/uploads/presign/"]["post"]["operationId"] == "presignUpload"
+    assert schema["paths"]["/api/uploads/"]["post"]["operationId"] == "presignUpload"
 
 
 def test_schema_requires_auth_for_presign(schema: dict):
     """The inverse of the ping/health assertion: an empty security requirement
     here would mean the schema advertises an open write endpoint."""
-    security = schema["paths"]["/api/uploads/presign/"]["post"].get("security", [])
+    security = schema["paths"]["/api/uploads/"]["post"].get("security", [])
 
     assert {} not in security
 
