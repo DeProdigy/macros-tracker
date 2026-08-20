@@ -13,7 +13,10 @@ class UserAdmin(BaseUserAdmin):
 
     # BaseUserAdmin's defaults reference `username`, so override the bits that do.
     ordering = ("email",)
-    search_fields = ("email",)
+    # Both fields, because email is nullable now. An Apple user who hid their
+    # address has apple_user_id as their only identity, so an email-only search
+    # cannot find them at all.
+    search_fields = ("email", "apple_user_id")
     list_display = (
         "email",
         # The real join key under Apple-only sign-in, and the only identity a
