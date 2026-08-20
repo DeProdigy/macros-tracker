@@ -5,13 +5,13 @@
  * Typed contract consumed by apps/mobile via packages/api-client.
  * OpenAPI spec version: 0.1.0
  */
-import type { SessionUser } from "./sessionUser";
+import type { User } from "./user";
 
 /**
  * A created session: who you are, and the tokens to keep being them.
  */
 export interface Session {
-  user: SessionUser;
+  user: User;
   /** Short-lived bearer token for API calls. Send as `Authorization: Bearer <access>`. */
   access: string;
   /** Long-lived token used to mint a new pair. Rotated on every use and the old one blacklisted, so store it in the Keychain via expo-secure-store and never in AsyncStorage. */

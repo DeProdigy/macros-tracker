@@ -70,8 +70,12 @@
                                                 "id": 1,
                                                 "email": "user@privaterelay.appleid.com",
                                                 "name": "Alex Hint",
+                                                "timezone": "UTC",
                                                 "onboarding_completed": false,
-                                                "timezone": "UTC"
+                                                "goal_weight_kg": null,
+                                                "goal_timeline_weeks": null,
+                                                "training_days_per_week": null,
+                                                "dietary_constraints": ""
                                             },
                                             "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                                             "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -92,6 +96,129 @@
                         "description": "No response body"
                     },
                     "429": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/auth/sessions/current/": {
+            "delete": {
+                "operationId": "deleteCurrentSession",
+                "description": "Blacklists the refresh token in the body, so it can never mint another access token.\n\n**The refresh token goes in the body of a DELETE**, which is unusual and is the only option there is: blacklisting an access token is not a thing that exists in this scheme. Nothing on the access path consults a blacklist, which is also why signing out does not invalidate the access token the client is holding — that one stays valid until it expires, within 15 minutes. Discard both tokens client-side as well.\n\nAuthenticated, and the token must belong to the caller. Signing out is idempotent from the client's point of view: an already blacklisted or malformed token returns 400 and the client should clear its storage regardless.",
+                "summary": "Sign out",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionDeleteRequest"
+                            },
+                            "examples": {
+                                "SignOut": {
+                                    "value": {
+                                        "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                    },
+                                    "summary": "Present the stored refresh token"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionDeleteRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionDeleteRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "401": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/auth/sessions/refresh/": {
+            "post": {
+                "operationId": "refreshSession",
+                "description": "Exchanges a valid refresh token for a new access token **and a new refresh token**. Rotation is on, so the presented refresh token is blacklisted by this call: store the returned pair and discard the old one, or the next refresh fails.\n\n**Requires no authentication, by design.** This endpoint exists because the access token has expired, so demanding a valid one here would be a deadlock. The refresh token in the body *is* the credential.\n\nA rejected token returns 401 whether it expired, was already rotated, or was never valid. Reusing a rotated token is the signature of a stolen credential, and the client's only correct response to any 401 here is to sign in again.",
+                "summary": "Refresh a session",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionRefreshRequest"
+                            },
+                            "examples": {
+                                "Refresh": {
+                                    "value": {
+                                        "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                    },
+                                    "summary": "Present the stored refresh token"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionRefreshRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionRefreshRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SessionRefresh"
+                                },
+                                "examples": {
+                                    "NewPair": {
+                                        "value": {
+                                            "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                                            "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                        },
+                                        "summary": "Successful response",
+                                        "description": "`refresh` differs from the one presented. Overwrite both values in the Keychain together."
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "401": {
                         "description": "No response body"
                     }
                 }
@@ -269,6 +396,132 @@
                     }
                 }
             }
+        },
+        "/api/users/me/": {
+            "get": {
+                "operationId": "getCurrentUser",
+                "description": "Returns the user the bearer token resolves to. This is how the client learns who it is signed in as after a cold start, and `onboarding_completed` is what it routes on: false sends the user to onboarding, true to Today.\n\n401 when the token is missing, malformed, or expired — which the client should treat as 'refresh, then retry once'.",
+                "summary": "Read the signed-in user",
+                "tags": [
+                    "users"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/User"
+                                },
+                                "examples": {
+                                    "CurrentUser": {
+                                        "value": {
+                                            "id": 1,
+                                            "email": "user@privaterelay.appleid.com",
+                                            "name": "Alex Hint",
+                                            "timezone": "Europe/London",
+                                            "onboarding_completed": true,
+                                            "goal_weight_kg": "78.50",
+                                            "goal_timeline_weeks": 12,
+                                            "training_days_per_week": 4,
+                                            "dietary_constraints": ""
+                                        },
+                                        "summary": "A user partway through settings",
+                                        "description": "The four settings fields are null or empty until the user fills them in, which most never will."
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "updateCurrentUser",
+                "description": "Partial update of the settings doc 05 moved out of onboarding: goal weight, timeline, training days, and dietary constraints — plus the timezone the client refreshes on launch.\n\n**Partial.** An omitted field is left untouched; an explicit null clears it back to unanswered. That distinction is the reason this is `PATCH` and not `PUT`: a full replace cannot tell the two apart.\n\nOnly these fields are writable. `email` and `name` come from Apple at sign-in, and `onboarding_completed` is set by completing onboarding, so none of them are accepted here — sending them is ignored, not an error. The response is the full user, so the client can replace its cached copy with one round trip.",
+                "summary": "Update the signed-in user's settings",
+                "tags": [
+                    "users"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserSettingsRequest"
+                            },
+                            "examples": {
+                                "SetAGoal": {
+                                    "value": {
+                                        "goal_weight_kg": "78.50",
+                                        "goal_timeline_weeks": 12
+                                    },
+                                    "summary": "Two fields, the rest untouched"
+                                },
+                                "ClearTheGoal": {
+                                    "value": {
+                                        "goal_weight_kg": null,
+                                        "goal_timeline_weeks": null
+                                    },
+                                    "summary": "Explicit nulls clear",
+                                    "description": "Omitting these fields would have left the stored values alone."
+                                },
+                                "RefreshTheTimezone": {
+                                    "value": {
+                                        "timezone": "Europe/London"
+                                    },
+                                    "summary": "Sent on app launch"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserSettingsRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserSettingsRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/User"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "401": {
+                        "description": "No response body"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -313,6 +566,45 @@
                 ],
                 "type": "string",
                 "description": "* `ok` - ok\n* `unhealthy` - unhealthy"
+            },
+            "PatchedUserSettingsRequest": {
+                "type": "object",
+                "description": "What a client may write to its own user.\n\nDeliberately not `UserSerializer` with a couple of fields marked read-only.\nSharing one serializer between the read and the write shape is how\n`onboarding_completed` becomes client-settable: it only takes someone\nrelaxing a `read_only_fields` entry to ship the hole, and nothing about the\nread shape would look wrong in review.\n\nBounds live on the model fields, so `PATCH` and the admin reject the same\nvalues. ModelSerializer copies model validators onto the serializer fields.",
+                "properties": {
+                    "timezone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "IANA timezone name, e.g. `America/New_York`. The client refreshes this on launch (doc 02), so a user who flies somewhere gets their days bucketed locally. Never a numeric offset — offsets break across DST.",
+                        "maxLength": 64
+                    },
+                    "goal_weight_kg": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,2})?$",
+                        "nullable": true,
+                        "description": "Target body weight in kilograms, 20–400. Null clears it back to unanswered."
+                    },
+                    "goal_timeline_weeks": {
+                        "type": "integer",
+                        "maximum": 104,
+                        "minimum": 1,
+                        "nullable": true,
+                        "description": "Weeks the user wants to reach the goal weight in, 1–104. A duration rather than a date, so it does not go stale. Null clears."
+                    },
+                    "training_days_per_week": {
+                        "type": "integer",
+                        "maximum": 7,
+                        "minimum": 0,
+                        "nullable": true,
+                        "description": "Training days in a typical week, 0–7. Null clears."
+                    },
+                    "dietary_constraints": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Free text, up to 500 characters — 'no dairy, allergic to shellfish'. Read by the advice feature (doc 08), not by target generation. Send an empty string to clear; null is accepted and stored as empty.",
+                        "maxLength": 500
+                    }
+                }
             },
             "Ping": {
                 "type": "object",
@@ -392,7 +684,7 @@
                 "description": "A created session: who you are, and the tokens to keep being them.",
                 "properties": {
                     "user": {
-                        "$ref": "#/components/schemas/SessionUser"
+                        "$ref": "#/components/schemas/User"
                     },
                     "access": {
                         "type": "string",
@@ -439,39 +731,114 @@
                     "nonce"
                 ]
             },
-            "SessionUser": {
+            "SessionDeleteRequest": {
                 "type": "object",
-                "description": "The signed-in user, as the client needs them.\n\nA deliberate subset. The mobile app routes on `onboarding_completed` and\ndisplays the rest; nothing else on the model is its business.",
+                "description": "What sign-out presents.\n\nThe refresh token, in the body of a DELETE. Unusual, and correct: an access\ntoken cannot be revoked -- there is no blacklist on the access path -- so\nthe refresh token is the only thing there is to destroy.",
+                "properties": {
+                    "refresh": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The refresh token to blacklist. Must belong to the authenticated user; another user's token is rejected."
+                    }
+                },
+                "required": [
+                    "refresh"
+                ]
+            },
+            "SessionRefresh": {
+                "type": "object",
+                "description": "What the client presents to refresh, and what it gets back.\n\nOne serializer for both directions because the shapes genuinely match: a\nrefresh token goes in, and a new pair -- including a new refresh token --\ncomes back. `access` is response-only, so the request component drops it\n(COMPONENT_SPLIT_REQUEST in settings splits them).\n\nNot simplejwt's own `TokenRefreshSerializer`. That one carries no help text,\ntypes `refresh` as a bare string, and changes shape with the rotation\nsetting; this API's contract is generated into a mobile client, so it states\nwhat it returns rather than inheriting it.",
+                "properties": {
+                    "refresh": {
+                        "type": "string",
+                        "description": "The refresh token from the last sign-in or refresh. It is the credential for this call: no `Authorization` header is read, because the whole point of refreshing is that the access token has expired."
+                    },
+                    "access": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "A new short-lived access token."
+                    }
+                },
+                "required": [
+                    "access",
+                    "refresh"
+                ]
+            },
+            "SessionRefreshRequest": {
+                "type": "object",
+                "description": "What the client presents to refresh, and what it gets back.\n\nOne serializer for both directions because the shapes genuinely match: a\nrefresh token goes in, and a new pair -- including a new refresh token --\ncomes back. `access` is response-only, so the request component drops it\n(COMPONENT_SPLIT_REQUEST in settings splits them).\n\nNot simplejwt's own `TokenRefreshSerializer`. That one carries no help text,\ntypes `refresh` as a bare string, and changes shape with the rotation\nsetting; this API's contract is generated into a mobile client, so it states\nwhat it returns rather than inheriting it.",
+                "properties": {
+                    "refresh": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The refresh token from the last sign-in or refresh. It is the credential for this call: no `Authorization` header is read, because the whole point of refreshing is that the access token has expired."
+                    }
+                },
+                "required": [
+                    "refresh"
+                ]
+            },
+            "User": {
+                "type": "object",
+                "description": "The signed-in user, as the client is allowed to see them.\n\nOne serializer for the whole read shape, used by `GET /api/users/me/` and\nembedded in the sign-in response. Two serializers describing the same row\nwould generate two client types that drift the first time a field is added\nto one of them.\n\nA ModelSerializer here, and a hand-written Serializer for the request shapes\nbelow. The difference is what the fields are: these mirror model columns and\nthe validators belong on the model, while a refresh token is not a column\nand never will be.\n\nEvery field is read-only. This is the *read* shape; the subset a client may\nwrite is `UserSettingsSerializer`, and keeping them apart is what stops a\nclient from setting `onboarding_completed` on itself.",
                 "properties": {
                     "id": {
                         "type": "integer",
-                        "description": "Stable user identifier."
+                        "readOnly": true
                     },
                     "email": {
                         "type": "string",
                         "format": "email",
+                        "readOnly": true,
                         "nullable": true,
                         "description": "May be null: Apple does not guarantee an email, and may supply a private relay address rather than a real one."
                     },
                     "name": {
                         "type": "string",
+                        "readOnly": true,
                         "description": "Display name, or empty when Apple never supplied one."
-                    },
-                    "onboarding_completed": {
-                        "type": "boolean",
-                        "description": "Whether the client should route to onboarding or to Today."
                     },
                     "timezone": {
                         "type": "string",
-                        "description": "IANA timezone name, e.g. `America/New_York`."
+                        "readOnly": true
+                    },
+                    "onboarding_completed": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Whether the client should route to onboarding or to Today."
+                    },
+                    "goal_weight_kg": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,2})?$",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "goal_timeline_weeks": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "training_days_per_week": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "dietary_constraints": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "dietary_constraints",
                     "email",
+                    "goal_timeline_weeks",
+                    "goal_weight_kg",
                     "id",
                     "name",
                     "onboarding_completed",
-                    "timezone"
+                    "timezone",
+                    "training_days_per_week"
                 ]
             }
         },

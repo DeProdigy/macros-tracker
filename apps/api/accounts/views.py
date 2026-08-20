@@ -14,10 +14,21 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from accounts import services
-from accounts.serializers import SessionCreateSerializer, SessionSerializer
+from accounts.schema import RequestBodyOnDeleteAutoSchema
+from accounts.serializers import (
+    SessionCreateSerializer,
+    SessionDeleteSerializer,
+    SessionRefreshSerializer,
+    SessionSerializer,
+    UserSerializer,
+    UserSettingsSerializer,
+)
 from accounts.throttles import SignInBurstThrottle, SignInSustainedThrottle
 
 
@@ -109,8 +120,12 @@ class SessionCreateView(APIView):
                         "id": 1,
                         "email": "user@privaterelay.appleid.com",
                         "name": "Alex Hint",
-                        "onboarding_completed": False,
                         "timezone": "UTC",
+                        "onboarding_completed": False,
+                        "goal_weight_kg": None,
+                        "goal_timeline_weeks": None,
+                        "training_days_per_week": None,
+                        "dietary_constraints": "",
                     },
                     "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                     "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -155,3 +170,285 @@ class SessionCreateView(APIView):
         # the user is reported in the body, not in the status -- the resource
         # addressed is the session either way.
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class SessionRefreshView(TokenRefreshView):
+    """Exchange a refresh token for a new pair.
+
+    Subclassed rather than routed directly, for two reasons.
+
+    The schema is the first. simplejwt's `TokenRefreshView` carries no
+    `@extend_schema`, so `spectacular --fail-on-warn` fails on it and the client
+    never generates. The generated hook name is the second: the base view would
+    produce `useApiAuthSessionsRefreshCreate`, and an operation id is not
+    something to rename after call sites exist.
+
+    The refresh logic itself is inherited, deliberately. Rotation, blacklisting
+    the presented token, and the sliding-token variants are simplejwt's problem,
+    and reimplementing them here to own the response shape would be a security
+    control rewritten for cosmetics.
+    """
+
+    # Both lines, and neither is redundant with the other. `AllowAny` is the
+    # whole reason this endpoint can work: it is reached precisely *because* the
+    # access token expired, so requiring a valid one to get a new one is a
+    # deadlock. Emptying authentication_classes then stops SessionAuthentication
+    # running a CSRF check against a request that carries no session. Same pair
+    # as SessionCreateView and PingView.
+    # Both empty, and both stated rather than inherited. `AllowAny` is not
+    # spelled here because the base class types these as empty tuples and an
+    # empty permission list already means the same thing -- what matters is that
+    # neither is a leftover.
+    #
+    # This is the whole reason the endpoint works: it is reached precisely
+    # *because* the access token expired, so requiring a valid one to get a new
+    # one is a deadlock. Empty authentication_classes then stops
+    # SessionAuthentication running a CSRF check against a request that carries
+    # no session. Same intent as SessionCreateView and PingView, which spell it
+    # with AllowAny because they inherit from a base that does not.
+    permission_classes = ()
+    authentication_classes = ()
+
+    @extend_schema(
+        operation_id="refreshSession",
+        summary="Refresh a session",
+        description=(
+            "Exchanges a valid refresh token for a new access token **and a new "
+            "refresh token**. Rotation is on, so the presented refresh token is "
+            "blacklisted by this call: store the returned pair and discard the "
+            "old one, or the next refresh fails.\n\n"
+            "**Requires no authentication, by design.** This endpoint exists "
+            "because the access token has expired, so demanding a valid one "
+            "here would be a deadlock. The refresh token in the body *is* the "
+            "credential.\n\n"
+            "A rejected token returns 401 whether it expired, was already "
+            "rotated, or was never valid. Reusing a rotated token is the "
+            "signature of a stolen credential, and the client's only correct "
+            "response to any 401 here is to sign in again."
+        ),
+        tags=["auth"],
+        request=SessionRefreshSerializer,
+        responses={
+            status.HTTP_200_OK: SessionRefreshSerializer,
+            status.HTTP_400_BAD_REQUEST: None,
+            status.HTTP_401_UNAUTHORIZED: None,
+        },
+        examples=[
+            OpenApiExample(
+                "Refresh",
+                summary="Present the stored refresh token",
+                value={"refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "New pair",
+                summary="Successful response",
+                description=(
+                    "`refresh` differs from the one presented. Overwrite both values in "
+                    "the Keychain together."
+                ),
+                value={
+                    "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                },
+                response_only=True,
+                status_codes=[str(status.HTTP_200_OK)],
+            ),
+        ],
+    )
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # 200, not 201. Nothing addressable was created -- the session already
+        # existed and this returns a fresh representation of the credential for
+        # it. Compare SessionCreateView, which really does create one.
+        return super().post(request, *args, **kwargs)
+
+
+class CurrentSessionView(APIView):
+    """Sign out: blacklist the presented refresh token.
+
+    Named singleton. `current` is the one session the caller can address, and it
+    has no id of its own for the client to hold.
+    """
+
+    # DELETE carries a body here, and drf-spectacular drops request bodies on
+    # DELETE by default -- so without this the generated client would have no
+    # way to send the refresh token. See the class for why the body is right.
+    schema = RequestBodyOnDeleteAutoSchema()
+
+    @extend_schema(
+        operation_id="deleteCurrentSession",
+        summary="Sign out",
+        description=(
+            "Blacklists the refresh token in the body, so it can never mint "
+            "another access token.\n\n"
+            "**The refresh token goes in the body of a DELETE**, which is "
+            "unusual and is the only option there is: blacklisting an access "
+            "token is not a thing that exists in this scheme. Nothing on the "
+            "access path consults a blacklist, which is also why signing out "
+            "does not invalidate the access token the client is holding — that "
+            "one stays valid until it expires, within 15 minutes. Discard both "
+            "tokens client-side as well.\n\n"
+            "Authenticated, and the token must belong to the caller. Signing "
+            "out is idempotent from the client's point of view: an already "
+            "blacklisted or malformed token returns 400 and the client should "
+            "clear its storage regardless."
+        ),
+        tags=["auth"],
+        request=SessionDeleteSerializer,
+        responses={
+            status.HTTP_204_NO_CONTENT: None,
+            status.HTTP_400_BAD_REQUEST: None,
+            status.HTTP_401_UNAUTHORIZED: None,
+        },
+        examples=[
+            OpenApiExample(
+                "Sign out",
+                summary="Present the stored refresh token",
+                value={"refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."},
+                request_only=True,
+            ),
+        ],
+    )
+    def delete(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        serializer = SessionDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            token = RefreshToken(serializer.validated_data["refresh"])
+        except TokenError as exc:
+            # Expired, already blacklisted, or never ours. All the same answer:
+            # there is nothing left to revoke and the client's next step is
+            # identical in every case.
+            raise ValidationError({"refresh": "Token is invalid or expired."}) from exc
+
+        # Ownership check. Without it, any authenticated user can blacklist any
+        # refresh token they can get hold of, which is a denial of service on
+        # somebody else's session dressed up as a sign-out.
+        #
+        # Compared as strings on purpose: simplejwt stringifies the id when it
+        # mints the claim, so `token.payload["user_id"]` is "42" and
+        # `request.user.pk` is 42. A `!=` between those is always True, and the
+        # bug it produces is the worst shape available -- every sign-out fails
+        # with "not your token", including the ordinary one.
+        owner_id = str(getattr(request.user, api_settings.USER_ID_FIELD))
+        if str(token.payload.get(api_settings.USER_ID_CLAIM)) != owner_id:
+            raise ValidationError({"refresh": "Token is invalid or expired."})
+
+        token.blacklist()
+
+        # 204: a delete succeeded and there is nothing to say about it.
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CurrentUserView(APIView):
+    """Read or update the signed-in user.
+
+    Named singleton again, and the exception the route conventions allow: the
+    client cannot address itself by id, and the server genuinely owns which user
+    a bearer token resolves to.
+
+    `APIView` rather than `RetrieveUpdateAPIView`. The generic view is a better
+    fit for everything except one detail -- it also routes `PUT`, and a full
+    replace cannot tell "field omitted" from "field cleared". Three explicit
+    methods beat a fourth that has to be suppressed. `DELETE` on this same URL
+    is MAC-29's.
+    """
+
+    @extend_schema(
+        operation_id="getCurrentUser",
+        summary="Read the signed-in user",
+        description=(
+            "Returns the user the bearer token resolves to. This is how the "
+            "client learns who it is signed in as after a cold start, and "
+            "`onboarding_completed` is what it routes on: false sends the user "
+            "to onboarding, true to Today.\n\n"
+            "401 when the token is missing, malformed, or expired — which the "
+            "client should treat as 'refresh, then retry once'."
+        ),
+        tags=["users"],
+        responses={
+            status.HTTP_200_OK: UserSerializer,
+            status.HTTP_401_UNAUTHORIZED: None,
+        },
+        examples=[
+            OpenApiExample(
+                "Current user",
+                summary="A user partway through settings",
+                description=(
+                    "The four settings fields are null or empty until the user fills "
+                    "them in, which most never will."
+                ),
+                value={
+                    "id": 1,
+                    "email": "user@privaterelay.appleid.com",
+                    "name": "Alex Hint",
+                    "timezone": "Europe/London",
+                    "onboarding_completed": True,
+                    "goal_weight_kg": "78.50",
+                    "goal_timeline_weeks": 12,
+                    "training_days_per_week": 4,
+                    "dietary_constraints": "",
+                },
+                response_only=True,
+                status_codes=[str(status.HTTP_200_OK)],
+            ),
+        ],
+    )
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return Response(UserSerializer(request.user).data)
+
+    @extend_schema(
+        operation_id="updateCurrentUser",
+        summary="Update the signed-in user's settings",
+        description=(
+            "Partial update of the settings doc 05 moved out of onboarding: "
+            "goal weight, timeline, training days, and dietary constraints — "
+            "plus the timezone the client refreshes on launch.\n\n"
+            "**Partial.** An omitted field is left untouched; an explicit null "
+            "clears it back to unanswered. That distinction is the reason this "
+            "is `PATCH` and not `PUT`: a full replace cannot tell the two "
+            "apart.\n\n"
+            "Only these fields are writable. `email` and `name` come from Apple "
+            "at sign-in, and `onboarding_completed` is set by completing "
+            "onboarding, so none of them are accepted here — sending them is "
+            "ignored, not an error. The response is the full user, so the "
+            "client can replace its cached copy with one round trip."
+        ),
+        tags=["users"],
+        request=UserSettingsSerializer,
+        responses={
+            status.HTTP_200_OK: UserSerializer,
+            status.HTTP_400_BAD_REQUEST: None,
+            status.HTTP_401_UNAUTHORIZED: None,
+        },
+        examples=[
+            OpenApiExample(
+                "Set a goal",
+                summary="Two fields, the rest untouched",
+                value={"goal_weight_kg": "78.50", "goal_timeline_weeks": 12},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Clear the goal",
+                summary="Explicit nulls clear",
+                description="Omitting these fields would have left the stored values alone.",
+                value={"goal_weight_kg": None, "goal_timeline_weeks": None},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Refresh the timezone",
+                summary="Sent on app launch",
+                value={"timezone": "Europe/London"},
+                request_only=True,
+            ),
+        ],
+    )
+    def patch(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        serializer = UserSettingsSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        # Read shape back, not the write shape. The client asked to change its
+        # own user and the useful answer is the whole user -- otherwise it has
+        # to follow every PATCH with a GET to refresh its cache.
+        return Response(UserSerializer(request.user).data)

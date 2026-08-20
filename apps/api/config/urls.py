@@ -28,11 +28,16 @@ urlpatterns = [
     # Probed by Railway's health check (see apps/api/railway.json). Unlike
     # ping, this one queries the database.
     path("api/health/", HealthView.as_view(), name="health"),
-    # Sign in with Apple (MAC-27). `accounts` owns /api/auth/ for session
-    # resources and will own /api/users/ for the user itself -- the URL tree and
-    # the app tree are allowed to differ, and forcing them to match is what
-    # produced /api/entries/analyze/ in the route audit.
+    # Sign in with Apple (MAC-27) and the rest of the session lifecycle
+    # (MAC-28). `accounts` owns /api/auth/ for session resources and
+    # /api/users/ for the user itself -- the URL tree and the app tree are
+    # allowed to differ, and forcing them to match is what produced
+    # /api/entries/analyze/ in the route audit.
     path("api/auth/", include("accounts.urls")),
+    # Same app, second prefix (MAC-28). `accounts` manages both, and that is
+    # allowed: the URL tree names resources, the app tree groups code, and they
+    # answer different questions.
+    path("api/users/", include("accounts.urls_users")),
     # Presigned object-storage URLs (MAC-19). Owns its own routes so the app
     # stays self-contained as more of them appear.
     path("api/uploads/", include("uploads.urls")),

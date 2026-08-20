@@ -73,10 +73,26 @@ class UserAdmin(BaseUserAdmin):
             "Profile",
             {
                 "fields": (
+                    "name",
                     "timezone",
                     "onboarding_completed",
                     "ai_calls_this_month",
                 )
+            },
+        ),
+        (
+            "Settings",
+            {
+                # The four fields doc 05 moved out of onboarding. Listed here
+                # because an admin fieldset is explicit: a field absent from
+                # this tuple is invisible in the admin no matter what the model
+                # says, and support cannot answer "what goal did they set?"
+                "fields": (
+                    "goal_weight_kg",
+                    "goal_timeline_weeks",
+                    "training_days_per_week",
+                    "dietary_constraints",
+                ),
             },
         ),
         (

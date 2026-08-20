@@ -23,11 +23,16 @@ import type {
 
 import type {
   Health,
+  PatchedUserSettingsRequest,
   Ping,
   PresignUploadRequestRequest,
   PresignUploadResponse,
   Session,
   SessionCreateRequest,
+  SessionDeleteRequest,
+  SessionRefresh,
+  SessionRefreshRequest,
+  User,
 } from "./model";
 
 import { customFetch } from "../http-client";
@@ -151,6 +156,236 @@ export const useCreateSession = <TError = void, TContext = unknown>(
   TContext
 > => {
   const mutationOptions = getCreateSessionMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+
+/**
+ * Blacklists the refresh token in the body, so it can never mint another access token.
+
+**The refresh token goes in the body of a DELETE**, which is unusual and is the only option there is: blacklisting an access token is not a thing that exists in this scheme. Nothing on the access path consults a blacklist, which is also why signing out does not invalidate the access token the client is holding — that one stays valid until it expires, within 15 minutes. Discard both tokens client-side as well.
+
+Authenticated, and the token must belong to the caller. Signing out is idempotent from the client's point of view: an already blacklisted or malformed token returns 400 and the client should clear its storage regardless.
+ * @summary Sign out
+ */
+export type deleteCurrentSessionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteCurrentSessionResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type deleteCurrentSessionResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type deleteCurrentSessionResponseSuccess = deleteCurrentSessionResponse204 & {
+  headers: Headers;
+};
+export type deleteCurrentSessionResponseError = (
+  deleteCurrentSessionResponse400 | deleteCurrentSessionResponse401
+) & {
+  headers: Headers;
+};
+
+export type deleteCurrentSessionResponse =
+  deleteCurrentSessionResponseSuccess | deleteCurrentSessionResponseError;
+
+export const getDeleteCurrentSessionUrl = () => {
+  return `/api/auth/sessions/current/`;
+};
+
+export const deleteCurrentSession = async (
+  sessionDeleteRequest: SessionDeleteRequest,
+  options?: RequestInit,
+): Promise<deleteCurrentSessionResponse> => {
+  return customFetch<deleteCurrentSessionResponse>(getDeleteCurrentSessionUrl(), {
+    ...options,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sessionDeleteRequest),
+  });
+};
+
+export const getDeleteCurrentSessionMutationOptions = <
+  TError = void,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCurrentSession>>,
+    TError,
+    { data: SessionDeleteRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteCurrentSession>>,
+  TError,
+  { data: SessionDeleteRequest },
+  TContext
+> => {
+  const mutationKey = ["deleteCurrentSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteCurrentSession>>,
+    { data: SessionDeleteRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return deleteCurrentSession(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteCurrentSessionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteCurrentSession>>
+>;
+export type DeleteCurrentSessionMutationBody = SessionDeleteRequest;
+export type DeleteCurrentSessionMutationError = void;
+
+/**
+ * @summary Sign out
+ */
+export const useDeleteCurrentSession = <TError = void, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteCurrentSession>>,
+      TError,
+      { data: SessionDeleteRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteCurrentSession>>,
+  TError,
+  { data: SessionDeleteRequest },
+  TContext
+> => {
+  const mutationOptions = getDeleteCurrentSessionMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+
+/**
+ * Exchanges a valid refresh token for a new access token **and a new refresh token**. Rotation is on, so the presented refresh token is blacklisted by this call: store the returned pair and discard the old one, or the next refresh fails.
+
+**Requires no authentication, by design.** This endpoint exists because the access token has expired, so demanding a valid one here would be a deadlock. The refresh token in the body *is* the credential.
+
+A rejected token returns 401 whether it expired, was already rotated, or was never valid. Reusing a rotated token is the signature of a stolen credential, and the client's only correct response to any 401 here is to sign in again.
+ * @summary Refresh a session
+ */
+export type refreshSessionResponse200 = {
+  data: SessionRefresh;
+  status: 200;
+};
+
+export type refreshSessionResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type refreshSessionResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type refreshSessionResponseSuccess = refreshSessionResponse200 & {
+  headers: Headers;
+};
+export type refreshSessionResponseError = (
+  refreshSessionResponse400 | refreshSessionResponse401
+) & {
+  headers: Headers;
+};
+
+export type refreshSessionResponse = refreshSessionResponseSuccess | refreshSessionResponseError;
+
+export const getRefreshSessionUrl = () => {
+  return `/api/auth/sessions/refresh/`;
+};
+
+export const refreshSession = async (
+  sessionRefreshRequest: SessionRefreshRequest,
+  options?: RequestInit,
+): Promise<refreshSessionResponse> => {
+  return customFetch<refreshSessionResponse>(getRefreshSessionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sessionRefreshRequest),
+  });
+};
+
+export const getRefreshSessionMutationOptions = <TError = void, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof refreshSession>>,
+    TError,
+    { data: SessionRefreshRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof refreshSession>>,
+  TError,
+  { data: SessionRefreshRequest },
+  TContext
+> => {
+  const mutationKey = ["refreshSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof refreshSession>>,
+    { data: SessionRefreshRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return refreshSession(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RefreshSessionMutationResult = NonNullable<Awaited<ReturnType<typeof refreshSession>>>;
+export type RefreshSessionMutationBody = SessionRefreshRequest;
+export type RefreshSessionMutationError = void;
+
+/**
+ * @summary Refresh a session
+ */
+export const useRefreshSession = <TError = void, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof refreshSession>>,
+      TError,
+      { data: SessionRefreshRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof refreshSession>>,
+  TError,
+  { data: SessionRefreshRequest },
+  TContext
+> => {
+  const mutationOptions = getRefreshSessionMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };
@@ -496,6 +731,256 @@ export const usePresignUpload = <TError = void, TContext = unknown>(
   TContext
 > => {
   const mutationOptions = getPresignUploadMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+
+/**
+ * Returns the user the bearer token resolves to. This is how the client learns who it is signed in as after a cold start, and `onboarding_completed` is what it routes on: false sends the user to onboarding, true to Today.
+
+401 when the token is missing, malformed, or expired — which the client should treat as 'refresh, then retry once'.
+ * @summary Read the signed-in user
+ */
+export type getCurrentUserResponse200 = {
+  data: User;
+  status: 200;
+};
+
+export type getCurrentUserResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getCurrentUserResponseSuccess = getCurrentUserResponse200 & {
+  headers: Headers;
+};
+export type getCurrentUserResponseError = getCurrentUserResponse401 & {
+  headers: Headers;
+};
+
+export type getCurrentUserResponse = getCurrentUserResponseSuccess | getCurrentUserResponseError;
+
+export const getGetCurrentUserUrl = () => {
+  return `/api/users/me/`;
+};
+
+export const getCurrentUser = async (options?: RequestInit): Promise<getCurrentUserResponse> => {
+  return customFetch<getCurrentUserResponse>(getGetCurrentUserUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCurrentUserQueryKey = () => {
+  return [`/api/users/me/`] as const;
+};
+
+export const getGetCurrentUserQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCurrentUser>>,
+  TError = void,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCurrentUserQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCurrentUser>>> = ({ signal }) =>
+    getCurrentUser({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCurrentUser>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetCurrentUserQueryResult = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
+export type GetCurrentUserQueryError = void;
+
+export function useGetCurrentUser<
+  TData = Awaited<ReturnType<typeof getCurrentUser>>,
+  TError = void,
+>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCurrentUser>>,
+          TError,
+          Awaited<ReturnType<typeof getCurrentUser>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetCurrentUser<
+  TData = Awaited<ReturnType<typeof getCurrentUser>>,
+  TError = void,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCurrentUser>>,
+          TError,
+          Awaited<ReturnType<typeof getCurrentUser>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetCurrentUser<
+  TData = Awaited<ReturnType<typeof getCurrentUser>>,
+  TError = void,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Read the signed-in user
+ */
+
+export function useGetCurrentUser<
+  TData = Awaited<ReturnType<typeof getCurrentUser>>,
+  TError = void,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetCurrentUserQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
+/**
+ * Partial update of the settings doc 05 moved out of onboarding: goal weight, timeline, training days, and dietary constraints — plus the timezone the client refreshes on launch.
+
+**Partial.** An omitted field is left untouched; an explicit null clears it back to unanswered. That distinction is the reason this is `PATCH` and not `PUT`: a full replace cannot tell the two apart.
+
+Only these fields are writable. `email` and `name` come from Apple at sign-in, and `onboarding_completed` is set by completing onboarding, so none of them are accepted here — sending them is ignored, not an error. The response is the full user, so the client can replace its cached copy with one round trip.
+ * @summary Update the signed-in user's settings
+ */
+export type updateCurrentUserResponse200 = {
+  data: User;
+  status: 200;
+};
+
+export type updateCurrentUserResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type updateCurrentUserResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type updateCurrentUserResponseSuccess = updateCurrentUserResponse200 & {
+  headers: Headers;
+};
+export type updateCurrentUserResponseError = (
+  updateCurrentUserResponse400 | updateCurrentUserResponse401
+) & {
+  headers: Headers;
+};
+
+export type updateCurrentUserResponse =
+  updateCurrentUserResponseSuccess | updateCurrentUserResponseError;
+
+export const getUpdateCurrentUserUrl = () => {
+  return `/api/users/me/`;
+};
+
+export const updateCurrentUser = async (
+  patchedUserSettingsRequest: PatchedUserSettingsRequest,
+  options?: RequestInit,
+): Promise<updateCurrentUserResponse> => {
+  return customFetch<updateCurrentUserResponse>(getUpdateCurrentUserUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(patchedUserSettingsRequest),
+  });
+};
+
+export const getUpdateCurrentUserMutationOptions = <TError = void, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCurrentUser>>,
+    TError,
+    { data: PatchedUserSettingsRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCurrentUser>>,
+  TError,
+  { data: PatchedUserSettingsRequest },
+  TContext
+> => {
+  const mutationKey = ["updateCurrentUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCurrentUser>>,
+    { data: PatchedUserSettingsRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateCurrentUser(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCurrentUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCurrentUser>>
+>;
+export type UpdateCurrentUserMutationBody = PatchedUserSettingsRequest;
+export type UpdateCurrentUserMutationError = void;
+
+/**
+ * @summary Update the signed-in user's settings
+ */
+export const useUpdateCurrentUser = <TError = void, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateCurrentUser>>,
+      TError,
+      { data: PatchedUserSettingsRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateCurrentUser>>,
+  TError,
+  { data: PatchedUserSettingsRequest },
+  TContext
+> => {
+  const mutationOptions = getUpdateCurrentUserMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

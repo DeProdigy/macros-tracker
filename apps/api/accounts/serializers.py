@@ -8,6 +8,8 @@ every permission relation into the mobile app's types.
 
 from rest_framework import serializers
 
+from accounts.models import User
+
 
 class SessionCreateSerializer(serializers.Serializer):
     """What the client presents to sign in.
@@ -48,35 +50,134 @@ class SessionCreateSerializer(serializers.Serializer):
     )
 
 
-class SessionUserSerializer(serializers.Serializer):
-    """The signed-in user, as the client needs them.
+class UserSerializer(serializers.ModelSerializer):
+    """The signed-in user, as the client is allowed to see them.
 
-    A deliberate subset. The mobile app routes on `onboarding_completed` and
-    displays the rest; nothing else on the model is its business.
+    One serializer for the whole read shape, used by `GET /api/users/me/` and
+    embedded in the sign-in response. Two serializers describing the same row
+    would generate two client types that drift the first time a field is added
+    to one of them.
+
+    A ModelSerializer here, and a hand-written Serializer for the request shapes
+    below. The difference is what the fields are: these mirror model columns and
+    the validators belong on the model, while a refresh token is not a column
+    and never will be.
+
+    Every field is read-only. This is the *read* shape; the subset a client may
+    write is `UserSettingsSerializer`, and keeping them apart is what stops a
+    client from setting `onboarding_completed` on itself.
     """
 
-    id = serializers.IntegerField(help_text="Stable user identifier.")
-    email = serializers.EmailField(
-        allow_null=True,
-        help_text=(
-            "May be null: Apple does not guarantee an email, and may supply a "
-            "private relay address rather than a real one."
-        ),
-    )
-    name = serializers.CharField(
-        allow_blank=True,
-        help_text="Display name, or empty when Apple never supplied one.",
-    )
-    onboarding_completed = serializers.BooleanField(
-        help_text="Whether the client should route to onboarding or to Today.",
-    )
-    timezone = serializers.CharField(help_text="IANA timezone name, e.g. `America/New_York`.")
+    class Meta:
+        model = User
+        # Explicit, never `fields = "__all__"`. An `__all__` on the user model
+        # would publish `password`, `is_superuser`, and every permission
+        # relation straight into the mobile app's generated types.
+        fields = [
+            "id",
+            "email",
+            "name",
+            "timezone",
+            "onboarding_completed",
+            "goal_weight_kg",
+            "goal_timeline_weeks",
+            "training_days_per_week",
+            "dietary_constraints",
+        ]
+        read_only_fields = fields
+        extra_kwargs = {
+            "email": {
+                "help_text": (
+                    "May be null: Apple does not guarantee an email, and may "
+                    "supply a private relay address rather than a real one."
+                )
+            },
+            "name": {"help_text": "Display name, or empty when Apple never supplied one."},
+            "onboarding_completed": {
+                "help_text": "Whether the client should route to onboarding or to Today."
+            },
+        }
+
+
+class UserSettingsSerializer(serializers.ModelSerializer):
+    """What a client may write to its own user.
+
+    Deliberately not `UserSerializer` with a couple of fields marked read-only.
+    Sharing one serializer between the read and the write shape is how
+    `onboarding_completed` becomes client-settable: it only takes someone
+    relaxing a `read_only_fields` entry to ship the hole, and nothing about the
+    read shape would look wrong in review.
+
+    Bounds live on the model fields, so `PATCH` and the admin reject the same
+    values. ModelSerializer copies model validators onto the serializer fields.
+    """
+
+    class Meta:
+        model = User
+        fields = [
+            "timezone",
+            "goal_weight_kg",
+            "goal_timeline_weeks",
+            "training_days_per_week",
+            "dietary_constraints",
+        ]
+        extra_kwargs = {
+            # `timezone` has a model default, which would otherwise make it
+            # required=False but non-nullable with no way to state "unchanged".
+            # Partial update covers that; there is simply nothing to clear.
+            "timezone": {
+                "help_text": (
+                    "IANA timezone name, e.g. `America/New_York`. The client "
+                    "refreshes this on launch (doc 02), so a user who flies "
+                    "somewhere gets their days bucketed locally. Never a numeric "
+                    "offset — offsets break across DST."
+                )
+            },
+            "goal_weight_kg": {
+                "help_text": (
+                    "Target body weight in kilograms, 20–400. Null clears it back to unanswered."
+                )
+            },
+            "goal_timeline_weeks": {
+                "help_text": (
+                    "Weeks the user wants to reach the goal weight in, 1–104. A "
+                    "duration rather than a date, so it does not go stale. Null "
+                    "clears."
+                )
+            },
+            "training_days_per_week": {
+                "help_text": "Training days in a typical week, 0–7. Null clears."
+            },
+            "dietary_constraints": {
+                # The column is not nullable, so ModelSerializer would reject
+                # null outright and validate_dietary_constraints below would
+                # never run. This is what lets "clear it" look the same on every
+                # field in this serializer.
+                "allow_null": True,
+                "help_text": (
+                    "Free text, up to 500 characters — 'no dairy, allergic to "
+                    "shellfish'. Read by the advice feature (doc 08), not by "
+                    "target generation. Send an empty string to clear; null is "
+                    "accepted and stored as empty."
+                ),
+            },
+        }
+
+    def validate_dietary_constraints(self, value: str | None) -> str:
+        """Accept null and store empty.
+
+        The column is `blank=True, default=""` rather than nullable, so there is
+        exactly one empty value in the database. Clients still say "clear this"
+        with null, the same way they clear the numeric fields, and this is the
+        one place that difference is absorbed.
+        """
+        return value or ""
 
 
 class SessionSerializer(serializers.Serializer):
     """A created session: who you are, and the tokens to keep being them."""
 
-    user = SessionUserSerializer()
+    user = UserSerializer()
     access = serializers.CharField(
         help_text=(
             "Short-lived bearer token for API calls. Send as `Authorization: Bearer <access>`."
@@ -93,5 +194,51 @@ class SessionSerializer(serializers.Serializer):
         help_text=(
             "True when this sign-in created the account. The client uses it to "
             "distinguish a first run from a returning user."
+        ),
+    )
+
+
+class SessionRefreshSerializer(serializers.Serializer):
+    """What the client presents to refresh, and what it gets back.
+
+    One serializer for both directions because the shapes genuinely match: a
+    refresh token goes in, and a new pair -- including a new refresh token --
+    comes back. `access` is response-only, so the request component drops it
+    (COMPONENT_SPLIT_REQUEST in settings splits them).
+
+    Not simplejwt's own `TokenRefreshSerializer`. That one carries no help text,
+    types `refresh` as a bare string, and changes shape with the rotation
+    setting; this API's contract is generated into a mobile client, so it states
+    what it returns rather than inheriting it.
+    """
+
+    refresh = serializers.CharField(
+        trim_whitespace=False,
+        help_text=(
+            "The refresh token from the last sign-in or refresh. It is the "
+            "credential for this call: no `Authorization` header is read, "
+            "because the whole point of refreshing is that the access token has "
+            "expired."
+        ),
+    )
+    access = serializers.CharField(
+        read_only=True,
+        help_text="A new short-lived access token.",
+    )
+
+
+class SessionDeleteSerializer(serializers.Serializer):
+    """What sign-out presents.
+
+    The refresh token, in the body of a DELETE. Unusual, and correct: an access
+    token cannot be revoked -- there is no blacklist on the access path -- so
+    the refresh token is the only thing there is to destroy.
+    """
+
+    refresh = serializers.CharField(
+        trim_whitespace=False,
+        help_text=(
+            "The refresh token to blacklist. Must belong to the authenticated "
+            "user; another user's token is rejected."
         ),
     )

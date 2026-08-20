@@ -8,9 +8,13 @@
 
 export * from "./health";
 export * from "./healthStatusEnum";
+export * from "./patchedUserSettingsRequest";
 export * from "./ping";
 export * from "./presignUploadRequestRequest";
 export * from "./presignUploadResponse";
 export * from "./session";
 export * from "./sessionCreateRequest";
-export * from "./sessionUser";
+export * from "./sessionDeleteRequest";
+export * from "./sessionRefresh";
+export * from "./sessionRefreshRequest";
+export * from "./user";
