@@ -111,6 +111,23 @@ class User(AbstractBaseUser, PermissionsMixin):
     # about someone else's consent screen into our schema.
     email = models.EmailField(unique=True, null=True, blank=True)
 
+    # Display name, and the one field on this model we cannot verify.
+    #
+    # Apple does not put a name in the identity token -- their discovery document
+    # lists every claim they send, and there is none. `fullName` arrives on the
+    # client-side credential, on the first authorization only, and never again.
+    # So the client forwards it and we take its word for it.
+    #
+    # That is acceptable for a display name: it is the user's own name and
+    # nobody is harmed by them typing a different one. It is NOT acceptable as
+    # an input to anything security-relevant, and nothing may ever gate on it.
+    # Email is the opposite case and keeps the stricter rule -- read from the
+    # verified claims, never from a client field (doc 04).
+    #
+    # blank + default="" rather than null. A nullable CharField gives two ways
+    # to say "empty", and every reader then has to handle both.
+    name = models.CharField(max_length=255, blank=True, default="")
+
     # --- profile / domain fields (plan doc 02) ---
     # No apple_user_id here. Identity below owns the provider subject, one row
     # per (provider, subject) pair -- see that model for why.

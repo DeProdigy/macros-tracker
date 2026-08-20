@@ -2,7 +2,7 @@
 linear_id: 794ca722-e849-40c9-9d7c-804cdee285e3
 linear_title: "02 — Data Model"
 linear_url: https://linear.app/hintology/document/02-data-model-2b01a7aaa301
-linear_updated_at: 2026-08-20T17:10:36.082Z
+linear_updated_at: 2026-08-20T18:23:06.109Z
 generated: true
 ---
 
@@ -168,6 +168,7 @@ This is the standard slowly-changing-dimension pattern — worth internalizing, 
 User (custom, AbstractBaseUser)
   id
   email                  unique, NULLABLE              # from Apple, may be a relay address
+  name                   CharField, blank              # display only, UNVERIFIED
   timezone               CharField                     # IANA name, e.g. "America/New_York"
   onboarding_completed   BooleanField
   ai_calls_this_month    IntegerField                  # quota counter
@@ -223,7 +224,15 @@ It stays `unique` regardless, because Postgres treats NULLs as distinct — the 
 
 The general rule, which applies to any federated provider and not just Apple: the subject identifier is the only claim guaranteed to arrive. Everything else is optional and consent-gated, so putting `NOT NULL` on one encodes an assumption about someone else's consent screen into our schema.
 
-**No name field, deliberately.** Nothing in the product greets the user by name or displays one, so there is nothing to persist Apple's one-shot `fullName` into. See doc 04 for why that makes the usual "capture it on first authorization" warning inapplicable here.
+`name` **exists, and it is the one field on this model we cannot verify.** Reversed 20 Aug 2026; the original schema had no name field on the grounds that nothing displays one.
+
+Apple puts **no name claim in the identity token** — their discovery document lists every claim they send and there is none. `fullName` arrives on the client-side `ASAuthorizationAppleIDCredential`, on the first authorization only, and Apple never sends it again. So the client forwards it and the server takes its word.
+
+That is acceptable for a display name: it is the user's own name, and nobody is harmed by them typing a different one. It is **not** acceptable as an input to anything security-relevant, and nothing may ever gate on it. Email is the opposite case and keeps the stricter rule — read from the verified claims, never from a client field.
+
+What changed the decision was not a new use for the name. It was the asymmetry: capture it on the first authorization or lose it permanently. The same argument decided `real_user_status`.
+
+`blank=True, default=""` rather than nullable. A nullable `CharField` gives two ways to say "empty" and every reader then has to handle both — the one place Django's own docs are unambiguous about avoiding `null`.
 
 ## Migration sequencing
 

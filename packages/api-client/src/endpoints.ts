@@ -21,11 +21,139 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { Health, Ping, PresignUploadRequestRequest, PresignUploadResponse } from "./model";
+import type {
+  Health,
+  Ping,
+  PresignUploadRequestRequest,
+  PresignUploadResponse,
+  Session,
+  SessionCreateRequest,
+} from "./model";
 
 import { customFetch } from "../http-client";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * Exchanges a verified Apple identity token for a user and a JWT pair. Creates the account when the Apple subject is unknown, so this one call covers both first-time sign-up and returning login.
+
+**Nonce.** Send the *raw* nonce, not the digest. The client sets `SHA256(nonce)` as lowercase hex on the Apple request and Apple copies that digest into the token; the server hashes the raw value to compare. Sending the digest fails verification.
+
+**Name.** Apple supplies `fullName` on the first authorization only. Send it when present; omitting it never clears a stored name. It is not part of the signed token, so it is stored for display and is not verified.
+
+**Reactivation.** A previously deleted account is restored automatically, with no time limit. Once the purge has removed the row, a sign-in creates a fresh account instead.
+
+Requires no authentication, and is rate limited by IP. Every verification failure returns the same 401 regardless of cause.
+ * @summary Sign in with Apple
+ */
+export type createSessionResponse201 = {
+  data: Session;
+  status: 201;
+};
+
+export type createSessionResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type createSessionResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type createSessionResponse429 = {
+  data: void;
+  status: 429;
+};
+
+export type createSessionResponseSuccess = createSessionResponse201 & {
+  headers: Headers;
+};
+export type createSessionResponseError = (
+  createSessionResponse400 | createSessionResponse401 | createSessionResponse429
+) & {
+  headers: Headers;
+};
+
+export type createSessionResponse = createSessionResponseSuccess | createSessionResponseError;
+
+export const getCreateSessionUrl = () => {
+  return `/api/auth/sessions/`;
+};
+
+export const createSession = async (
+  sessionCreateRequest: SessionCreateRequest,
+  options?: RequestInit,
+): Promise<createSessionResponse> => {
+  return customFetch<createSessionResponse>(getCreateSessionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sessionCreateRequest),
+  });
+};
+
+export const getCreateSessionMutationOptions = <TError = void, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSession>>,
+    TError,
+    { data: SessionCreateRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createSession>>,
+  TError,
+  { data: SessionCreateRequest },
+  TContext
+> => {
+  const mutationKey = ["createSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createSession>>,
+    { data: SessionCreateRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createSession(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateSessionMutationResult = NonNullable<Awaited<ReturnType<typeof createSession>>>;
+export type CreateSessionMutationBody = SessionCreateRequest;
+export type CreateSessionMutationError = void;
+
+/**
+ * @summary Sign in with Apple
+ */
+export const useCreateSession = <TError = void, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createSession>>,
+      TError,
+      { data: SessionCreateRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createSession>>,
+  TError,
+  { data: SessionCreateRequest },
+  TContext
+> => {
+  const mutationOptions = getCreateSessionMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
 
 /**
  * Reports whether the API can serve traffic. Unlike `/api/ping/`, this executes a real query against the database and returns HTTP 503 if that query fails, so an orchestrator can pull the instance out of rotation. Requires no authentication.

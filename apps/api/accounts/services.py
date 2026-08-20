@@ -48,11 +48,12 @@ from django.conf import settings
 from django.contrib.auth.models import update_last_login
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
+from django.db import transaction
 from django.utils import timezone
 from jwt.algorithms import RSAAlgorithm
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import APIException, ValidationError
 
-from accounts.models import Identity
+from accounts.models import Identity, User
 
 # Apple's OpenID configuration, confirmed against
 # https://appleid.apple.com/.well-known/openid-configuration.
@@ -436,3 +437,126 @@ def record_authentication(identity: Identity, *, claims: AppleClaims) -> None:
     # runtime and is the common idiom, but it fails type checking, and silencing
     # that with an ignore would hide a real signature change later.
     update_last_login(type(identity.user), identity.user)
+
+
+class InvalidAppleCredential(APIException):
+    """A sign-in attempt that failed verification.
+
+    Deliberately not `AuthenticationFailed`, which would be the obvious choice.
+    DRF rewrites `AuthenticationFailed` and `NotAuthenticated` to 403 when the
+    view has no authenticator to build a `WWW-Authenticate` header from -- and
+    this endpoint must set `authentication_classes = []`, because it is the
+    request that creates the session in the first place. Measured, not assumed:
+
+        authentication_classes = []  -> 403
+        default auth classes         -> 401
+
+    A plain `APIException` subclass is untouched by that rewrite, so it keeps
+    the 401 a failed credential deserves. The alternative, overriding
+    `get_authenticate_header`, means advertising a bearer challenge the endpoint
+    does not actually issue: a misleading header to fix a status code.
+
+    One message for every cause, on purpose. `verify_apple_identity_token`
+    raises distinct codes so its tests can prove each check runs, and a response
+    that told the caller "wrong audience" rather than "bad signature" would hand
+    an attacker a free oracle for probing.
+    """
+
+    status_code = 401
+    default_detail = "Could not verify the Apple credential."
+    default_code = "invalid_apple_credential"
+
+
+@dataclass(frozen=True)
+class ResolvedSession:
+    """The outcome of resolving one sign-in.
+
+    `created` and `reactivated` are reported rather than inferred, because the
+    caller cannot tell them apart afterwards: a restored user and a returning
+    one look identical once the row is saved. They are separate flags rather
+    than one enum because a brand-new user is never reactivated, so no third
+    state exists to name.
+    """
+
+    user: User
+    identity: Identity
+    created: bool
+    reactivated: bool
+
+
+def resolve_apple_user(claims: AppleClaims, *, name: str = "") -> ResolvedSession:
+    """Find or create the user behind a set of verified claims.
+
+    The lookup is `(provider, subject)` and never the email. A user may elect
+    Apple's private relay, relay addresses can change, and Apple sends the email
+    claim inconsistently. Any one of those breaks an email-keyed lookup, and the
+    failure is that two sign-ins by one person produce two accounts.
+
+    **Reactivation has no time limit.** If the row is here and the same Apple
+    credential presents itself, it is the same person, so they get their account
+    back. The 30-day figure belongs to MAC-29's purge as a retention policy, and
+    the purge enforces it by deleting the row -- after which this function takes
+    the create branch and gives them a clean account. Putting a second copy of
+    that deadline here would mean a date comparison on the sign-in path whose
+    only reachable outcome, in a working system, is "the purge is broken".
+
+    `name` is separate from `claims` because it is not a claim. Apple sends no
+    name in the token; the client forwards what it got from the credential on
+    first authorization. Keeping it out of `AppleClaims` keeps the boundary
+    visible: everything in that dataclass is signed, and this is not.
+    """
+    with transaction.atomic():
+        identity = (
+            Identity.objects.select_related("user")
+            .filter(provider=Identity.Provider.APPLE, subject=claims.subject)
+            .first()
+        )
+
+        if identity is None:
+            user = User.objects.create_apple_user(
+                apple_user_id=claims.subject,
+                email=claims.email,
+                is_private_email=claims.is_private_email,
+                real_user_status=claims.real_user_status,
+                name=name,
+            )
+            return ResolvedSession(
+                user=user,
+                identity=user.identities.get(),
+                created=True,
+                reactivated=False,
+            )
+
+        user = identity.user
+        updates: list[str] = []
+
+        # Absence is not a change. Apple omits the email claim for real users --
+        # a stale app association, a Managed Apple ID -- and never resends the
+        # name after the first authorization. Writing those absences through
+        # would erase a working address on someone's second login, which is a
+        # bug that cannot appear until a real user comes back.
+        if claims.email:
+            normalized = User.objects.normalize_email(claims.email)
+            if normalized != user.email:
+                user.email = normalized
+                updates.append("email")
+
+        if name and name != user.name:
+            user.name = name
+            updates.append("name")
+
+        reactivated = user.deleted_at is not None
+        if reactivated:
+            user.deleted_at = None
+            user.is_active = True
+            updates.extend(["deleted_at", "is_active"])
+
+        if updates:
+            user.save(update_fields=updates)
+
+        return ResolvedSession(
+            user=user,
+            identity=identity,
+            created=False,
+            reactivated=reactivated,
+        )

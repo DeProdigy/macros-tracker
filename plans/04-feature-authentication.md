@@ -2,7 +2,7 @@
 linear_id: c77c29c9-be49-4acc-9720-c446ad327b36
 linear_title: "04 — Feature: Authentication"
 linear_url: https://linear.app/hintology/document/04-feature-authentication-8efb3525d18e
-linear_updated_at: 2026-08-20T17:10:49.013Z
+linear_updated_at: 2026-08-20T18:23:21.189Z
 generated: true
 ---
 
@@ -46,7 +46,9 @@ The native flow hands the client an `ASAuthorizationAppleIDCredential`, which ca
 
 So the classic "capture it on first authorization or lose it forever" warning applies to `fullName`, not to the email, provided you read the email from the token. Which we do anyway, for a second reason: `credential.email` is a client-supplied field the server cannot verify, while the token claim is signed by Apple. **Read email from the verified claims, never from a client-supplied field.**
 
-**No name is stored at all.** Nothing in this product displays or greets by name, so there is no field for it in doc 02 and nothing is lost by letting Apple's one-shot `fullName` go. If a name is ever needed, it must be collected in our own UI rather than recovered from Apple.
+**The name is stored, and it is unverified.** Reversed 20 Aug 2026. The original position was that nothing displays a name, so nothing is lost by letting Apple's one-shot `fullName` go. What changed the decision was the asymmetry rather than a new use: capture it on the first authorization or lose it permanently.
+
+Apple puts **no name claim in the identity token**. Their discovery document lists every claim they send and there is none, so unlike email there is no verified alternative to prefer. The client forwards `fullName` from the credential and the server takes its word. Fine for a display name; never acceptable as an input to anything security-relevant.
 
 **Email can still be missing, so it is nullable.** Not guaranteed even in the token: a stale app association can drop the claim (Apple's forums carry repeated reports of a valid `sub` with no `email`), and Managed Apple IDs under Sign in with Apple at Work & School behave differently. Every sign-in is therefore an upsert that writes the email only when a claim is present, and **never overwrites a stored address with null**.
 
@@ -91,7 +93,7 @@ Why rotation: a stolen refresh token is only useful until the legitimate client 
 ## Endpoints
 
 ```
-POST   /api/auth/sessions/          Apple identity token → user + token pair
+POST   /api/auth/sessions/          Apple identity token → user + token pair   [BUILT]
 POST   /api/auth/sessions/refresh/  refresh → new access + new refresh
 DELETE /api/auth/sessions/current/  blacklist the presented refresh
 GET    /api/users/me/               current user
@@ -118,6 +120,10 @@ Both stores require an in-app deletion path.
 1. `deleted_at` set immediately, all tokens blacklisted, user can no longer authenticate. Identities are left alone — soft delete is a property of the person, and reactivation inside the grace window only works if the credential survived
 2. Photos in R2 queued for deletion (keys are namespaced by user, so purge by prefix)
 3. Hard purge after a 30-day grace period
+
+**The grace period is a retention policy, not a reactivation deadline.** Sign-in restores a soft-deleted account with **no time limit**: if the row is there and the same Apple credential presents itself, it is the same person. The purge enforces the deadline by deleting the row, after which sign-in creates a clean account through the ordinary path.
+
+The original design refused a returning user past 30 days. That branch was unreachable in a working system — past the window the purge has already removed the row, so reaching it means the purge is broken, and "our cron failed" is not something to tell a user. It also welded a retention policy to a product rule because the two happened to share a number.
 
 Soft delete first is the right instinct — irreversible destruction on a single tap is a bad experience and a bad support story.
 

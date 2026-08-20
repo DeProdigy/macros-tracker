@@ -223,6 +223,16 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
     ],
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
+    # Rates for the scoped throttles in accounts/throttles.py. Declared here
+    # rather than on the classes because DRF resolves them from settings, which
+    # is also what lets a test override one without touching the view.
+    #
+    # Both apply to the sign-in endpoint and both must pass. See that module for
+    # why there are two, and for why the throttle is not the security control.
+    "DEFAULT_THROTTLE_RATES": {
+        "signin-burst": "10/min",
+        "signin-sustained": "60/hour",
+    },
     # drf-spectacular introspects views/serializers to emit the OpenAPI schema
     # that packages/api-client generates its typed hooks from.
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",

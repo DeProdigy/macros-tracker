@@ -6,6 +6,97 @@
         "description": "Typed contract consumed by apps/mobile via packages/api-client."
     },
     "paths": {
+        "/api/auth/sessions/": {
+            "post": {
+                "operationId": "createSession",
+                "description": "Exchanges a verified Apple identity token for a user and a JWT pair. Creates the account when the Apple subject is unknown, so this one call covers both first-time sign-up and returning login.\n\n**Nonce.** Send the *raw* nonce, not the digest. The client sets `SHA256(nonce)` as lowercase hex on the Apple request and Apple copies that digest into the token; the server hashes the raw value to compare. Sending the digest fails verification.\n\n**Name.** Apple supplies `fullName` on the first authorization only. Send it when present; omitting it never clears a stored name. It is not part of the signed token, so it is stored for display and is not verified.\n\n**Reactivation.** A previously deleted account is restored automatically, with no time limit. Once the purge has removed the row, a sign-in creates a fresh account instead.\n\nRequires no authentication, and is rate limited by IP. Every verification failure returns the same 401 regardless of cause.",
+                "summary": "Sign in with Apple",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionCreateRequest"
+                            },
+                            "examples": {
+                                "FirstSign-in": {
+                                    "value": {
+                                        "identity_token": "eyJraWQiOiIxRTZWaW9JYU5JIiwiYWxnIjoiUlMyNTYifQ...",
+                                        "nonce": "n-0S6_WzA2Mj",
+                                        "name": "Alex Hint"
+                                    },
+                                    "summary": "New user, name supplied",
+                                    "description": "Apple sends `fullName` only on the first authorization, so this shape appears exactly once per user."
+                                },
+                                "ReturningSign-in": {
+                                    "value": {
+                                        "identity_token": "eyJraWQiOiIxRTZWaW9JYU5JIiwiYWxnIjoiUlMyNTYifQ...",
+                                        "nonce": "n-0S6_WzA2Mj"
+                                    },
+                                    "summary": "Existing user, no name",
+                                    "description": "Every later sign-in looks like this. Omitting `name` leaves the stored value untouched."
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Session"
+                                },
+                                "examples": {
+                                    "Session": {
+                                        "value": {
+                                            "user": {
+                                                "id": 1,
+                                                "email": "user@privaterelay.appleid.com",
+                                                "name": "Alex Hint",
+                                                "onboarding_completed": false,
+                                                "timezone": "UTC"
+                                            },
+                                            "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                                            "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                                            "created": true
+                                        },
+                                        "summary": "Successful response",
+                                        "description": "`created` distinguishes a first run from a returning user. Store both tokens in the Keychain; the refresh token rotates on use."
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "401": {
+                        "description": "No response body"
+                    },
+                    "429": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/health/": {
             "get": {
                 "operationId": "health",
@@ -294,6 +385,93 @@
                     "key",
                     "max_bytes",
                     "url"
+                ]
+            },
+            "Session": {
+                "type": "object",
+                "description": "A created session: who you are, and the tokens to keep being them.",
+                "properties": {
+                    "user": {
+                        "$ref": "#/components/schemas/SessionUser"
+                    },
+                    "access": {
+                        "type": "string",
+                        "description": "Short-lived bearer token for API calls. Send as `Authorization: Bearer <access>`."
+                    },
+                    "refresh": {
+                        "type": "string",
+                        "description": "Long-lived token used to mint a new pair. Rotated on every use and the old one blacklisted, so store it in the Keychain via expo-secure-store and never in AsyncStorage."
+                    },
+                    "created": {
+                        "type": "boolean",
+                        "description": "True when this sign-in created the account. The client uses it to distinguish a first run from a returning user."
+                    }
+                },
+                "required": [
+                    "access",
+                    "created",
+                    "refresh",
+                    "user"
+                ]
+            },
+            "SessionCreateRequest": {
+                "type": "object",
+                "description": "What the client presents to sign in.\n\nBoth fields are required. The token alone is not enough: without the nonce\nthere is nothing to prove this token was minted for *this* sign-in attempt\nrather than captured from an earlier one.",
+                "properties": {
+                    "identity_token": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The `identityToken` from ASAuthorizationAppleIDCredential, as a JWT string. Verified against Apple's published signing keys before anything else happens."
+                    },
+                    "nonce": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The **raw** nonce generated for this sign-in, not the digest. The client sets `SHA256(nonce)` as lowercase hex on the Apple request; Apple copies that digest into the token verbatim, and the server hashes this value to compare. Sending the digest here fails."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Display name, from `fullName` on the credential. Apple supplies it on the first authorization only and never again, so send it when present and omit it otherwise — omitting never clears a stored name. Unverified: Apple puts no name in the identity token, so this is the client's word and is used for display only.",
+                        "maxLength": 255
+                    }
+                },
+                "required": [
+                    "identity_token",
+                    "nonce"
+                ]
+            },
+            "SessionUser": {
+                "type": "object",
+                "description": "The signed-in user, as the client needs them.\n\nA deliberate subset. The mobile app routes on `onboarding_completed` and\ndisplays the rest; nothing else on the model is its business.",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "description": "Stable user identifier."
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "nullable": true,
+                        "description": "May be null: Apple does not guarantee an email, and may supply a private relay address rather than a real one."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Display name, or empty when Apple never supplied one."
+                    },
+                    "onboarding_completed": {
+                        "type": "boolean",
+                        "description": "Whether the client should route to onboarding or to Today."
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "IANA timezone name, e.g. `America/New_York`."
+                    }
+                },
+                "required": [
+                    "email",
+                    "id",
+                    "name",
+                    "onboarding_completed",
+                    "timezone"
                 ]
             }
         },
