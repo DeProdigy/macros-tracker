@@ -167,6 +167,41 @@ R2_ALLOWED_UPLOAD_TYPES = {
 }
 
 
+# Caching.
+#
+# Declared explicitly rather than left to Django's implicit default, which is
+# this exact backend. The reason it is written down is the consequence: LocMemCache
+# is per *process*, so each gunicorn worker keeps its own copy of everything here.
+#
+# What that costs the Apple JWKS cache in accounts/services.py: with N workers we
+# hold N copies of Apple's public keys and N independent refetch cooldown locks,
+# so the worst-case fetch rate against Apple is N per cooldown window rather than
+# one. Bounded and acceptable at this size. It stops being acceptable the moment
+# something here needs to be consistent across workers — a rate limiter, an
+# idempotency key, a lock that actually has to be exclusive. That is when this
+# becomes Redis, and this comment is the marker for it.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "macros-tracker",
+    },
+}
+
+
+# Sign in with Apple.
+#
+# Only the client ID is read. APPLE_TEAM_ID / APPLE_KEY_ID / APPLE_PRIVATE_KEY
+# exist in .env.example for Apple's server-to-server endpoints (token exchange,
+# revocation), which the MVP never calls — a native client hands us an identity
+# token we verify locally against Apple's public keys.
+#
+# This is the expected `aud` claim, and it is the check that stops a valid Apple
+# identity token minted for somebody else's app from authenticating against this
+# API. No default that could pass silently: accounts/services.py raises
+# ImproperlyConfigured on an empty value rather than comparing `aud` against "".
+APPLE_CLIENT_ID = env("APPLE_CLIENT_ID", default="")
+
+
 # Django REST Framework — sane defaults: authenticated by default, JSON in/out.
 REST_FRAMEWORK = {
     # JWT first: it is how the mobile client authenticates. Session auth stays
