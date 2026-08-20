@@ -295,7 +295,7 @@ export type presignUploadResponseError = (presignUploadResponse400 | presignUplo
 export type presignUploadResponse = presignUploadResponseSuccess | presignUploadResponseError;
 
 export const getPresignUploadUrl = () => {
-  return `/api/uploads/presign/`;
+  return `/api/uploads/`;
 };
 
 export const presignUpload = async (

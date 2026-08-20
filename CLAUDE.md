@@ -83,6 +83,64 @@ what is committed.
 - Every new feature ships with unit tests covering the edge cases
 - ruff (line length 100; `E,F,I,UP,B,DJ`) and mypy both gate CI
 
+## REST route conventions
+
+**A URL names a resource. The HTTP method supplies the verb.** Every route added
+to this API is checked against that sentence before it is written. The 20 Aug
+2026 audit rewrote eight of twelve routes because it had not been; see the
+Decision Log for the reasoning on each.
+
+Before adding a route, in order:
+
+1. **Name the noun the request acts on.** If the only name that fits is a verb
+   (`presign`, `analyze`, `logout`, `sync`), the resource has not been found yet.
+   Keep looking — it is usually the thing the call produces
+2. **Pick the method for the effect**, not for convenience. `POST` creates,
+   `GET` reads and never mutates, `PATCH` partially updates, `DELETE` removes.
+   `PUT` is rarely right here: clients send the fields they changed, and a
+   full-representation replace cannot tell an omitted field from a cleared one
+3. **Return the status the method implies** — `201` when the POST created
+   something addressable, `200` when it returns a computed representation that
+   has no URL of its own (`/api/uploads/`, `/api/analyses/`), `204` from a
+   delete, `200` from a read
+4. **Filtering, sorting, and pagination go in the query string**, never in the
+   path. `?ordering=`, `?logged_since=`, `?page=` — not `/recent/`, `/history/`,
+   `/latest/`
+
+Hard rules that follow from that:
+
+- **Never name a route after the screen that calls it.** `/api/onboarding/…`,
+  `/api/foods/recent/`, and `/api/targets/history/` all died in the audit. The
+  second caller is what exposes the mistake, and by then the name is in the
+  generated client
+- **One entity gets one URL.** If two paths address the same row, the design is
+  wrong regardless of how different the operations feel. `GET /api/auth/me/`
+  plus `DELETE /api/auth/account/` was the clearest example
+- **The URL tree and the Django app tree are allowed to differ.** `entries` owns
+  `/api/analyses/`; `accounts` owns both `/api/auth/` and `/api/users/`. Forcing
+  them to match is what produced `/api/entries/analyze/`
+- **An expensive computation is a resource you create.** `POST /api/analyses/`,
+  `POST /api/targets/proposals/`. Whether the result is persisted is an
+  implementation detail the URL must not encode
+
+Legitimate exceptions, which are allowed but must be justified in the plan and
+in the view's `@extend_schema` description:
+
+- **Named singletons** for a member the client cannot address by id:
+  `/api/users/me/`, `/api/targets/current/`. Only when the server genuinely owns
+  that state — `/api/days/today/` was rejected because it does not. Route the
+  literal before the detail route, and give the detail route a typed converter
+  (`<int:pk>`) so the two cannot collide
+- **Token exchange** (`POST /api/auth/sessions/refresh/`) is the one place a verb
+  survives, because the credential presented is not the resource addressed.
+  OAuth 2 landed on the same shape
+- **Operational probes** (`/api/ping/`, `/api/health/`) are not resources and are
+  out of scope for all of this
+
+Renaming a route is never free after it ships: it changes `openapi.json`, the
+generated client, and every call site. Get it right in the plan, where it costs
+nothing.
+
 ## Mobile conventions
 
 - TypeScript strict; no `any` without a comment justifying it

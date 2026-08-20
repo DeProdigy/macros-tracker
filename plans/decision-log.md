@@ -2,7 +2,7 @@
 linear_id: afad3d4f-f24b-4fb2-b6ea-0e45cd997939
 linear_title: "Decision Log"
 linear_url: https://linear.app/hintology/document/decision-log-3f0d791973e7
-linear_updated_at: 2026-08-02T19:37:50.456Z
+linear_updated_at: 2026-08-20T04:03:23.293Z
 generated: true
 ---
 
@@ -14,6 +14,49 @@ generated: true
 Kept because the reasoning is the valuable part — and because "here's a project where I made and documented real tradeoffs" is directly useful material for engineering leadership interviews.
 
 Newest first.
+
+---
+
+## 20 Aug 2026 — REST route audit
+
+Every route in the codebase and in docs 04–09 read against one rule: a URL names a *resource*, the HTTP method supplies the *verb*. Twelve routes existed or were planned; eight changed. The full table lives in each feature doc — this is why.
+
+### The one that was a bug, not a style problem
+
+`GET /api/days/today/` is gone. Doc 02 says the client owns its calendar date and sends `local_date` on write, precisely because the server cannot know a phone's timezone. `today/` would have made the read path guess what the write path refuses to guess, so a user logging at 11pm and reading at 1am could get back a different day than the one they wrote to. The client already knows its local date; it asks for `/api/days/2026-08-20/`.
+
+Everything else in this audit was hygiene. This one would have shipped as a real defect.
+
+### One entity, two URLs
+
+`GET /api/auth/me/` and `DELETE /api/auth/account/` addressed the same user row under two different names, and neither belonged under `/api/auth/`. A user is a user whether you are reading it or deleting it. Both are now `/api/users/me/`, separated by method — and `PATCH /api/users/me/` closes a gap nobody had noticed: doc 05 moves four questions into settings and doc 08 reads dietary constraints from there, but no route had ever been specified to write them.
+
+### Verbs in paths
+
+`presign`, `analyze`, `logout`, `refresh`. Each named the action, which the method already carries.
+
+* `POST /api/uploads/presign/` → `POST /api/uploads/` — the request creates an upload authorisation
+* `POST /api/entries/analyze/` → `POST /api/analyses/` — an analysis is not part of an entry; it exists before any entry does and often never becomes one. Modelling an expensive non-idempotent computation as a resource you create is the standard way to keep it inside REST
+* `POST /api/auth/logout/` → `DELETE /api/auth/sessions/current/`
+* `POST /api/auth/apple/` → `POST /api/auth/sessions/` — `apple` named the credential, not the resource. A second provider would have forked a parallel endpoint returning an identical thing
+
+`POST /api/auth/sessions/refresh/` **keeps its verb, deliberately.** Token exchange is the one case where the credential presented is not the resource addressed, which is why OAuth 2 settled on a single token endpoint. Folding rotation into `POST /api/auth/sessions/` as a second grant type is purer and makes the request body a discriminated union that Orval generates badly. A documented exception beats a rule that is quietly broken later.
+
+### Routes named after screens
+
+`GET /api/foods/recent/` and `GET /api/targets/history/` were both the whole collection under the name of the UI that consumes it. Recency is `/api/foods/`'s default ordering; targets are append-only, so the collection *is* the history. Filtering, sorting, and pagination go in the query string. Naming routes after screens is how an API ends up with five URLs returning the same rows in different orders.
+
+`POST /api/onboarding/targets/` had the same problem with a longer fuse — settings recomputes proposals too, so the name would have gone stale on the second caller. It is `POST /api/targets/proposals/`.
+
+### Kept after review
+
+* `GET /api/targets/current/` — a named singleton for a member the client cannot address by id is legitimate. Unlike `today`, "the version in effect now" is state the server actually owns. Must be routed before `/api/targets/<int:pk>/`
+* `POST /api/advice/` — one POST creates one advice object that contains three suggestions. `/api/suggestions/` would read better and describe the response worse
+* `GET /api/ping/`, `GET /api/health/` — operational probes, not resources. Out of scope for REST naming
+
+### What this cost
+
+Almost nothing, which is the point of doing it now. One shipped route (`/api/uploads/`), regenerated client, no consumers. E2 is unstarted, so [MAC-27](https://linear.app/hintology/issue/MAC-27/post-apiauthapple-sign-in-account-resolution-and-reactivation), [MAC-28](https://linear.app/hintology/issue/MAC-28/session-endpoints-refresh-logout-and-me), and [MAC-29](https://linear.app/hintology/issue/MAC-29/account-deletion-and-the-purge-command) were re-scoped rather than rewritten. The convention is now written into `CLAUDE.md` so the next endpoint gets it right the first time.
 
 ---
 

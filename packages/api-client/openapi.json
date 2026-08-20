@@ -101,7 +101,7 @@
                 }
             }
         },
-        "/api/uploads/presign/": {
+        "/api/uploads/": {
             "post": {
                 "operationId": "presignUpload",
                 "description": "Returns a short-lived presigned PUT URL and the object key the upload will land at.\n\nThe client uploads straight to object storage rather than through this API, so a slow mobile connection never occupies a server worker. The declared content type and length are signed into the URL: the subsequent PUT must match both exactly or storage rejects it.\n\nStore the returned `key` against the entry. The URL expires; the key does not.",
