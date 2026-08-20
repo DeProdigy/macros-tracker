@@ -2,7 +2,7 @@
 linear_id: c77c29c9-be49-4acc-9720-c446ad327b36
 linear_title: "04 — Feature: Authentication"
 linear_url: https://linear.app/hintology/document/04-feature-authentication-8efb3525d18e
-linear_updated_at: 2026-08-20T04:46:58.009Z
+linear_updated_at: 2026-08-20T05:31:29.422Z
 generated: true
 ---
 
@@ -53,6 +53,22 @@ So the classic "capture it on first authorization or lose it forever" warning ap
 **Store** `apple_user_id` **(the stable** `sub` **claim) as the join key — never the email.** Users may elect a private relay address, and relay addresses can change.
 
 **Verify the identity token server-side.** Fetch Apple's JWKS, validate the signature, and check `iss` and `aud`. A client-supplied token accepted without verification is not authentication.
+
+**The nonce round-trips in one specific direction, and it is the opposite of what most people assume.** Apple does not hash anything in the native flow. The *client* computes SHA256 of its raw nonce and sets that digest on `ASAuthorizationAppleIDRequest.nonce`; Apple copies the string into the `nonce` claim verbatim. Apple's *web* flow echoes a raw nonce, which is where the confusion comes from, and it is a recurring bug in Supabase and better-auth for exactly that reason.
+
+So the contract across the three sides is:
+
+| Side | Does |
+| -- | -- |
+| Mobile ([MAC-30](<https://linear.app/hintology/issue/MAC-30/mobile-sign-in-with-apple-on-welcome>)) | Generates a random `raw_nonce`. Computes SHA256 as **lowercase hex** via `expo-crypto`'s `digestStringAsync`, whose default encoding is hex. Passes the digest to `signInAsync({ nonce })` |
+| Mobile → API ([MAC-27](<https://linear.app/hintology/issue/MAC-27/post-apiauthsessions-sign-in-account-resolution-and-reactivation>)) | Posts the **raw** value alongside the token, never the digest |
+| Server ([MAC-26](<https://linear.app/hintology/issue/MAC-26/verify-apple-identity-tokens-against-jwks>)) | Hashes the raw value and compares to the claim with `hmac.compare_digest` |
+
+Hex rather than base64url only because `expo-crypto` defaults to hex and both ends are ours. It has to be written down because an encoding mismatch fails identically to a wrong nonce.
+
+**Apple rotates its signing keys, so the token names its own key by** `kid`**.** A `kid` the server has never seen is routine rather than hostile, and refusing to refetch breaks every sign-in on rotation day. Refetching on *every* unknown `kid` is the opposite mistake: it is a cache bypass by definition, so it turns the sign-in endpoint into a way for an attacker to make the API flood Apple. [MAC-26](https://linear.app/hintology/issue/MAC-26/verify-apple-identity-tokens-against-jwks) resolves this with a cooldown lock — one refetch per five minutes regardless of traffic.
+
+**Verification errors must not be distinguishable to the client.** The service raises distinct error codes so its tests can prove each check runs, but a response that tells the caller "wrong audience" rather than "bad signature" is a free oracle for anyone probing the endpoint. [MAC-27](https://linear.app/hintology/issue/MAC-27/post-apiauthsessions-sign-in-account-resolution-and-reactivation) collapses every one of them into a single generic 401.
 
 `email_verified` **is not worth storing.** Apple documents the claim's value as always `true`, because their servers only return verified addresses. The one exception is Sign in with Apple at Work & School, where it can be false. A local `is_email_verified` column under Apple-only sign-in would hold a constant, and worse, would sit at its `False` default forever because nothing writes it — an inviting trap for the next person adding an auth check. Dropped in [MAC-25](https://linear.app/hintology/issue/MAC-25/auth-foundations-simplejwt-and-the-user-model-under-apple-only).
 
@@ -119,7 +135,8 @@ Note that onboarding no longer gates the app — a user can log a meal before an
 ## Security requirements
 
 * Rate limit the Apple auth endpoint by IP
-* Verify Apple's identity token signature against their JWKS endpoint; check `aud` and `iss`
+* Verify Apple's identity token signature against their JWKS endpoint; check `iss`, `aud`, `exp` and `nonce`. `aud` is the load-bearing one: without it, a valid Apple token minted for any other app in the world authenticates against this API
+* Pin the accepted signing algorithm to RS256 explicitly. A verifier that trusts the token's own `alg` header accepts `alg: none`, and accepts an HS256 token signed with the public key as the shared secret — a key whose location we publish by design
 * Never trust a client-supplied token unverified
 * `apple_user_id` unique constraint at the database level, not just in application code
 

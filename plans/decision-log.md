@@ -2,7 +2,7 @@
 linear_id: afad3d4f-f24b-4fb2-b6ea-0e45cd997939
 linear_title: "Decision Log"
 linear_url: https://linear.app/hintology/document/decision-log-3f0d791973e7
-linear_updated_at: 2026-08-20T04:47:23.452Z
+linear_updated_at: 2026-08-20T05:31:55.328Z
 generated: true
 ---
 
@@ -14,6 +14,46 @@ generated: true
 Kept because the reasoning is the valuable part — and because "here's a project where I made and documented real tradeoffs" is directly useful material for engineering leadership interviews.
 
 Newest first.
+
+---
+
+## 20 Aug 2026 — Apple token verification, and the nonce that runs backwards
+
+[MAC-26](<https://linear.app/hintology/issue/MAC-26/verify-apple-identity-tokens-against-jwks>). One service function, no endpoint. Three decisions worth keeping and one thing the ticket had backwards.
+
+### The ticket was wrong about who hashes the nonce
+
+**Was:** "Apple places the SHA256 hash of the client's nonce in the `nonce` claim."
+
+**Now:** Apple hashes nothing. In the native flow the *client* computes the SHA256 digest and sets it on `ASAuthorizationAppleIDRequest.nonce`; Apple copies that string into the claim verbatim.
+
+**Why it matters:** the server-side code is identical either way, which is what makes this dangerous rather than academic. The difference lands entirely on [MAC-30](<https://linear.app/hintology/issue/MAC-30/mobile-sign-in-with-apple-on-welcome>). A mobile client that sets the *raw* nonce on the request produces a raw nonce in the claim, and every sign-in fails with an error that looks like a nonce mismatch rather than a client bug. The confusion is real and widespread because Apple's **web** flow does echo a raw nonce; the two flows genuinely differ. Supabase and better-auth both carry issues for it.
+
+Settled by reading Apple's live discovery document rather than the ticket. Digest encoding is lowercase hex, chosen because `expo-crypto` defaults to hex and both ends of the exchange are ours. Recorded in doc 04, and guarded by a test that rejects a raw nonce in the claim so [MAC-30](https://linear.app/hintology/issue/MAC-30/mobile-sign-in-with-apple-on-welcome) cannot get this wrong silently.
+
+### An unknown `kid` refetches once, then cools down
+
+Apple rotates signing keys on its own schedule, so a `kid` the server has never seen is routine. Refusing to refetch breaks every sign-in on rotation day.
+
+But a refetch is a cache bypass by definition, so the naive rule turns the sign-in endpoint into an amplifier: a thousand tokens carrying `kid: "bogus"` become a thousand requests to Apple, from our IP, on demand. The fix is a cooldown lock built on `cache.add()`, whose write-if-absent semantic makes it a lock with a built-in expiry and no cleanup path. One refetch per five minutes regardless of traffic. A genuine rotation is delayed by at most that window, well inside the overlap Apple leaves when publishing a new key.
+
+Worth generalising: any "on miss, go fetch" path reachable by an untrusted caller has this shape. The cache protects the happy path and does nothing for the miss path, which is the one an attacker chooses.
+
+### Distinct error codes internally, one generic 401 externally
+
+The service raises `ValidationError` with a distinct `code` per failure, because a suite where every bad input produces the same generic error cannot demonstrate that the `aud` check runs at all — and `aud` is the check that stops another app's Apple tokens.
+
+Those codes must never reach a client. A response distinguishing "wrong audience" from "bad signature" is a free oracle for anyone probing the endpoint. [MAC-27](<https://linear.app/hintology/issue/MAC-27/post-apiauthsessions-sign-in-account-resolution-and-reactivation>) carries the obligation to flatten them, and it is written into doc 04 rather than left as lore.
+
+### Two things the ticket assumed existed and did not
+
+`APPLE_CLIENT_ID` was documented in `.env.example` but no settings module read it, so `settings.APPLE_CLIENT_ID` would have raised `AttributeError`. Added, with a guard: an empty value raises `ImproperlyConfigured` rather than letting the audience check compare against `""`. It fires inside the function rather than at import, so a deploy without it still boots and still answers `/api/health/`.
+
+There was also no `CACHES` block at all, so Django was silently using per-process `LocMemCache`. Declared explicitly, not to change behaviour but to give the consequence somewhere to live: with N gunicorn workers there are N copies of the JWKS and N independent cooldown locks, so the amplification ceiling is N refetches per window rather than one. Acceptable at this size. The comment marks the point where this becomes Redis — the first time something cached here has to be consistent across workers.
+
+### Rejected: PyJWT's `PyJWKClient`
+
+The closest call. It fetches and caches JWKS for you, but into its own per-process LRU rather than Django's cache, and "exactly one refetch, then cool down" is not expressible through it. It also makes the network call harder to stub, which would have cost the hermetic test suite. `django-allauth`'s Apple provider was rejected for the opposite reason: it brings a whole social-account model layer and its own opinions about user creation to replace one function.
 
 ---
 
