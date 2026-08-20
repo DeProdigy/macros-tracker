@@ -16,16 +16,17 @@ class UserAdmin(BaseUserAdmin):
     search_fields = ("email",)
     list_display = (
         "email",
+        # The real join key under Apple-only sign-in, and the only identity a
+        # user who hid their email has.
+        "apple_user_id",
         "is_staff",
         "is_superuser",
-        "is_email_verified",
         "onboarding_completed",
     )
     list_filter = (
         "is_staff",
         "is_superuser",
         "is_active",
-        "is_email_verified",
         "onboarding_completed",
     )
     # auto_now_add / auth-managed fields can't be edited, so show them read-only.
@@ -40,7 +41,6 @@ class UserAdmin(BaseUserAdmin):
                 "fields": (
                     "timezone",
                     "apple_user_id",
-                    "is_email_verified",
                     "onboarding_completed",
                     "ai_calls_this_month",
                 )

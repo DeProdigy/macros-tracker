@@ -27,6 +27,37 @@ class UserManager(BaseUserManager["User"]):
         user.save(using=self._db)
         return user
 
+    def create_apple_user(self, apple_user_id, email=None, **extra_fields):
+        """Create a user who signs in with Apple and has no password.
+
+        Separate from create_user rather than relaxing it. create_user hard-
+        requires an email and always sets a password, which is what
+        `createsuperuser` needs; loosening that guard to fit Apple would weaken
+        superuser creation for every caller.
+
+        email is optional because Apple does not guarantee it. The identity
+        token normally carries an `email` claim, but it can be absent -- a
+        stale app association, a Managed Apple ID, or a client that read the
+        first-authorization-only `credential.email` property instead of the
+        token. The join key is apple_user_id (Apple's `sub`), never the email:
+        a Hide My Email relay address can change or stop forwarding.
+        """
+        if not apple_user_id:
+            raise ValueError("Apple users must have an apple_user_id.")
+        user = self.model(
+            apple_user_id=apple_user_id,
+            # normalize_email("") would give "", which is a real value that
+            # would collide on the unique constraint. None must stay None.
+            email=self.normalize_email(email) if email else None,
+            **extra_fields,
+        )
+        # Not the same as a blank password: this writes an unusable sentinel, so
+        # check_password() returns False for every input, including the stored
+        # value itself. There is no password to guess.
+        user.set_unusable_password()
+        user.save(using=self._db)
+        return user
+
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
@@ -47,10 +78,18 @@ class User(AbstractBaseUser, PermissionsMixin):
     """
 
     # --- identity ---
-    email = models.EmailField(unique=True)
+    # Nullable because Apple does not guarantee an email, and a NOT NULL column
+    # would force the sign-in path to either reject a legitimate user or invent
+    # a placeholder. Still unique: Postgres treats NULLs as distinct, so any
+    # number of Apple users without an email coexist.
+    #
+    # This is the general shape for any federated provider. The subject
+    # identifier is the only claim guaranteed to arrive; everything else is
+    # optional and consent-gated, so a NOT NULL on it would bake an assumption
+    # about someone else's consent screen into our schema.
+    email = models.EmailField(unique=True, null=True, blank=True)
 
     # --- profile / domain fields (plan doc 02) ---
-    is_email_verified = models.BooleanField(default=False)
     # Apple's stable subject claim. null so non-Apple users don't collide on the
     # unique constraint (in Postgres, NULLs are never equal to each other).
     apple_user_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
@@ -80,4 +119,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = []
 
     def __str__(self):
-        return self.email
+        # email is nullable and apple_user_id always has been, so neither alone
+        # satisfies __str__'s str return type. The f-string terminates the chain.
+        return self.email or self.apple_user_id or f"user {self.pk}"

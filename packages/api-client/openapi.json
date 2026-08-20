@@ -141,6 +141,9 @@
                 },
                 "security": [
                     {
+                        "jwtAuth": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -299,6 +302,11 @@
                 "type": "apiKey",
                 "in": "cookie",
                 "name": "sessionid"
+            },
+            "jwtAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
             }
         }
     }

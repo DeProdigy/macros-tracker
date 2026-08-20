@@ -2,7 +2,7 @@
 linear_id: afad3d4f-f24b-4fb2-b6ea-0e45cd997939
 linear_title: "Decision Log"
 linear_url: https://linear.app/hintology/document/decision-log-3f0d791973e7
-linear_updated_at: 2026-08-20T04:03:23.293Z
+linear_updated_at: 2026-08-20T04:47:23.452Z
 generated: true
 ---
 
@@ -14,6 +14,46 @@ generated: true
 Kept because the reasoning is the valuable part — and because "here's a project where I made and documented real tradeoffs" is directly useful material for engineering leadership interviews.
 
 Newest first.
+
+---
+
+## 20 Aug 2026 — User model reshaped for Apple-only, and a correction to doc 04
+
+[MAC-25](https://linear.app/hintology/issue/MAC-25/auth-foundations-simplejwt-and-the-user-model-under-apple-only). Two model changes and one thing doc 04 had wrong.
+
+### `email` is now nullable
+
+**Was:** `NOT NULL, unique`, inherited from the email/password design that doc 04 deleted.
+
+**Now:** `null=True, blank=True, unique`.
+
+**Why:** Apple does not guarantee an email claim. It is normally in the identity token, but it can be absent for a stale app association, for a Managed Apple ID, or when a client reads the first-authorization-only `credential.email` property instead of the token. Under `NOT NULL` the sign-in path gets two choices in those cases: reject a legitimate user, or fabricate a placeholder that then occupies a unique column. NULL is better than both. Postgres treats NULLs as distinct, so uniqueness survives.
+
+The generalisable version, worth more than the instance: in federated identity the subject identifier is the only claim the provider guarantees. Everything else is optional and consent-gated. A `NOT NULL` on a federated claim encodes an assumption about someone else's consent screen into your schema.
+
+`create_user` and `create_superuser` still hard-require an email, so `createsuperuser` is unchanged. Only the new `create_apple_user` is permissive.
+
+### `is_email_verified` dropped
+
+**Why:** nothing read it, and nothing ever would have written it. Under Apple-only it would have sat at its `False` default forever, which is worse than not existing — the next person adding an auth check sees a field with that name and gates on it, locking out every user. A column that lies beats no column only in the sense that it is harder to notice.
+
+The concept is also dead upstream. Apple documents the token's `email_verified` claim as always `true`, because their servers only return verified addresses. Storing it would store a constant.
+
+Done now because `accounts_user` is empty in production ([MAC-24](https://linear.app/hintology/issue/MAC-24/railway-deploy-follow-ups-from-mac-18-mac-23)). Dropping a column is free today and will not be once real users exist.
+
+### Doc 04 was wrong about email
+
+**Was:** "Apple returns the user's name and email only on first authorization. If you don't persist it then, you never get it again."
+
+**Now:** true of `fullName` and of the credential's `.email` *property*; false of the identity token, which carries the verified email on subsequent authorizations as well.
+
+**Why it matters:** the token is what [MAC-26](https://linear.app/hintology/issue/MAC-26/verify-apple-identity-tokens-against-jwks) parses, so the distinction decides how [MAC-27](https://linear.app/hintology/issue/MAC-27/post-apiauthsessions-sign-in-account-resolution-and-reactivation) reads email. It also points at the secure option, since `credential.email` is client-supplied and unverifiable while the token claim is signed by Apple. Corrected in doc 04, along with a note that no name is stored at all — nothing in the product displays one, so Apple's one-shot `fullName` costs us nothing.
+
+### Token strategy, as built
+
+15-minute access, 30-day refresh, rotation on, blacklist after rotation. Lifetimes hardcoded rather than env-driven: a token lifetime is a security decision, not a per-environment fact, and a Railway variable would let production drift to a 90-day refresh with no review.
+
+One correction to how rotation was described. Doc 04 said reuse of a blacklisted token "makes the theft detectable". simplejwt blacklists the old token and mints a new one, and that is all — no family invalidation, no signal, no notification. Reuse *fails*; nobody finds out. Real detection is the OAuth family-invalidation pattern and remains unbuilt. Logged as a known gap rather than an assumed feature.
 
 ---
 
