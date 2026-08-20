@@ -2,7 +2,7 @@
 linear_id: afad3d4f-f24b-4fb2-b6ea-0e45cd997939
 linear_title: "Decision Log"
 linear_url: https://linear.app/hintology/document/decision-log-3f0d791973e7
-linear_updated_at: 2026-08-20T05:31:55.328Z
+linear_updated_at: 2026-08-20T17:11:19.273Z
 generated: true
 ---
 
@@ -14,6 +14,50 @@ generated: true
 Kept because the reasoning is the valuable part — and because "here's a project where I made and documented real tradeoffs" is directly useful material for engineering leadership interviews.
 
 Newest first.
+
+---
+
+## 20 Aug 2026 — Identity moves off the user table
+
+[MAC-34](<https://linear.app/hintology/issue/MAC-34/move-identity-off-the-user-table-into-an-identity-join-table>). `apple_user_id` becomes an `Identity` row. One destructive migration, no endpoints. Prompted by reading a friend's production Supabase `auth.users` table, which is a better source of design pressure than any amount of thinking about it.
+
+### The argument I got wrong
+
+I argued against building this, on the grounds that a join table for a provider that does not exist is speculative generality. That was wrong, for a reason this project had already established twice: `accounts_user` is empty in production ([MAC-24](<https://linear.app/hintology/issue/MAC-24/railway-deploy-follow-ups-from-mac-18-mac-23>)), so the change costs one migration today and a backfill plus a deploy window after the first real user. "Not yet" is only free when the cost curve is flat, and here it is not.
+
+### Why the shape is right regardless of a second provider
+
+The usual justification for an identities table is Google-plus-Apple, which we may never have. The better justification is one nobody mentions: **an app transfer between Apple developer teams reissues every user's** `sub`**.** Apple provides a `transfer_sub` mapping for exactly this. With the subject inlined on `User` that migration rewrites the user table under live traffic; with a join table it inserts rows.
+
+The generalisable version: when judging whether a normalisation is premature, look for the migration it makes cheap rather than the feature it enables. Features are speculative. Migrations are not.
+
+### Unique on the pair, never on subject alone
+
+`UNIQUE (provider, subject)`. A subject is only unique *within* a provider — each mints opaque strings from its own namespace and nothing coordinates them. A unique index on `subject` alone is a cross-provider collision that fires once, years later, unreproducibly.
+
+### `last_login` was three bugs, and the third is the interesting one
+
+Nothing wrote it. simplejwt's `UPDATE_LAST_LOGIN` only fires inside `TokenObtainPairSerializer`, and tokens are minted directly with `RefreshToken.for_user()`, so enabling it would have changed nothing. Meanwhile `accounts/admin.py` displayed the field, so every active user read as "never logged in" — worse than not showing it.
+
+The third: it is a field holding a constant, which is exactly what [MAC-25](<https://linear.app/hintology/issue/MAC-25/auth-foundations-simplejwt-and-the-user-model-under-apple-only>) deleted `is_email_verified` for. The difference is that `is_email_verified` was declared, reviewed, and caught, while `last_login` arrived free from `AbstractBaseUser`. **An inherited field dodges the review a declared one gets.** Nobody chose it, so nobody audited it. Worth carrying into any base class, model mixin, or framework default.
+
+### Two Apple claims now stored, after arguing against both
+
+I proposed skipping `is_private_email` and `real_user_status` on the grounds that nothing reads them. Overruled, and the call stands on its own merits: both are cheap, and both are *unrecoverable* later. `real_user_status` is sent on the first authorization only, so a user who signs in before the column exists can never be assessed. That asymmetry is the deciding factor, not whether a reader exists today.
+
+The write rules differ and the difference is the point. `is_private_email` is current state and is refreshed on every sign-in, because a user can switch between a relay and their real address. `real_user_status` is written once and never updated: a later token carries nothing, and writing that would erase a real signal. Same table, opposite update semantics, because one is a fact about now and the other is a fact about a moment.
+
+`is_private_email` is also three-valued. NULL means Apple did not say, which is not `False` — defaulting to `False` would assert a deliverable address nobody told us about, in the one field whose job is saying whether the address can be trusted.
+
+### Rejected: an `email` column on `Identity`
+
+Supabase keeps one on both sides and it was tempting. Nothing would read it until a second provider asserts a different address, and adding a column nothing reads is the thing [MAC-25](https://linear.app/hintology/issue/MAC-25/auth-foundations-simplejwt-and-the-user-model-under-apple-only) deleted `is_email_verified` for. Consistency with our own principle beat consistency with Supabase.
+
+### The migration was hand-ordered
+
+`makemigrations` emitted `RemoveField` *before* `CreateModel`, which drops the data before there is anywhere to put it. The autodetector also cannot write the copy: nothing tells it that `apple_user_id` and `Identity.subject` mean the same thing. Three steps, hand-ordered, with a reversible `RunPython` in the middle.
+
+Production is empty, so the copy is a no-op there and the reverse was optional. Both were written anyway and tested through Django's `MigrationExecutor` against the real historical models. The only honest way to know a rollback works is to run one, and the cheapest time to learn that is when the stakes are zero.
 
 ---
 

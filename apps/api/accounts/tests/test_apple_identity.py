@@ -114,6 +114,7 @@ def make_token(
     subject: Any = "000123.abcdef.4567",
     email: str | None = "user@example.com",
     drop: tuple[str, ...] = (),
+    extra: dict[str, Any] | None = None,
 ) -> str:
     now = int(time.time())
     claims: dict[str, Any] = {
@@ -127,6 +128,8 @@ def make_token(
         claims["nonce"] = nonce
     if email is not None:
         claims["email"] = email
+    if extra:
+        claims.update(extra)
     for claim in drop:
         claims.pop(claim, None)
 
@@ -138,7 +141,7 @@ def make_token(
     )
 
 
-def verify(token: str, nonce: str = RAW_NONCE) -> services.AppleIdentity:
+def verify(token: str, nonce: str = RAW_NONCE) -> services.AppleClaims:
     return services.verify_apple_identity_token(token, expected_nonce=nonce)
 
 
@@ -423,6 +426,65 @@ def test_empty_subject_is_rejected(apple_key, fetch):
         verify(token)
 
     assert code_of(exc_info) == "missing_claim"
+
+
+# --- the optional Apple claims ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("claim", "expected"),
+    [
+        (True, True),
+        (False, False),
+        # Apple has emitted these as strings in some flows and the docs do not
+        # promise which, so both spellings have to land the same way.
+        ("true", True),
+        ("false", False),
+        ("TRUE", True),
+        # Anything unrecognised is None, never False. "Apple did not say" and
+        # "Apple said no" are different answers and only one is safe to act on.
+        (None, None),
+        ("maybe", None),
+        (1, None),
+    ],
+)
+def test_is_private_email_parsing(apple_key, fetch, claim, expected):
+    token = make_token(apple_key, extra={"is_private_email": claim} if claim is not None else {})
+
+    identity = verify(token)
+
+    assert identity.is_private_email is expected
+
+
+@pytest.mark.parametrize(
+    ("claim", "expected"),
+    [
+        (0, 0),
+        (1, 1),
+        (2, 2),
+        # Outside Apple's documented set. Dropped rather than stored: a value we
+        # cannot interpret survives into the database looking like a fact.
+        (7, None),
+        (-1, None),
+        ("2", None),
+        # True is an int in Python and would otherwise store as 1 ("Unknown").
+        (True, None),
+    ],
+)
+def test_real_user_status_parsing(apple_key, fetch, claim, expected):
+    token = make_token(apple_key, extra={"real_user_status": claim})
+
+    identity = verify(token)
+
+    assert identity.real_user_status == expected
+
+
+def test_absent_optional_claims_are_none(apple_key, fetch):
+    """Every authorization after the first carries neither."""
+    identity = verify(make_token(apple_key))
+
+    assert identity.is_private_email is None
+    assert identity.real_user_status is None
 
 
 # --- configuration -----------------------------------------------------------

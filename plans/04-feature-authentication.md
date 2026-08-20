@@ -2,7 +2,7 @@
 linear_id: c77c29c9-be49-4acc-9720-c446ad327b36
 linear_title: "04 — Feature: Authentication"
 linear_url: https://linear.app/hintology/document/04-feature-authentication-8efb3525d18e
-linear_updated_at: 2026-08-20T05:31:29.422Z
+linear_updated_at: 2026-08-20T17:10:49.013Z
 generated: true
 ---
 
@@ -50,7 +50,11 @@ So the classic "capture it on first authorization or lose it forever" warning ap
 
 **Email can still be missing, so it is nullable.** Not guaranteed even in the token: a stale app association can drop the claim (Apple's forums carry repeated reports of a valid `sub` with no `email`), and Managed Apple IDs under Sign in with Apple at Work & School behave differently. Every sign-in is therefore an upsert that writes the email only when a claim is present, and **never overwrites a stored address with null**.
 
-**Store** `apple_user_id` **(the stable** `sub` **claim) as the join key — never the email.** Users may elect a private relay address, and relay addresses can change.
+**Store the stable** `sub` **claim as the join key — never the email.** Users may elect a private relay address, and relay addresses can change.
+
+It lives on an `Identity` row rather than on `User` (doc 02). Sign-in resolves `(provider="apple", subject=sub)` against that table. The reason is not a speculative second provider: it is that an **app transfer between Apple developer teams reissues every user's** `sub`, and migrating that on a column means rewriting the user table under live traffic.
+
+Two optional claims are stored alongside it. `is_private_email` says whether the address is a Hide My Email relay, and is three-valued — NULL means Apple did not say, which is not `False`. `real_user_status` is Apple's bot signal, sent on the first authorization only and therefore written once and never updated; a later token carries nothing, and writing that would erase a real signal.
 
 **Verify the identity token server-side.** Fetch Apple's JWKS, validate the signature, and check `iss` and `aud`. A client-supplied token accepted without verification is not authentication.
 
@@ -111,7 +115,7 @@ Six endpoints, two resources. Creating a session is signing in — it handles bo
 
 Both stores require an in-app deletion path.
 
-1. `deleted_at` set immediately, all tokens blacklisted, user can no longer authenticate
+1. `deleted_at` set immediately, all tokens blacklisted, user can no longer authenticate. Identities are left alone — soft delete is a property of the person, and reactivation inside the grace window only works if the credential survived
 2. Photos in R2 queued for deletion (keys are namespaced by user, so purge by prefix)
 3. Hard purge after a 30-day grace period
 
@@ -147,3 +151,11 @@ Note that onboarding no longer gates the app — a user can log a meal before an
 * Third-party identity token verification — JWKS fetching, signature validation, claim checks
 * Secure credential storage on device
 * React Query interceptor and cache-invalidation patterns for auth state
+
+## Apple ID deletion is not handled, on purpose
+
+Apple offers a server-to-server notification when a user deletes their Apple ID or unlinks the app. We do not consume it.
+
+Consequence: Apple issues that person a new `sub`, the `Identity` lookup misses, and they get a fresh account. **Decided 20 Aug 2026 that this is acceptable.** Deleting an Apple ID is rare and drastic, the user has abandoned the credential their data was keyed to, and there is no way to prove the new Apple ID belongs to the same person without building an account-recovery flow for an event that may never happen. The failure is also benign: a clean account rather than an error.
+
+Revisit if support requests appear, if orphaned rows start costing R2 storage, or if a second provider makes "same person, different credential" routine. See [MAC-35](https://linear.app/hintology/issue/MAC-35/apple-revocation-notifications-accepted-gap-revisit-if-support-cost).
