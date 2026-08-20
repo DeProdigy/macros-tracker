@@ -12,6 +12,8 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 
+from accounts.models import Identity
+
 User = get_user_model()
 
 
@@ -80,7 +82,10 @@ def test_str_is_the_email():
 def test_create_apple_user_stores_the_subject_and_no_password():
     user = User.objects.create_apple_user(apple_user_id="000123.abc.4567")
 
-    assert user.apple_user_id == "000123.abc.4567"
+    # The subject lives on the Identity now, not on the user row.
+    identity = user.identities.get()
+    assert identity.subject == "000123.abc.4567"
+    assert identity.provider == Identity.Provider.APPLE
     assert user.email is None
     # Unusable is stronger than blank: no input matches, not even the stored
     # value, so there is nothing to brute force.
@@ -115,7 +120,7 @@ def test_apple_users_without_an_email_coexist():
 
 
 @pytest.mark.django_db
-def test_apple_user_id_is_unique_at_the_database_level():
+def test_apple_subject_is_unique_at_the_database_level():
     """Application-level checks race; the constraint is what actually holds.
 
     Two concurrent sign-ins from one Apple account would otherwise create two
@@ -136,7 +141,12 @@ def test_create_apple_user_requires_a_subject():
 @pytest.mark.django_db
 def test_str_falls_back_when_there_is_no_email():
     """__str__ has to work for a user who hid their email, since the admin
-    changelist calls it on every row."""
+    changelist calls it on every row.
+
+    It reports the pk rather than reaching for an identity on purpose. Querying
+    a relation inside __str__ would issue one query per row in exactly the view
+    that renders the most of them.
+    """
     user = User.objects.create_apple_user(apple_user_id="000123.abc.4567")
 
-    assert str(user) == "000123.abc.4567"
+    assert str(user) == f"user {user.pk}"

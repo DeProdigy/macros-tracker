@@ -45,10 +45,14 @@ from typing import Any
 import jwt
 import jwt.exceptions
 from django.conf import settings
+from django.contrib.auth.models import update_last_login
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
+from django.utils import timezone
 from jwt.algorithms import RSAAlgorithm
 from rest_framework.exceptions import ValidationError
+
+from accounts.models import Identity
 
 # Apple's OpenID configuration, confirmed against
 # https://appleid.apple.com/.well-known/openid-configuration.
@@ -95,13 +99,17 @@ JWKS_REFRESH_COOLDOWN_SECONDS = 300
 
 
 @dataclass(frozen=True)
-class AppleIdentity:
-    """The only two things we take from a verified token.
+class AppleClaims:
+    """What a verified token told us.
+
+    Named for what it holds rather than what it becomes. `Identity` is the row
+    we store; this is the assertion Apple signed. Calling both "identity" was
+    the shape of a naming bug, so the dataclass took the other name.
 
     Deliberately not the raw claim dict. A dict invites the caller to reach for
-    `email_verified` (Apple documents it as always true, so it carries no
-    information) or `real_user_status`, neither of which doc 02 has a column for
-    and doc 04 explicitly declined to store.
+    `email_verified`, which Apple documents as always true and which therefore
+    carries no information, or for `transfer_sub`, which means something quite
+    different from `sub` and would silently work most of the time.
 
     `subject` is Apple's `sub` claim and is the account join key. Never the
     email: a user may elect a Hide My Email relay address, and relay addresses
@@ -110,10 +118,53 @@ class AppleIdentity:
     `email` is None when the claim is absent, which happens for real users --
     a stale app association or a Managed Apple ID. The caller writes it only
     when present and never overwrites a stored address with None (doc 04).
+
+    `is_private_email` is None when Apple did not say, which is not the same as
+    False. `real_user_status` is None on every authorization after the first,
+    because Apple only sends it once.
     """
 
     subject: str
     email: str | None
+    is_private_email: bool | None
+    real_user_status: int | None
+
+
+def _optional_bool(value: Any) -> bool | None:
+    """Read a claim Apple has sent as both a bool and a string.
+
+    `is_private_email` arrives as a real JSON boolean in the identity token, but
+    Apple's own flows have historically emitted `"true"` / `"false"` strings and
+    the docs do not promise which. Anything unrecognised becomes None rather
+    than False, because "Apple did not tell us" and "Apple said no" are
+    different answers and only one of them is safe to act on.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
+    return None
+
+
+def _optional_real_user_status(value: Any) -> int | None:
+    """Read Apple's bot signal, rejecting anything outside the documented set.
+
+    An unrecognised number is dropped rather than stored. A value we cannot
+    interpret is worse than no value: it survives into the database looking
+    like a fact, and the next reader has no way to tell it apart from one.
+
+    `isinstance(value, bool)` is excluded first because in Python `True` is an
+    int, and `True` would otherwise store as status 1 ("Unknown").
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    if value in Identity.RealUserStatus.values:
+        return value
+    return None
 
 
 def _reject(code: str, message: str) -> ValidationError:
@@ -246,7 +297,7 @@ def _verify_nonce(claims: dict[str, Any], expected_nonce: str) -> None:
         raise _reject("nonce_mismatch", "Token does not carry the expected nonce.")
 
 
-def verify_apple_identity_token(token: str, *, expected_nonce: str) -> AppleIdentity:
+def verify_apple_identity_token(token: str, *, expected_nonce: str) -> AppleClaims:
     """Verify an Apple identity token and return who it names.
 
     `expected_nonce` is the raw value the client generated for this sign-in, and
@@ -326,7 +377,7 @@ def verify_apple_identity_token(token: str, *, expected_nonce: str) -> AppleIden
 
     # PyJWT covers `sub` being absent (MissingRequiredClaimError) and being a
     # non-string (InvalidSubjectError), both handled above. It accepts the empty
-    # string, which is the one gap: AppleIdentity declares `subject: str` and
+    # string, which is the one gap: AppleClaims declares `subject: str` and
     # MAC-27 uses it as the account join key, so an empty subject would become a
     # database lookup for "" and match the wrong thing or nothing at all.
     subject = claims["sub"]
@@ -334,7 +385,54 @@ def verify_apple_identity_token(token: str, *, expected_nonce: str) -> AppleIden
         raise _reject("missing_claim", "Identity token is missing a required claim.")
 
     email = claims.get("email")
-    return AppleIdentity(
+    return AppleClaims(
         subject=subject,
         email=email if isinstance(email, str) and email else None,
+        is_private_email=_optional_bool(claims.get("is_private_email")),
+        real_user_status=_optional_real_user_status(claims.get("real_user_status")),
     )
+
+
+def record_authentication(identity: Identity, *, claims: AppleClaims) -> None:
+    """Stamp a successful sign-in on both the person and the credential.
+
+    Fixes three things that were quietly broken.
+
+    `User.last_login` was never written. simplejwt has an `UPDATE_LAST_LOGIN`
+    setting, but it only fires inside `TokenObtainPairSerializer`, and we mint
+    tokens directly with `RefreshToken.for_user()` -- so turning it on would
+    have changed nothing. Meanwhile `accounts/admin.py` displays the field, so
+    every active user read as "never logged in".
+
+    The general lesson is worth more than the fix: `last_login` arrived free
+    from `AbstractBaseUser`. Nobody declared it, so nobody reviewed it, and it
+    sat holding a constant -- exactly what MAC-25 deleted `is_email_verified`
+    for. Inherited fields dodge the scrutiny declared ones get.
+
+    `update_last_login` is Django's own receiver rather than a hand-written
+    save. It uses `update_fields`, so it writes one column instead of the whole
+    row, which matters here because a concurrent request holding a stale user
+    object would otherwise clobber whatever it had cached.
+
+    Refreshing `is_private_email` but not `real_user_status` is deliberate and
+    is the whole reason this takes claims rather than just an identity. A user
+    can switch between a relay address and their real one, so the first is
+    current state. Apple sends the second only on the first authorization, so a
+    later token carries None -- and writing that would erase a real signal.
+    """
+    now = timezone.now()
+    fields = ["last_authenticated_at"]
+    identity.last_authenticated_at = now
+
+    if claims.is_private_email is not None:
+        identity.is_private_email = claims.is_private_email
+        fields.append("is_private_email")
+
+    identity.save(update_fields=fields)
+
+    # update_last_login is a signal receiver, so its first argument is the
+    # sender and it goes unused. Passing the model class rather than None
+    # because that is what the signature actually asks for -- None works at
+    # runtime and is the common idiom, but it fails type checking, and silencing
+    # that with an ignore would hide a real signature change later.
+    update_last_login(type(identity.user), identity.user)

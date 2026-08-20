@@ -2,7 +2,7 @@
 linear_id: 794ca722-e849-40c9-9d7c-804cdee285e3
 linear_title: "02 — Data Model"
 linear_url: https://linear.app/hintology/document/02-data-model-2b01a7aaa301
-linear_updated_at: 2026-08-20T04:58:12.968Z
+linear_updated_at: 2026-08-20T17:10:36.082Z
 generated: true
 ---
 
@@ -168,17 +168,46 @@ This is the standard slowly-changing-dimension pattern — worth internalizing, 
 User (custom, AbstractBaseUser)
   id
   email                  unique, NULLABLE              # from Apple, may be a relay address
-  apple_user_id          CharField, unique             # Sign in with Apple subject — the join key
   timezone               CharField                     # IANA name, e.g. "America/New_York"
   onboarding_completed   BooleanField
   ai_calls_this_month    IntegerField                  # quota counter
   created_at
   deleted_at             DateTimeField, nullable       # soft delete
+
+Identity
+  id
+  user                   FK -> User, CASCADE, related_name="identities"
+  provider               CharField, choices            # "apple"
+  subject                CharField                     # the provider's `sub`
+  is_private_email       BooleanField, NULLABLE        # Hide My Email relay? null = Apple didn't say
+  real_user_status       IntegerField, NULLABLE        # Apple's bot signal, first authorization only
+  created_at
+  last_authenticated_at  DateTimeField, nullable
+
+  UNIQUE (provider, subject)
 ```
+
+**Identity is separate from User, and that is the point.** A `User` is the account: targets, entries, timezone. An `Identity` is a credential that resolves to one. Today every app user has exactly one, from Apple, so the two look interchangeable — which is exactly why they were separated before the first real row existed rather than after.
+
+The forcing case is not a hypothetical second provider. It is an **app transfer**: move the app to another Apple developer team and Apple reissues every user's `sub`. With the subject inlined on `User` that migration rewrites the user table under live traffic. With a join table it inserts rows. Every federated identity system lands here — Supabase's `auth.identities`, allauth's `SocialAccount`. The shape is not clever; the mistake is skipping it because one provider fits in a column.
+
+**The unique constraint is on the pair, never on** `subject` **alone.** A subject is only unique *within* a provider: each mints opaque strings from its own namespace and nothing coordinates them. A unique index on `subject` by itself would be a cross-provider collision that fires once, years later, and cannot be reproduced.
+
+**Superusers have no** `Identity` **at all.** They have a password and log in at `/admin/`. That is the sentence that makes the split easy to reason about: authentication is not something every row must have.
+
+`is_private_email` **is three-valued on purpose.** NULL means Apple did not tell us, which is not the same as `False`. Defaulting to `False` would assert a deliverable address we were never told about, and the field exists precisely to say whether mail to it can be relied on. It is refreshed on every sign-in, because a user can switch between a relay and their real address.
+
+`real_user_status` **is written once and never updated.** Apple sends it on the first authorization only, so later tokens carry nothing — and if one ever carried `UNKNOWN`, writing it would silently downgrade a stored `LIKELY_REAL`. The field means "what Apple thought when this identity was first seen", which is a fact about one moment rather than current state.
+
+**No** `email` **column on** `Identity` **yet.** Supabase keeps one on both sides and it is tempting, but nothing would read it until a second provider asserts a different address. Adding a column nothing reads is what MVP deleted `is_email_verified` for.
 
 **Custom user model from the very first migration.** Swapping Django's user model after tables exist is genuinely painful. Non-negotiable, and already done.
 
-MVP is Sign in with Apple only, so no app user ever has a usable password, and there is no email verification flag. `apple_user_id` is the stable identifier; email may be an Apple private relay address and must never be used as the join key.
+MVP is Sign in with Apple only, so no app user ever has a usable password, and there is no email verification flag. `Identity.subject` is the stable identifier; email may be an Apple private relay address and must never be used as the join key.
+
+`last_login` **is real now.** It arrives free from `AbstractBaseUser` and nothing wrote it until the sign-in path did, while the admin displayed it the whole time — so every active user read as "never logged in". simplejwt's `UPDATE_LAST_LOGIN` would not have helped: it only fires inside `TokenObtainPairSerializer`, and tokens are minted directly with `RefreshToken.for_user()`. The generalisable half: **a field inherited from a base class dodges the review a declared field gets.** Nobody chose it, so nobody audited it, and it sat holding a constant — the same trap `is_email_verified` was deleted for.
+
+`User.last_login` is person-level and covers a superuser's admin password login. `Identity.last_authenticated_at` is credential-level. With one provider they move together; with two, the second answers "which login did they actually use?", which is the first question support asks.
 
 **There is still a** `password` **column, and it is** `NOT NULL`**.** It comes from `AbstractBaseUser`, not from anything declared in `accounts/models.py`, and the schema block above omits it along with the other Django auth plumbing (`last_login`, `is_active`, `is_staff`, `is_superuser`, groups, permissions). Do not read that omission as "the column does not exist".
 
@@ -186,7 +215,7 @@ Apple users get `set_unusable_password()`, which stores `!` plus 40 random chara
 
 The column earns its place for staff only. `createsuperuser` still sets a real hash, and that is the `/admin/` login path.
 
-**Hazard if email/password ever returns** (doc 04 parks it for a possible web client): calling `set_password()` on an existing Apple user would hand them a usable password and create a second way into the same account that bypasses Apple entirely. Any future password flow has to exclude users who have an `apple_user_id`.
+**Hazard if email/password ever returns** (doc 04 parks it for a possible web client): calling `set_password()` on an existing Apple user would hand them a usable password and create a second way into the same account that bypasses Apple entirely. Any future password flow has to exclude users who have an `Identity`.
 
 **Why** `email` **is nullable.** Apple does not guarantee an email claim. It is normally present in the identity token, but it can be absent for a stale app association, for a Managed Apple ID under Sign in with Apple at Work & School, or when a client reads the first-authorization-only `credential.email` property instead of the token. A `NOT NULL` column would leave the sign-in path two options in those cases: reject a legitimate user, or invent a placeholder that then occupies a unique column. Both are worse than storing NULL.
 
