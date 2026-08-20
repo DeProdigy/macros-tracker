@@ -2,7 +2,7 @@
 linear_id: 794ca722-e849-40c9-9d7c-804cdee285e3
 linear_title: "02 — Data Model"
 linear_url: https://linear.app/hintology/document/02-data-model-2b01a7aaa301
-linear_updated_at: 2026-08-19T04:33:02.644Z
+linear_updated_at: 2026-08-20T04:58:12.968Z
 generated: true
 ---
 
@@ -167,7 +167,7 @@ This is the standard slowly-changing-dimension pattern — worth internalizing, 
 ```
 User (custom, AbstractBaseUser)
   id
-  email                  unique                        # from Apple, may be a relay address
+  email                  unique, NULLABLE              # from Apple, may be a relay address
   apple_user_id          CharField, unique             # Sign in with Apple subject — the join key
   timezone               CharField                     # IANA name, e.g. "America/New_York"
   onboarding_completed   BooleanField
@@ -178,7 +178,23 @@ User (custom, AbstractBaseUser)
 
 **Custom user model from the very first migration.** Swapping Django's user model after tables exist is genuinely painful. Non-negotiable, and already done.
 
-MVP is Sign in with Apple only, so there is no password field and no email verification flag. `apple_user_id` is the stable identifier; email may be an Apple private relay address and must never be used as the join key.
+MVP is Sign in with Apple only, so no app user ever has a usable password, and there is no email verification flag. `apple_user_id` is the stable identifier; email may be an Apple private relay address and must never be used as the join key.
+
+**There is still a** `password` **column, and it is** `NOT NULL`**.** It comes from `AbstractBaseUser`, not from anything declared in `accounts/models.py`, and the schema block above omits it along with the other Django auth plumbing (`last_login`, `is_active`, `is_staff`, `is_superuser`, groups, permissions). Do not read that omission as "the column does not exist".
+
+Apple users get `set_unusable_password()`, which stores `!` plus 40 random characters. The `!` prefix makes `is_password_usable()` false, so `check_password()` returns false for every input including the stored value itself. That is stronger than an empty string, which Django would treat as a *usable* password it then cannot parse. Consequence: an Apple user cannot log in through the Django admin form under any input.
+
+The column earns its place for staff only. `createsuperuser` still sets a real hash, and that is the `/admin/` login path.
+
+**Hazard if email/password ever returns** (doc 04 parks it for a possible web client): calling `set_password()` on an existing Apple user would hand them a usable password and create a second way into the same account that bypasses Apple entirely. Any future password flow has to exclude users who have an `apple_user_id`.
+
+**Why** `email` **is nullable.** Apple does not guarantee an email claim. It is normally present in the identity token, but it can be absent for a stale app association, for a Managed Apple ID under Sign in with Apple at Work & School, or when a client reads the first-authorization-only `credential.email` property instead of the token. A `NOT NULL` column would leave the sign-in path two options in those cases: reject a legitimate user, or invent a placeholder that then occupies a unique column. Both are worse than storing NULL.
+
+It stays `unique` regardless, because Postgres treats NULLs as distinct — the same property `apple_user_id` already depends on.
+
+The general rule, which applies to any federated provider and not just Apple: the subject identifier is the only claim guaranteed to arrive. Everything else is optional and consent-gated, so putting `NOT NULL` on one encodes an assumption about someone else's consent screen into our schema.
+
+**No name field, deliberately.** Nothing in the product greets the user by name or displays one, so there is nothing to persist Apple's one-shot `fullName` into. See doc 04 for why that makes the usual "capture it on first authorization" warning inapplicable here.
 
 ## Migration sequencing
 

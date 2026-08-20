@@ -13,19 +13,23 @@ class UserAdmin(BaseUserAdmin):
 
     # BaseUserAdmin's defaults reference `username`, so override the bits that do.
     ordering = ("email",)
-    search_fields = ("email",)
+    # Both fields, because email is nullable now. An Apple user who hid their
+    # address has apple_user_id as their only identity, so an email-only search
+    # cannot find them at all.
+    search_fields = ("email", "apple_user_id")
     list_display = (
         "email",
+        # The real join key under Apple-only sign-in, and the only identity a
+        # user who hid their email has.
+        "apple_user_id",
         "is_staff",
         "is_superuser",
-        "is_email_verified",
         "onboarding_completed",
     )
     list_filter = (
         "is_staff",
         "is_superuser",
         "is_active",
-        "is_email_verified",
         "onboarding_completed",
     )
     # auto_now_add / auth-managed fields can't be edited, so show them read-only.
@@ -40,7 +44,6 @@ class UserAdmin(BaseUserAdmin):
                 "fields": (
                     "timezone",
                     "apple_user_id",
-                    "is_email_verified",
                     "onboarding_completed",
                     "ai_calls_this_month",
                 )

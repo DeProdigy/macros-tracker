@@ -2,7 +2,7 @@
 linear_id: c77c29c9-be49-4acc-9720-c446ad327b36
 linear_title: "04 — Feature: Authentication"
 linear_url: https://linear.app/hintology/document/04-feature-authentication-8efb3525d18e
-linear_updated_at: 2026-08-20T04:04:15.508Z
+linear_updated_at: 2026-08-20T04:46:58.009Z
 generated: true
 ---
 
@@ -40,11 +40,21 @@ Email/password is parked for if a web or Android client appears. See Follow-ups.
 
 ## Sign in with Apple — implementation notes
 
-**Apple returns the user's name and email only on first authorization.** If you don't persist it then, you never get it again. This is the classic first-integrator bug.
+**Name and email are not the same case. Do not treat them alike.**
+
+The native flow hands the client an `ASAuthorizationAppleIDCredential`, which carries `.fullName`, `.email`, and the signed `identityToken`. Apple's rule is that `fullName` and the credential's `.email` **property** are populated only on the first authorization and are `nil` on every sign-in afterwards. The **identity token** is different: it carries the verified email address on subsequent authorization requests too.
+
+So the classic "capture it on first authorization or lose it forever" warning applies to `fullName`, not to the email, provided you read the email from the token. Which we do anyway, for a second reason: `credential.email` is a client-supplied field the server cannot verify, while the token claim is signed by Apple. **Read email from the verified claims, never from a client-supplied field.**
+
+**No name is stored at all.** Nothing in this product displays or greets by name, so there is no field for it in doc 02 and nothing is lost by letting Apple's one-shot `fullName` go. If a name is ever needed, it must be collected in our own UI rather than recovered from Apple.
+
+**Email can still be missing, so it is nullable.** Not guaranteed even in the token: a stale app association can drop the claim (Apple's forums carry repeated reports of a valid `sub` with no `email`), and Managed Apple IDs under Sign in with Apple at Work & School behave differently. Every sign-in is therefore an upsert that writes the email only when a claim is present, and **never overwrites a stored address with null**.
 
 **Store** `apple_user_id` **(the stable** `sub` **claim) as the join key — never the email.** Users may elect a private relay address, and relay addresses can change.
 
 **Verify the identity token server-side.** Fetch Apple's JWKS, validate the signature, and check `iss` and `aud`. A client-supplied token accepted without verification is not authentication.
+
+`email_verified` **is not worth storing.** Apple documents the claim's value as always `true`, because their servers only return verified addresses. The one exception is Sign in with Apple at Work & School, where it can be false. A local `is_email_verified` column under Apple-only sign-in would hold a constant, and worse, would sit at its `False` default forever because nothing writes it — an inviting trap for the next person adding an auth check. Dropped in [MAC-25](https://linear.app/hintology/issue/MAC-25/auth-foundations-simplejwt-and-the-user-model-under-apple-only).
 
 ## Token strategy
 

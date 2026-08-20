@@ -6,6 +6,7 @@ Values come from the environment via django-environ (see the repo-root
 production.py — import everything from here and override what differs.
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -38,6 +39,9 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     "drf_spectacular",
+    # Stores rotated/blacklisted refresh tokens. Required for
+    # BLACKLIST_AFTER_ROTATION below to have anywhere to write.
+    "rest_framework_simplejwt.token_blacklist",
     # Local apps
     "accounts",
     "uploads",
@@ -165,7 +169,16 @@ R2_ALLOWED_UPLOAD_TYPES = {
 
 # Django REST Framework — sane defaults: authenticated by default, JSON in/out.
 REST_FRAMEWORK = {
+    # JWT first: it is how the mobile client authenticates. Session auth stays
+    # beneath it so the Swagger UI at /api/docs/ still works against a logged-in
+    # admin session.
+    #
+    # The order also decides the 401 challenge. DRF takes the WWW-Authenticate
+    # header from the *first* authenticator, so with JWT leading, an
+    # unauthenticated request now gets 401 rather than the 403 SessionAuth
+    # produces. That is the correct answer for a bearer-token API.
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
@@ -179,6 +192,35 @@ REST_FRAMEWORK = {
     # that packages/api-client generates its typed hooks from.
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
+
+# JSON Web Tokens (djangorestframework-simplejwt).
+#
+# Lifetimes are hardcoded rather than read from the environment, unlike the R2
+# expiries above. A token lifetime is a security decision, not a per-environment
+# fact: making it a Railway variable would let production drift to a 90-day
+# refresh window with no code review.
+#
+# Access tokens are deliberately short. Nothing checks a blacklist on the access
+# path, so an access token cannot be revoked before it expires -- 15 minutes is
+# the window an attacker gets. Going much shorter just means a user returning to
+# a backgrounded app eats a refresh round-trip on every launch.
+#
+# Refresh tokens rotate on every use and the old one is blacklisted, so a stolen
+# refresh token stops working as soon as the real client refreshes. Note what
+# this does and does not buy: reuse of a rotated token *fails*, but simplejwt
+# emits no signal and does not invalidate the token family, so nobody is
+# notified. Detection is a follow-up, not something installing this gives us.
+#
+# SIGNING_KEY defaults to SECRET_KEY, which is left alone. Consequence worth
+# knowing before an incident: rotating DJANGO_SECRET_KEY in Railway signs every
+# user out at once.
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+}
+
 
 # OpenAPI schema generation (drf-spectacular).
 #
