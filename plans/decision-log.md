@@ -2,7 +2,7 @@
 linear_id: afad3d4f-f24b-4fb2-b6ea-0e45cd997939
 linear_title: "Decision Log"
 linear_url: https://linear.app/hintology/document/decision-log-3f0d791973e7
-linear_updated_at: 2026-08-20T17:11:19.273Z
+linear_updated_at: 2026-08-20T18:23:47.418Z
 generated: true
 ---
 
@@ -14,6 +14,56 @@ generated: true
 Kept because the reasoning is the valuable part — and because "here's a project where I made and documented real tradeoffs" is directly useful material for engineering leadership interviews.
 
 Newest first.
+
+---
+
+## 20 Aug 2026 — The sign-in endpoint, and two reversals
+
+[MAC-27](<https://linear.app/hintology/issue/MAC-27/post-apiauthsessions-sign-in-account-resolution-and-reactivation>). `POST /api/auth/sessions/`. The ticket spec was rewritten before implementation because three parts of it were wrong.
+
+### The 30-day reactivation window is gone
+
+**Was:** restore a soft-deleted user inside 30 days, refuse past it with a distinct error.
+
+**Now:** restore, always. No date arithmetic on the sign-in path.
+
+**Why:** the refuse branch was unreachable in a working system. Past 30 days the purge has already deleted the row, so reaching that branch means [MAC-29](<https://linear.app/hintology/issue/MAC-29/account-deletion-and-the-purge-command>)'s command is broken — and a user-facing error is the wrong response to a broken cron. It also served nobody: the person is trying to come back, and telling them to return later, about data scheduled for destruction, helps neither side.
+
+The deeper mistake was conflating two decisions that happened to share a number. A purge grace period is a data-retention policy. A reactivation deadline is a product rule. Welded together, changing one silently changes the other.
+
+The purge still enforces the deadline, by deleting the row. Once it has, sign-in takes the ordinary create branch and the user gets a clean account — the same behaviour already accepted for a deleted Apple ID in [MAC-35](<https://linear.app/hintology/issue/MAC-35/apple-revocation-notifications-accepted-gap-revisit-if-support-cost>). Removing the window deleted a branch, a date comparison, a boundary test, and an error state.
+
+Generalisable: when a rule's only reachable failure mode is "our own infrastructure is broken", it is monitoring, not product logic.
+
+### The name is stored after all, and it cannot be verified
+
+**Was:** no name field. Nothing displays a name, so nothing is lost by dropping Apple's one-shot `fullName`.
+
+**Now:** `User.name`, explicitly unverified.
+
+**Why:** not a new use for it. The asymmetry. Apple sends `fullName` on the first authorization and never again, so not capturing it is permanent. Same argument that decided `real_user_status` in [MAC-34](<https://linear.app/hintology/issue/MAC-34/move-identity-off-the-user-table-into-an-identity-join-table>), and worth stating as a rule: **for data available exactly once, "nothing reads it yet" is a much weaker argument than usual.**
+
+The constraint worth knowing: Apple puts **no name claim in the identity token**. Confirmed against their live discovery document, which lists every claim they send. `fullName` is client-side only, so unlike email there is no verified alternative to prefer. The client forwards it and we take its word. Acceptable for a display name; documented at the field as never acceptable for anything security-relevant.
+
+### Throttling is burst plus sustained
+
+One flat rate has to choose between blocking a human who taps twice and leaving room for a script: 10/min alone permits 600/hour, and 60/hour alone rejects the second tap in a minute. Two scopes, both of which must pass, express "a burst is fine, all day is not".
+
+Stated plainly in the code because it is easy to get backwards: **the throttle is not the security control.** Sign in with Apple has no password to guess, and forged tokens are stopped by the signature check. This limit exists for cost and denial of service, which is why it can afford to be generous.
+
+### DRF turns a 401 into a 403 when a view has no authenticator
+
+This endpoint must set `authentication_classes = []`, because it is the request that creates the session. DRF rewrites `AuthenticationFailed` and `NotAuthenticated` to **403** when there is no authenticator to build a `WWW-Authenticate` header from, so the obvious exception produces the wrong status. Measured rather than assumed.
+
+A plain `APIException` subclass with `status_code = 401` is untouched by that rewrite. Rejected the alternative of overriding `get_authenticate_header`, which fixes the status by advertising a bearer challenge the endpoint does not issue.
+
+This also corrects doc 04, which after [MAC-26](https://linear.app/hintology/issue/MAC-26/verify-apple-identity-tokens-against-jwks) claimed the endpoint "collapses every one of them into a single generic 401" without noting that the obvious way to do that yields 403.
+
+### One more DRF trap, found by a test that passed while asserting nothing
+
+`SimpleRateThrottle.THROTTLE_RATES` is a **class** attribute bound to the settings dict at import time. Overriding `settings.REST_FRAMEWORK` in a test creates a new dict the class never looks at, so the throttle tests passed at the real rate and proved nothing. Production is unaffected, because the class body runs after settings are configured.
+
+The general shape is worth more than the instance: **a settings override that silently does nothing produces a green test.** Any framework value captured at import rather than read per call has this property, and the only reliable tell is a test that fails when you break the thing it claims to cover.
 
 ---
 
