@@ -25,6 +25,14 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "warn",
     },
   },
+  {
+    // Repo tooling runs in Node, not in a bundle. Declared by hand rather than
+    // via the `globals` package — three names is cheaper than a dependency.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { console: "readonly", fetch: "readonly", process: "readonly" },
+    },
+  },
   // Keep last: disables stylistic rules that Prettier owns.
   prettier,
 );

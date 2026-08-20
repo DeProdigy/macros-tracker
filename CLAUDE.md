@@ -1,25 +1,41 @@
 # CLAUDE.md
 
-Planning source of truth lives in [`plans/`](./plans) — mirrors of the Linear
-project docs. Feed the relevant plan doc into a session rather than
-re-explaining decisions. Architecture is in
-[`plans/01-architecture.md`](./plans/01-architecture.md); the working agreement
-this file enforces is in
-[`plans/03-working-agreement.md`](./plans/03-working-agreement.md).
+Planning source of truth is the Linear project. [`plans/`](./plans) is a
+**generated mirror** of it — never hand-edit anything in there except
+`plans/tickets/`. To change a plan, edit the Linear doc and run
+`pnpm sync:plans`. Feed the relevant plan doc into a session rather than
+re-explaining decisions.
+
+Start at [`plans/README.md`](./plans/README.md), which indexes every doc and
+says which one wins in a conflict. Architecture is in
+[`plans/01-architecture-and-repo-structure.md`](./plans/01-architecture-and-repo-structure.md);
+the working agreement this file enforces is in
+[`plans/03-working-agreement-and-ai-workflow.md`](./plans/03-working-agreement-and-ai-workflow.md).
 
 ---
 
 ## How to work on this repo
 
-This is a learning project. The owner is levelling up React Native and Django.
+This is a learning project. The owner is levelling up React Native and Django
+by reviewing plans and code rather than writing it.
 
-For tickets labeled `you-implement`:
-- Do NOT write implementation code unless explicitly asked
-- Explain concepts, review code, ask guiding questions, unblock errors
-- If asked "how do I do X", answer with the concept and a pointer, not a finished file, unless asked for it
+For every ticket:
+- Produce a full implementation plan BEFORE writing code
+- Plan must cover: files touched, approach, alternatives rejected,
+  Django/RN concepts in play, blast radius, what's deliberately unhandled,
+  and open questions
+- Wait for plan approval before implementing
+- Save the approved plan to `plans/tickets/MAC-NN.md` and commit it
+- In the PR description, call out anything the owner should look at closely
+  and anything you were unsure about
 
-For tickets labeled `auto-ok`:
-- Implement freely
+When asked "why", explain the concept, not just this instance. Name the
+pattern. Say when it's the wrong choice.
+
+The `you-implement` and `auto-ok` labels are **retired** (doc 03, 19 Aug 2026).
+Existing tickets still carry them; ignore them. Every ticket now gets the plan
+gate above and a full diff review before merge. The per-language rules that used
+to sit here are the sections below.
 
 ## Layout
 
@@ -30,6 +46,7 @@ pnpm + turbo monorepo (`pnpm@11.15.1`), workspaces `apps/*` and `packages/*`:
 | `apps/api` | Django 6 + DRF, Python 3.12, dependencies managed with `uv` |
 | `apps/mobile` | Expo SDK 57 + expo-router, React Native 0.86, TypeScript |
 | `packages/api-client` | **Generated** TypeScript client (drf-spectacular → Orval). Never hand-edit |
+| `plans` | **Generated** mirror of the Linear docs (`pnpm sync:plans`). Never hand-edit, except `plans/tickets/` |
 
 Django apps: `accounts` (custom User model), `uploads` (Cloudflare R2 presigned
 uploads). `entries`, `targets`, and `ai` are scaffolded but still empty.
@@ -40,6 +57,9 @@ Run from the repo root — turbo fans out to the workspaces.
 
 - `pnpm lint`, `pnpm format:check`, `pnpm check-types`, `pnpm test`
 - `pnpm generate:api` — regenerate the API client (deliberately never cached)
+- `pnpm sync:plans` — re-mirror the Linear plan docs into `plans/`. Needs
+  `LINEAR_API_KEY` in `.env`. Run it at the start of an epic, and any time a
+  plan doc changes in Linear
 - Python, from `apps/api`: `uv sync --all-groups`, `uv run ruff check .`,
   `uv run mypy`, `uv run pytest`
 - Use `uv` and `pnpm` — never bare `pip` or `npm install`; they own the lockfiles

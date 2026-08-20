@@ -4,12 +4,13 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "lint": "turbo run lint && eslint scripts",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
     "check-types": "turbo run check-types",
     "test": "turbo run test",
-    "generate:api": "turbo run generate:api"
+    "generate:api": "turbo run generate:api",
+    "sync:plans": "node --env-file-if-exists=.env scripts/sync-plans.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
