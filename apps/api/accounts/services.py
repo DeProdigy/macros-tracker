@@ -262,9 +262,7 @@ def verify_apple_identity_token(token: str, *, expected_nonce: str) -> AppleIden
         # first sign-in instead. The alternative -- defaulting to "" and letting
         # the `aud` check compare against it -- is how the most important check
         # in this module would silently do nothing.
-        raise ImproperlyConfigured(
-            "APPLE_CLIENT_ID must be set to verify Apple identity tokens."
-        )
+        raise ImproperlyConfigured("APPLE_CLIENT_ID must be set to verify Apple identity tokens.")
 
     kid = _unverified_kid(token)
     public_key = RSAAlgorithm.from_jwk(_signing_jwk(kid))
