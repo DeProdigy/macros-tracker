@@ -989,3 +989,95 @@ export const useUpdateCurrentUser = <TError = void, TContext = unknown>(
 
   return useMutation(mutationOptions, queryClient);
 };
+
+/**
+ * Deletes the caller's account. Required by both app stores, which will not ship an app that creates accounts without an in-app way to remove them.
+
+**This is reversible.** Signing in again with the same Apple ID restores the account and its data, as long as the account has not yet been purged — there is no separate 'undelete' call. The row is marked deleted rather than destroyed; scheduled destruction is not implemented yet, so nothing is currently erased.
+
+Access stops at once. The refresh tokens are blacklisted and the account is deactivated, so the access token the client is holding fails on its next use rather than lasting out its 15 minutes. The client should clear its token storage and route to Welcome.
+
+Deleting twice changes nothing: the deletion timestamp keeps its original value. Expect a 401 rather than a second 204, though — the account is deactivated by then, so authentication rejects the retry before this endpoint sees it. Either answer means the same thing to the client, which should clear its tokens and move on.
+ * @summary Delete the signed-in user's account
+ */
+export type deleteCurrentUserResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteCurrentUserResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type deleteCurrentUserResponseSuccess = deleteCurrentUserResponse204 & {
+  headers: Headers;
+};
+export type deleteCurrentUserResponseError = deleteCurrentUserResponse401 & {
+  headers: Headers;
+};
+
+export type deleteCurrentUserResponse =
+  deleteCurrentUserResponseSuccess | deleteCurrentUserResponseError;
+
+export const getDeleteCurrentUserUrl = () => {
+  return `/api/users/me/`;
+};
+
+export const deleteCurrentUser = async (
+  options?: RequestInit,
+): Promise<deleteCurrentUserResponse> => {
+  return customFetch<deleteCurrentUserResponse>(getDeleteCurrentUserUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteCurrentUserMutationOptions = <TError = void, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCurrentUser>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof deleteCurrentUser>>, TError, void, TContext> => {
+  const mutationKey = ["deleteCurrentUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCurrentUser>>, void> = () => {
+    return deleteCurrentUser(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteCurrentUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteCurrentUser>>
+>;
+
+export type DeleteCurrentUserMutationError = void;
+
+/**
+ * @summary Delete the signed-in user's account
+ */
+export const useDeleteCurrentUser = <TError = void, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteCurrentUser>>,
+      TError,
+      void,
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<Awaited<ReturnType<typeof deleteCurrentUser>>, TError, void, TContext> => {
+  const mutationOptions = getDeleteCurrentUserMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};

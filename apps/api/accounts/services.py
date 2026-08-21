@@ -52,6 +52,10 @@ from django.db import transaction
 from django.utils import timezone
 from jwt.algorithms import RSAAlgorithm
 from rest_framework.exceptions import APIException, ValidationError
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
 
 from accounts.models import Identity, User
 
@@ -484,6 +488,44 @@ class ResolvedSession:
     reactivated: bool
 
 
+def revoke_refresh_tokens(user: User) -> None:
+    """Blacklist every outstanding refresh token this user holds.
+
+    Two callers, and they are the two ends of one story: deleting an account,
+    and restoring one. Both mean "no credential issued before this moment is
+    still good".
+
+    Two queries, not one per token. Every refresh mints a new OutstandingToken
+    -- ROTATE_REFRESH_TOKENS and BLACKLIST_AFTER_ROTATION are both on, and
+    `TokenRefreshSerializer` calls `outstand()` on the rotated token -- and
+    nothing here runs `flushexpiredtokens`. So a long-lived account arrives with
+    hundreds of rows, most already blacklisted. A per-row `get_or_create` would
+    issue a SELECT for each one, and that cost grows for as long as the user
+    stays signed in.
+
+    `blacklistedtoken__isnull=True` skips the rows an earlier sign-out already
+    revoked, and `ignore_conflicts` covers the row a concurrent sign-out inserts
+    between the SELECT and the INSERT. Without one of the two, the unique
+    constraint raises and rolls the caller's transaction back.
+
+    **A refresh landing between the SELECT and the INSERT leaves its rotated
+    token unblacklisted.** Closing that would mean locking the user row on every
+    refresh -- a lock on the hottest path in the API, to protect a window two
+    statements wide. It is not needed. `TokenRefreshSerializer` applies
+    `USER_AUTHENTICATION_RULE` to the token's user, which is `is_active` by
+    default, so a token that escapes this sweep still cannot refresh while the
+    account is deleted. Reactivation is where it would come back to life, which
+    is why restoring an account calls this too.
+    """
+    BlacklistedToken.objects.bulk_create(
+        [
+            BlacklistedToken(token=token)
+            for token in OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True)
+        ],
+        ignore_conflicts=True,
+    )
+
+
 def resolve_apple_user(claims: AppleClaims, *, name: str = "") -> ResolvedSession:
     """Find or create the user behind a set of verified claims.
 
@@ -554,9 +596,79 @@ def resolve_apple_user(claims: AppleClaims, *, name: str = "") -> ResolvedSessio
         if updates:
             user.save(update_fields=updates)
 
+        if reactivated:
+            # A restore must not re-arm credentials that predate the deletion.
+            # Deletion blacklists them, so in the ordinary case this finds
+            # nothing. What it catches is the token minted by a refresh that
+            # raced the delete: inert while the account was inactive, and
+            # working again from this line onwards if nothing revoked it.
+            #
+            # Scoped to the reactivation branch on purpose. Doing it on every
+            # sign-in would sign the user's other devices out whenever they
+            # opened the app, which nobody asked for.
+            revoke_refresh_tokens(user)
+
         return ResolvedSession(
             user=user,
             identity=identity,
             created=False,
             reactivated=reactivated,
         )
+
+
+def delete_account(user: User) -> bool:
+    """Soft-delete a user and revoke every refresh token they hold.
+
+    Returns True if this call performed the deletion, False if the account was
+    already deleted. The caller answers 204 either way -- the flag exists for
+    logs and tests, not for the response.
+
+    Three writes, and each one closes a different hole:
+
+    `deleted_at` records the deletion for the purge that a later ticket adds.
+    On its own it stops nothing: no authentication path reads this column.
+
+    `is_active=False` is what actually locks the account. simplejwt's
+    `JWTAuthentication` checks it on every request, so the access token the
+    client is still holding stops working on the next call rather than whenever
+    it expires -- up to 15 minutes of authenticated requests, otherwise.
+
+    Blacklisting the outstanding refresh tokens stops the other half. A refresh
+    is a token exchange, and doc 04 asks for all tokens revoked; without this a
+    stored refresh token still mints new access tokens, which then fail the
+    `is_active` check. Belt and braces on purpose: the two guards fail
+    independently.
+
+    Identities are deliberately left alone. Soft delete is a property of the
+    person, and `resolve_apple_user` restores the account by finding the
+    Identity row for the same Apple `sub`. Deleting it here would turn every
+    return visit into a brand-new account.
+
+    **Deleting twice does not move `deleted_at`.** A retried request must not
+    push the retention deadline forward, and a client that retries a 204 it
+    never saw is ordinary. The row is re-read under a lock to decide that,
+    because the instance the caller passes in is a snapshot: `JWTAuthentication`
+    loaded it when it authenticated the request, so `user.deleted_at` says what
+    was true then. Two DELETEs arriving together would both read None from their
+    own stale copy, both pass the check, and the second would move the
+    timestamp -- the exact thing this paragraph promises cannot happen.
+
+    `select_for_update` rather than a conditional UPDATE. Both close the race;
+    the lock also leaves a fresh row to write through, where
+    `filter(...).update(...)` would return a count and leave the in-memory user
+    disagreeing with the database.
+    """
+    with transaction.atomic():
+        # The lock is held until this block commits, so a second request blocks
+        # here and then reads the timestamp the first one wrote.
+        locked = User.objects.select_for_update().get(pk=user.pk)
+        if locked.deleted_at is not None:
+            return False
+
+        locked.deleted_at = timezone.now()
+        locked.is_active = False
+        locked.save(update_fields=["deleted_at", "is_active"])
+
+        revoke_refresh_tokens(user)
+
+    return True
