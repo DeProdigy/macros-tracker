@@ -171,8 +171,27 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
               : { status: "signedOut" },
           );
         }
-      } catch {
-        await clearTokens();
+      } catch (error) {
+        // Which failure this was decides whether the tokens survive, and the
+        // wrong answer here is unrecoverable: a cold start in airplane mode
+        // would wipe the Keychain, and turning the radio back on would not
+        // bring the session back.
+        //
+        // 401 and 403 are the server's verdict on the credential — refused, or
+        // attached to an account that is gone. Nothing to keep.
+        //
+        // A timeout, a 5xx, a dead connection: no verdict was ever reached.
+        // The user still sees Welcome, because there is no session to show
+        // them yet, but the tokens stay and the next launch with signal
+        // restores them. This mirrors the expired/unavailable split the
+        // refresh bridge makes, and the two disagreeing is what made this a
+        // bug rather than a rough edge.
+        const refused = error instanceof ApiError && (error.status === 401 || error.status === 403);
+
+        if (refused) {
+          await clearTokens();
+        }
+
         if (!cancelled) setState({ status: "signedOut" });
       }
     };

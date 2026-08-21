@@ -141,6 +141,40 @@ describe("restoring at launch", () => {
     await waitFor(() => expect(screen.getByText("signedOut")).toBeTruthy());
     expect(mockClearTokens).toHaveBeenCalled();
   });
+
+  it("clears a token belonging to a deleted account", async () => {
+    mockGetTokens.mockResolvedValue({ access: "a", refresh: "r" });
+    mockGetCurrentUser.mockRejectedValue(new ApiError(403, null));
+
+    renderSession();
+
+    await waitFor(() => expect(screen.getByText("signedOut")).toBeTruthy());
+    expect(mockClearTokens).toHaveBeenCalled();
+  });
+
+  it.each([500, 502, 504])("keeps the tokens when the server is broken (%i)", async (status) => {
+    mockGetTokens.mockResolvedValue({ access: "a", refresh: "r" });
+    mockGetCurrentUser.mockRejectedValue(new ApiError(status, null));
+
+    renderSession();
+
+    await waitFor(() => expect(screen.getByText("signedOut")).toBeTruthy());
+    // Welcome is the right screen — there is no session to show yet. Wiping
+    // the Keychain is not, because the next launch could have succeeded.
+    expect(mockClearTokens).not.toHaveBeenCalled();
+  });
+
+  it("keeps the tokens when the device is offline", async () => {
+    // The unrecoverable one. A cold start in airplane mode used to wipe the
+    // Keychain, and no amount of reconnecting brought the session back.
+    mockGetTokens.mockResolvedValue({ access: "a", refresh: "r" });
+    mockGetCurrentUser.mockRejectedValue(new TypeError("Network request failed"));
+
+    renderSession();
+
+    await waitFor(() => expect(screen.getByText("signedOut")).toBeTruthy());
+    expect(mockClearTokens).not.toHaveBeenCalled();
+  });
 });
 
 describe("signing out", () => {
