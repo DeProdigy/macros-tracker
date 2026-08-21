@@ -80,4 +80,10 @@ EXPOSE 8000
 #   container.
 # - --access-logfile/--error-logfile -: gunicorn logs to files by default, which
 #   in a container means logs that exist nowhere anyone can read them.
-CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 60 --access-logfile - --error-logfile - --forwarded-allow-ips '*'"]
+# - --access-logformat: gunicorn's default omits X-Forwarded-For, and %(h)s is
+#   REMOTE_ADDR, which behind Railway is always the proxy. MAC-36 needs the
+#   forwarded chain to count the hops between the client and this container, and
+#   the count cannot be assumed: setting DRF's NUM_PROXIES too high makes every
+#   caller in the world share one throttle bucket. TEMPORARY — this line comes
+#   out in the same ticket, once the count is recorded.
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 60 --access-logfile - --error-logfile - --access-logformat '%(h)s xff=%({x-forwarded-for}i)s \"%(r)s\" %(s)s' --forwarded-allow-ips '*'"]
