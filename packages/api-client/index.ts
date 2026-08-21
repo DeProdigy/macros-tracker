@@ -14,5 +14,9 @@ export * from "./src/endpoints";
 // Generated request/response types.
 export * from "./src/model";
 
-// Hand-written transport layer, exported so callers can catch ApiError.
-export { ApiError, customFetch } from "./http-client";
+// Hand-written transport layer. `configureSession` is how the app hands this
+// package its Keychain and its refresh call — see SessionBridge for why the
+// dependency points that way.
+export { ApiError, ApiTimeout, configureSession, customFetch } from "./http-client";
+export type { RefreshOutcome } from "./http-client";
+export type { SessionBridge } from "./http-client";
