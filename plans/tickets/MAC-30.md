@@ -193,6 +193,27 @@ RNTL can render a screen — is now covered eight times over by `login.test.tsx`
 - **Revocation.** `AppleAuthentication.addRevokeListener` exists and matters
   eventually, but nothing consumes a session yet
 
+## What the device test actually found
+
+Both of these are in this PR because the device run surfaced them, which is the
+whole argument for the acceptance criterion existing.
+
+**`APPLE_CLIENT_ID` was never set in Railway.** Sign-in returned 500 twice.
+`verify_apple_identity_token` raises `ImproperlyConfigured` on an empty value
+rather than compare `aud` against `""`, and MAC-26 put that guard inside the
+function so a deploy without it still boots and still answers `/api/health/`.
+The trade worked exactly as designed: health stayed green and only sign-in
+broke. What was missing was any documentation saying the variable is required
+for a deploy. `apps/api/README.md` now lists it in the required table with the
+failure mode spelled out.
+
+**A 5xx read as the user's fault.** The screen collapsed every non-2xx into
+"Nothing was created, so try again." Correct for the 401s, since the API answers
+every verification failure with the same opaque 401 and there is nothing more
+specific to say. Wrong for a 500: retrying could not have worked, and the screen
+said to retry anyway. `errorKindOf` now branches on `ApiError.status >= 500`,
+which is why `ApiError` carries the status at all.
+
 ## Open questions
 
 **Should the disclosure line be a link?** Doc 26 wants the dimmest text on the

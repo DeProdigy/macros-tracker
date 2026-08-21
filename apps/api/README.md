@@ -127,14 +127,24 @@ the full list; the ones that must be set for a deploy to work at all:
 | `DJANGO_SECRET_KEY`      | Freshly generated, never the dev default          |
 | `DJANGO_ALLOWED_HOSTS`   | The app domain **plus `healthcheck.railway.app`** |
 | `DATABASE_URL`           | Injected automatically once Postgres is linked    |
+| `APPLE_CLIENT_ID`        | The iOS bundle id, `com.hintology.macrostracker`  |
 
-Two failure modes worth knowing, because both look like an app bug and are not:
+Three failure modes worth knowing, because all three look like an app bug and
+are not:
 
 - Omitting `healthcheck.railway.app` from `ALLOWED_HOSTS` makes every health
   probe a 400, so the deploy never goes live.
 - `SECURE_SSL_REDIRECT` would 301 those probes, since they arrive over plain
   HTTP on the internal network. `production.py` exempts the health path via
   `SECURE_REDIRECT_EXEMPT`.
+- Omitting `APPLE_CLIENT_ID` deploys an API that boots, passes its health check,
+  and 500s on every sign-in. `verify_apple_identity_token` raises
+  `ImproperlyConfigured` rather than compare the `aud` claim against an empty
+  string, and it raises inside the function rather than at import so the rest of
+  the API keeps working. That trade is deliberate, and it means a missing value
+  here surfaces as a runtime 500 on `POST /api/auth/sessions/` and nowhere else.
+  It cost an hour on the first device test of MAC-30; the value is the bundle
+  identifier and it must match the token's `aud` exactly.
 
 ### Verifying production settings
 
