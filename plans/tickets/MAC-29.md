@@ -78,8 +78,9 @@ cannot work that way: a DELETE carries no body, a user can be signed in on more
 than one device, and "delete my account but stay signed in over there" is not a
 thing anyone means. So the sweep is `OutstandingToken.objects.filter(user=user)`.
 
-The revocation is two queries, not one per token, and the review is what got it
-there. `ROTATE_REFRESH_TOKENS` and `BLACKLIST_AFTER_ROTATION` are both on, so
+The revocation lives in `revoke_refresh_tokens`, which deletion and
+reactivation both call. It is two queries, not one per token, and the review is
+what got it there. `ROTATE_REFRESH_TOKENS` and `BLACKLIST_AFTER_ROTATION` are both on, so
 every refresh mints a new `OutstandingToken`, and nothing in this repo runs
 `flushexpiredtokens`. A long-lived account therefore arrives with hundreds of
 rows, most already blacklisted. The first version issued a `get_or_create` per
@@ -119,6 +120,33 @@ In practice the second call is unreachable through HTTP — the account is
 deactivated, so authentication rejects it first. The idempotency test therefore
 calls the service directly, and the unreachability is itself asserted by the
 test above it.
+
+### 3b. Reactivation revokes as well as restores
+
+A second Copilot pass raised a race: a refresh landing between the SELECT and
+the INSERT inside the sweep rotates to a token whose row nothing blacklisted.
+The race is real. The consequence it named is not, and the fix it proposed
+already exists.
+
+simplejwt 5.5.1's `TokenRefreshSerializer` applies `USER_AUTHENTICATION_RULE` to
+the token's user before it rotates anything, and the default rule is
+`is_active`. So a token that escapes the sweep gets a 401 on refresh anyway,
+with `no_active_account`. Measured, not assumed — the endpoint answers 401 while
+the account is deleted.
+
+What the same measurement exposed is a real gap one step further on. `is_active`
+is the only thing holding that token down, so **reactivation is where it comes
+back to life**: after `resolve_apple_user` clears the flag, the escaped token
+refreshes successfully. So reactivation now calls `revoke_refresh_tokens` too. A
+restore must not re-arm a credential issued before the deletion.
+
+Scoped to the reactivation branch, not to every sign-in. Signing in on a second
+device must not sign the first one out; only a restore means "nothing issued
+before now is still good". A test holds each half.
+
+Closing the race itself would mean `select_for_update` on the user row in the
+refresh path — a lock on the hottest endpoint in the API to protect a window two
+statements wide, when the window already fails closed. Not worth it.
 
 ### 4. Identities are left alone
 
@@ -205,6 +233,10 @@ Four things, and three of them were mine to get wrong.
   the account has not yet been purged". It also no longer promises a 204 on a
   repeat delete, because a deactivated account gets a 401 from authentication
   before the view runs
+
+A second automated pass then raised the refresh-versus-delete race, which is
+covered above: the race is real, its stated consequence is not, and it exposed a
+genuine gap at reactivation instead.
 
 The 204 on a repeat was reviewed and kept. It is close to unreachable over HTTP
 for that same reason, so the status is really only the answer `delete_account`

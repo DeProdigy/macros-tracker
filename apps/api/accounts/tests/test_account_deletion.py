@@ -251,6 +251,98 @@ def test_a_stale_outstanding_row_is_still_blacklisted(user):
     assert not OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True).exists()
 
 
+# --- the refresh that races the delete --------------------------------------
+
+
+def escaped_token(user) -> RefreshToken:
+    """A refresh token minted after the sweep ran.
+
+    Standing in for the one real gap in the revocation: a refresh landing
+    between the SELECT and the INSERT inside `revoke_refresh_tokens` rotates to
+    a new token whose row the sweep never saw. Reproduced by minting after the
+    delete rather than by racing two threads, which would test the scheduler
+    rather than the code.
+    """
+    token = RefreshToken.for_user(user)
+    assert not BlacklistedToken.objects.filter(token__jti=token.payload["jti"]).exists()
+    return token
+
+
+@pytest.mark.django_db
+def test_an_escaped_token_cannot_refresh_while_the_account_is_deleted(authed_client, url, user):
+    """The reason the race does not need a lock on the refresh path.
+
+    `TokenRefreshSerializer` applies `USER_AUTHENTICATION_RULE` to the token's
+    user, and the default rule is `is_active`. So the blacklist is not the only
+    thing standing behind refresh after all -- a token that escapes the sweep
+    is still dead while the account is deactivated.
+    """
+    authed_client.delete(url)
+    user.refresh_from_db()
+
+    response = APIClient().post(
+        reverse("accounts:session-refresh"),
+        {"refresh": str(escaped_token(user))},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+def test_reactivation_revokes_a_token_that_escaped_the_sweep(authed_client, url, user):
+    """And the reason reactivation revokes as well as restores.
+
+    `is_active` is what keeps an escaped token inert, so restoring the account
+    is exactly the moment it would start working again. Without the revoke in
+    `resolve_apple_user`, this refresh returns 200.
+    """
+    authed_client.delete(url)
+    user.refresh_from_db()
+    escaped = escaped_token(user)
+
+    identity = user.identities.get()
+    services.resolve_apple_user(
+        services.AppleClaims(
+            subject=identity.subject,
+            email=None,
+            is_private_email=None,
+            real_user_status=None,
+        )
+    )
+
+    response = APIClient().post(
+        reverse("accounts:session-refresh"),
+        {"refresh": str(escaped)},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+def test_an_ordinary_sign_in_does_not_revoke_other_sessions(user):
+    """The revoke is scoped to the reactivation branch, and this is why.
+
+    A user signing in on a second device must not sign the first one out. Only
+    a restore means "nothing issued before now is still good".
+    """
+    phone = RefreshToken.for_user(user)
+    identity = user.identities.get()
+
+    resolved = services.resolve_apple_user(
+        services.AppleClaims(
+            subject=identity.subject,
+            email=None,
+            is_private_email=None,
+            real_user_status=None,
+        )
+    )
+
+    assert resolved.reactivated is False
+    assert not BlacklistedToken.objects.filter(token__jti=phone.payload["jti"]).exists()
+
+
 # --- the seam with MAC-27 ---------------------------------------------------
 
 
