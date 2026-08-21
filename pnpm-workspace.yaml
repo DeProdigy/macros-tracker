@@ -30,3 +30,6 @@ minimumReleaseAgeExclude:
   - expo-router@56.2.16
   - expo-splash-screen@56.0.14
   - expo-web-browser@56.0.6
+  - expo-dev-client@57.0.14
+  - expo-dev-launcher@57.0.14
+  - expo-dev-menu@57.0.14
