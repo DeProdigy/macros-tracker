@@ -7,20 +7,15 @@
  */
 
 /**
- * What the client presents to refresh, and what it gets back.
+ * A refresh token in, a new token pair out.
 
-One serializer for both directions because the shapes genuinely match: a
-refresh token goes in, and a new pair -- including a new refresh token --
-comes back. `access` is response-only, so the request component drops it
-(COMPONENT_SPLIT_REQUEST in settings splits them).
-
-Not simplejwt's own `TokenRefreshSerializer`. That one carries no help text,
-types `refresh` as a bare string, and changes shape with the rotation
-setting; this API's contract is generated into a mobile client, so it states
-what it returns rather than inheriting it.
+One serializer for both directions, because the shapes match. `access` is
+response-only, so the request component drops it.
  */
 export interface SessionRefresh {
-  /** The refresh token from the last sign-in or refresh. It is the credential for this call: no `Authorization` header is read, because the whole point of refreshing is that the access token has expired. */
+  /** The refresh token from the last sign-in or refresh. It is the credential for this call: no `Authorization` header is read, because the whole point of refreshing is that the access token has expired.
+
+The response contains a **different** refresh token. Store it, and discard the one you sent -- rotation blacklists it immediately. */
   refresh: string;
   /** A new short-lived access token. */
   readonly access: string;

@@ -198,18 +198,29 @@ class SessionSerializer(serializers.Serializer):
     )
 
 
+# Schema only, and the one serializer in this module that never runs.
+# `SessionRefreshView` does not set `serializer_class`, so simplejwt's
+# `TokenRefreshSerializer` still validates the token, rotates it, and
+# blacklists the old one. This class exists because that one carries no help
+# text for any of it, and the emitted contract is what the mobile client is
+# generated from.
+#
+# So the two can disagree and nothing fails loudly. Flipping
+# `ROTATE_REFRESH_TOKENS` off would stop simplejwt returning a `refresh` key
+# while this still promised one. Two tests pin that pairing:
+# `test_rotation_settings_are_on` in test_tokens.py, and
+# `test_refresh_rotates_the_refresh_token` in test_session_lifecycle.py.
+#
+# Kept out of the docstring on purpose. drf-spectacular copies a serializer's
+# docstring into the OpenAPI component, and Orval copies that into the mobile
+# client's type -- so anything written there is documentation aimed at a client
+# author who cannot see this file and should not have to care which library
+# validates the token.
 class SessionRefreshSerializer(serializers.Serializer):
-    """What the client presents to refresh, and what it gets back.
+    """A refresh token in, a new token pair out.
 
-    One serializer for both directions because the shapes genuinely match: a
-    refresh token goes in, and a new pair -- including a new refresh token --
-    comes back. `access` is response-only, so the request component drops it
-    (COMPONENT_SPLIT_REQUEST in settings splits them).
-
-    Not simplejwt's own `TokenRefreshSerializer`. That one carries no help text,
-    types `refresh` as a bare string, and changes shape with the rotation
-    setting; this API's contract is generated into a mobile client, so it states
-    what it returns rather than inheriting it.
+    One serializer for both directions, because the shapes match. `access` is
+    response-only, so the request component drops it.
     """
 
     refresh = serializers.CharField(
@@ -218,7 +229,9 @@ class SessionRefreshSerializer(serializers.Serializer):
             "The refresh token from the last sign-in or refresh. It is the "
             "credential for this call: no `Authorization` header is read, "
             "because the whole point of refreshing is that the access token has "
-            "expired."
+            "expired.\n\n"
+            "The response contains a **different** refresh token. Store it, and "
+            "discard the one you sent -- rotation blacklists it immediately."
         ),
     )
     access = serializers.CharField(

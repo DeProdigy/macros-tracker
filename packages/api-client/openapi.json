@@ -747,11 +747,11 @@
             },
             "SessionRefresh": {
                 "type": "object",
-                "description": "What the client presents to refresh, and what it gets back.\n\nOne serializer for both directions because the shapes genuinely match: a\nrefresh token goes in, and a new pair -- including a new refresh token --\ncomes back. `access` is response-only, so the request component drops it\n(COMPONENT_SPLIT_REQUEST in settings splits them).\n\nNot simplejwt's own `TokenRefreshSerializer`. That one carries no help text,\ntypes `refresh` as a bare string, and changes shape with the rotation\nsetting; this API's contract is generated into a mobile client, so it states\nwhat it returns rather than inheriting it.",
+                "description": "A refresh token in, a new token pair out.\n\nOne serializer for both directions, because the shapes match. `access` is\nresponse-only, so the request component drops it.",
                 "properties": {
                     "refresh": {
                         "type": "string",
-                        "description": "The refresh token from the last sign-in or refresh. It is the credential for this call: no `Authorization` header is read, because the whole point of refreshing is that the access token has expired."
+                        "description": "The refresh token from the last sign-in or refresh. It is the credential for this call: no `Authorization` header is read, because the whole point of refreshing is that the access token has expired.\n\nThe response contains a **different** refresh token. Store it, and discard the one you sent -- rotation blacklists it immediately."
                     },
                     "access": {
                         "type": "string",
@@ -766,12 +766,12 @@
             },
             "SessionRefreshRequest": {
                 "type": "object",
-                "description": "What the client presents to refresh, and what it gets back.\n\nOne serializer for both directions because the shapes genuinely match: a\nrefresh token goes in, and a new pair -- including a new refresh token --\ncomes back. `access` is response-only, so the request component drops it\n(COMPONENT_SPLIT_REQUEST in settings splits them).\n\nNot simplejwt's own `TokenRefreshSerializer`. That one carries no help text,\ntypes `refresh` as a bare string, and changes shape with the rotation\nsetting; this API's contract is generated into a mobile client, so it states\nwhat it returns rather than inheriting it.",
+                "description": "A refresh token in, a new token pair out.\n\nOne serializer for both directions, because the shapes match. `access` is\nresponse-only, so the request component drops it.",
                 "properties": {
                     "refresh": {
                         "type": "string",
                         "minLength": 1,
-                        "description": "The refresh token from the last sign-in or refresh. It is the credential for this call: no `Authorization` header is read, because the whole point of refreshing is that the access token has expired."
+                        "description": "The refresh token from the last sign-in or refresh. It is the credential for this call: no `Authorization` header is read, because the whole point of refreshing is that the access token has expired.\n\nThe response contains a **different** refresh token. Store it, and discard the one you sent -- rotation blacklists it immediately."
                     }
                 },
                 "required": [

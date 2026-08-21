@@ -189,12 +189,6 @@ class SessionRefreshView(TokenRefreshView):
     control rewritten for cosmetics.
     """
 
-    # Both lines, and neither is redundant with the other. `AllowAny` is the
-    # whole reason this endpoint can work: it is reached precisely *because* the
-    # access token expired, so requiring a valid one to get a new one is a
-    # deadlock. Emptying authentication_classes then stops SessionAuthentication
-    # running a CSRF check against a request that carries no session. Same pair
-    # as SessionCreateView and PingView.
     # Both empty, and both stated rather than inherited. `AllowAny` is not
     # spelled here because the base class types these as empty tuples and an
     # empty permission list already means the same thing -- what matters is that
