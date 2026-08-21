@@ -120,6 +120,51 @@ the claim — `payload["user_id"]` is `"42"` while `request.user.pk` is `42`, an
 naive `!=` makes *every* sign-out fail with "not your token", including the
 legitimate one. Caught by a test rather than in review.
 
+## Changed in review
+
+Six comments on the PR. Four changed code.
+
+**A 500 where a 401 belongs.** simplejwt's `TokenRefreshSerializer.validate`
+looks the token's user up with a bare `.get()` (5.5.1, `serializers.py:116`), so
+a valid refresh token whose user row is gone raises `User.DoesNotExist` straight
+past DRF's exception handler. `SessionRefreshView.post` now catches it and
+raises `AuthenticationFailed`. A token that outlived its user is a dead
+credential, not a server fault.
+
+The three delete-ish states behaved differently before this: `is_active = False`
+gave a correct 401 through simplejwt's `USER_AUTHENTICATION_RULE`, a hard delete
+gave a 500, and `deleted_at` alone gave a 200. The first two are now both 401 and
+both pinned by a test. The third is MAC-29's, because nothing on this path reads
+`deleted_at` yet.
+
+**Refresh is throttled.** One scope at 20/min, where sign-in has two. Sign-in is
+a human tapping a button, so a burst limit and a daily limit answer different
+questions. Refreshing is a machine on a timer: one device needs about four calls
+an hour against a 15-minute access lifetime. A single generous per-minute cap
+catches the failure that happens here, which is a client stuck in a retry loop.
+MAC-36's proxy problem weakens the limit and does not make it useless, which is
+the same thing `throttles.py` already says about sign-in.
+
+**A schema test, the project's first.** `RequestBodyOnDeleteAutoSchema` overrides
+a private method. If drf-spectacular renames `_get_request_body`, the override
+stops being called silently, and the only signal is `api-client-drift` going red
+in generated TypeScript on an unrelated dependency bump. Three tests in
+`test_schema.py` name the intent: the sign-out body exists, it is the refresh
+token, and no other DELETE grew one.
+
+**Two more lifecycle tests.** An expired but well-formed refresh token, which is
+what happens to every user at 30 days and which the garbage-token test said
+nothing about. And the deactivated user, so token revocation on deactivation is a
+stated property before MAC-29 has to decide whether to lean on it.
+
+Not changed: `goal_weight_kg` stays a `DecimalField`, so the wire format is the
+string `"78.50"` and the mobile side parses before doing arithmetic. A JSON
+number here is an IEEE double and `78.5` round-trips into `78.49999999999999`.
+`dietary_constraints` stays free text. And `permission_classes` on the refresh
+view stays an empty tuple rather than `[AllowAny]` — simplejwt annotates it as
+`tuple[()]`, so every spelling of AllowAny needs a `type: ignore`, and two of
+those to win a naming preference is the wrong trade.
+
 ## Files touched
 
 | File | Change |
@@ -129,6 +174,8 @@ legitimate one. Caught by a test rather than in review.
 | `accounts/serializers.py` | `UserSerializer`, `UserSettingsSerializer`, `SessionRefreshSerializer`, `SessionDeleteSerializer`; `SessionUserSerializer` removed |
 | `accounts/views.py` | `SessionRefreshView`, `CurrentSessionView`, `CurrentUserView` |
 | `accounts/schema.py` | new — `RequestBodyOnDeleteAutoSchema` |
+| `accounts/throttles.py` | `RefreshThrottle` |
+| `config/settings/base.py` | the `refresh` rate |
 | `accounts/urls.py` | `sessions/refresh/`, `sessions/current/` |
 | `accounts/urls_users.py` | new — `/api/users/me/` |
 | `config/urls.py` | second mount for `accounts` at `/api/users/` |
@@ -137,8 +184,8 @@ legitimate one. Caught by a test rather than in review.
 
 ## Tests
 
-31 new, in `test_session_lifecycle.py` and `test_current_user.py`. The ones that
-carry weight:
+38 new, in `test_session_lifecycle.py`, `test_current_user.py` and
+`test_schema.py`. The ones that carry weight:
 
 * A rotated refresh token is **rejected on reuse**. Without this assertion,
   `ROTATE_REFRESH_TOKENS = True` proves only that the response contains a second
@@ -156,6 +203,10 @@ carry weight:
   ignored rather than rejected, so this fails silently when it regresses
 * `me` 401s with no token, and with a token backdated past its own expiry
 * `PUT` is 405
+* A refresh token whose user row was deleted returns 401, not 500. Verified by
+  breaking the fix and watching the test go red
+* The sign-out operation carries a `requestBody` in the emitted schema, and no
+  other DELETE does
 
 ## Blast radius
 
@@ -169,21 +220,21 @@ production rows to speak of. No rewrite, no backfill.
 ## Deliberately unhandled
 
 * **Soft-deleted users can still refresh.** `deleted_at` is not consulted
-  anywhere in this ticket. MAC-29 owns setting it and blacklisting that user's
-  outstanding tokens
+  anywhere in this ticket, so a soft-deleted user with a live refresh token keeps
+  minting access tokens. MAC-29 owns setting it and blacklisting that user's
+  outstanding tokens. Deactivation (`is_active = False`) already revokes, and
+  there is now a test saying so
 * **No session list.** A client cannot enumerate or revoke its other devices.
   `sessions/current/` is the only addressable session, and OutstandingToken has
   no device metadata to list anyway
-* **Refresh is unthrottled.** The sign-in throttle does not extend to it. A
-  valid refresh token is already a credential, and MAC-36's proxy problem makes
-  IP-based limits unreliable here regardless
 * **Timezone strings are not validated against the IANA database.** Any 64
   characters are accepted, as before this ticket
 
 ## For the reviewer
 
 1. `accounts/schema.py` — the DELETE-body override. It is the one place this
-   ticket works around a library default rather than following it
+   ticket works around a library default rather than following it, and
+   `test_schema.py` is what stops it failing silently
 2. Whether `timezone` belongs in the writable set, given the acceptance criteria
    listed four fields and this ships five
 3. The four new columns' names, units and bounds. They are the ones the E3

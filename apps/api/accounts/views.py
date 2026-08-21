@@ -9,7 +9,7 @@ from typing import Any
 
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -20,6 +20,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from accounts import services
+from accounts.models import User
 from accounts.schema import RequestBodyOnDeleteAutoSchema
 from accounts.serializers import (
     SessionCreateSerializer,
@@ -29,7 +30,7 @@ from accounts.serializers import (
     UserSerializer,
     UserSettingsSerializer,
 )
-from accounts.throttles import SignInBurstThrottle, SignInSustainedThrottle
+from accounts.throttles import RefreshThrottle, SignInBurstThrottle, SignInSustainedThrottle
 
 
 class SessionCreateView(APIView):
@@ -189,19 +190,25 @@ class SessionRefreshView(TokenRefreshView):
     control rewritten for cosmetics.
     """
 
-    # Both empty, and both stated rather than inherited. `AllowAny` is not
-    # spelled here because the base class types these as empty tuples and an
-    # empty permission list already means the same thing -- what matters is that
-    # neither is a leftover.
-    #
     # This is the whole reason the endpoint works: it is reached precisely
     # *because* the access token expired, so requiring a valid one to get a new
     # one is a deadlock. Empty authentication_classes then stops
     # SessionAuthentication running a CSRF check against a request that carries
-    # no session. Same intent as SessionCreateView and PingView, which spell it
-    # with AllowAny because they inherit from a base that does not.
+    # no session. Same pair as SessionCreateView and PingView.
+    #
+    # Empty rather than `[AllowAny]`, which would read the same as the two views
+    # above and is what this would say given the choice. simplejwt annotates
+    # both attributes as `tuple[()]`, so every spelling of AllowAny is an
+    # incompatible assignment under mypy, and two `type: ignore`s to win a
+    # naming preference is the wrong trade. An empty permission list means
+    # AllowAny to DRF: `get_permissions` returns nothing to check.
     permission_classes = ()
     authentication_classes = ()
+    # Unauthenticated, so it is throttled. Not a security control -- a valid
+    # refresh token is already a credential and there is nothing to guess -- but
+    # every call costs a signature verification and, on success, two writes.
+    # See throttles.py for why this one has a single scope where sign-in has two.
+    throttle_classes = [RefreshThrottle]
 
     @extend_schema(
         operation_id="refreshSession",
@@ -226,6 +233,7 @@ class SessionRefreshView(TokenRefreshView):
             status.HTTP_200_OK: SessionRefreshSerializer,
             status.HTTP_400_BAD_REQUEST: None,
             status.HTTP_401_UNAUTHORIZED: None,
+            status.HTTP_429_TOO_MANY_REQUESTS: None,
         },
         examples=[
             OpenApiExample(
@@ -251,10 +259,26 @@ class SessionRefreshView(TokenRefreshView):
         ],
     )
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        # 200, not 201. Nothing addressable was created -- the session already
-        # existed and this returns a fresh representation of the credential for
-        # it. Compare SessionCreateView, which really does create one.
-        return super().post(request, *args, **kwargs)
+        try:
+            # 200, not 201. Nothing addressable was created -- the session
+            # already existed and this returns a fresh representation of the
+            # credential for it. Compare SessionCreateView, which does create
+            # one.
+            return super().post(request, *args, **kwargs)
+        except User.DoesNotExist as exc:
+            # simplejwt looks the token's user up with a bare `.get()`
+            # (serializers.py:116 at 5.5.1), so a valid token that outlived its
+            # user row raises straight through DRF's exception handler as a 500.
+            #
+            # A token whose user is gone is a dead credential, not a server
+            # fault. 401 matches every other rejected token here, and keeps the
+            # description's promise that the client's answer to any 401 on this
+            # endpoint is to sign in again.
+            #
+            # Nothing in the app hard-deletes a user yet. The admin's delete
+            # button reaches it today, and MAC-29 is account deletion, so this
+            # does not belong in the ticket that inherits it.
+            raise AuthenticationFailed("Token is invalid or expired.") from exc
 
 
 class CurrentSessionView(APIView):

@@ -301,11 +301,16 @@ export type refreshSessionResponse401 = {
   status: 401;
 };
 
+export type refreshSessionResponse429 = {
+  data: void;
+  status: 429;
+};
+
 export type refreshSessionResponseSuccess = refreshSessionResponse200 & {
   headers: Headers;
 };
 export type refreshSessionResponseError = (
-  refreshSessionResponse400 | refreshSessionResponse401
+  refreshSessionResponse400 | refreshSessionResponse401 | refreshSessionResponse429
 ) & {
   headers: Headers;
 };
