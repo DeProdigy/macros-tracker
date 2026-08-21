@@ -202,6 +202,35 @@ const withTimeout = async (
 };
 
 /**
+ * Flattens any `HeadersInit` into a plain object.
+ *
+ * `RequestInit.headers` is a union: a record, a `Headers` instance, or an array
+ * of pairs. Spreading the last two yields `{}` and silently drops every header
+ * the caller set, so normalize before merging. Duck-typed rather than
+ * `instanceof Headers`, because the global is a polyfill in React Native and is
+ * not guaranteed to be the same class the caller built from.
+ */
+const toHeaderRecord = (init: HeadersInit | undefined): Record<string, string> => {
+  if (!init) {
+    return {};
+  }
+
+  if (Array.isArray(init)) {
+    return Object.fromEntries(init);
+  }
+
+  if (typeof (init as Headers).forEach === "function") {
+    const record: Record<string, string> = {};
+    (init as Headers).forEach((value, key) => {
+      record[key] = value;
+    });
+    return record;
+  }
+
+  return { ...(init as Record<string, string>) };
+};
+
+/**
  * Orval's fetch client expects the mutator to resolve to the whole envelope
  * (`{ data, status, headers }`), not the bare body — the generated
  * `pingResponse` type is built that way. Returning just the body typechecks
@@ -215,7 +244,7 @@ export const customFetch = async <T>(url: string, options: RequestInit = {}): Pr
   const send = async (accessToken: string | null): Promise<Response> => {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      ...(options.headers as Record<string, string> | undefined),
+      ...toHeaderRecord(options.headers),
     };
 
     if (accessToken) {

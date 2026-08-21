@@ -86,14 +86,18 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
 
   // The global 401 handler has no component to navigate from, so it moves this
   // state instead and every guarded route follows.
+  //
+  // Reuses endSession rather than clearing the cache inline: expiry can arrive
+  // with storage half-emptied (a missing refresh token, a failed clear), and a
+  // stale access token left in the Keychain is one customFetch attaches to the
+  // next request. One teardown path means one definition of signed out.
   useEffect(() => {
     setSessionExpiredListener(() => {
-      queryClient.clear();
-      setState({ status: "signedOut" });
+      void endSession();
     });
 
     return () => setSessionExpiredListener(null);
-  }, [queryClient]);
+  }, [endSession]);
 
   // The launch gate. A token in the Keychain is not a session: it may be
   // expired, blacklisted, or attached to an account that has since been

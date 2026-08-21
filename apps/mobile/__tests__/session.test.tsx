@@ -262,8 +262,15 @@ describe("the global 401 handler", () => {
     const expire = mockSetSessionExpiredListener.mock.calls[0]?.[0];
     expect(expire).toBeInstanceOf(Function);
 
-    act(() => expire?.());
+    // Awaited, not synchronous: expiry runs the same teardown as sign-out, and
+    // that clears the Keychain before it flips state.
+    await act(async () => {
+      expire?.();
+    });
 
     expect(screen.getByText("signedOut")).toBeTruthy();
+    // The whole point of routing expiry through endSession: a stale access
+    // token left behind is one customFetch attaches to the next request.
+    expect(mockClearTokens).toHaveBeenCalled();
   });
 });

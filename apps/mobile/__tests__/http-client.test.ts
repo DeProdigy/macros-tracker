@@ -312,3 +312,37 @@ describe("the deadline", () => {
     await expect(request).resolves.toBeDefined();
   });
 });
+
+describe("caller-supplied headers", () => {
+  /**
+   * `RequestInit.headers` is a union of three shapes. Only one of them survives
+   * an object spread, so the other two are what these cases guard.
+   */
+  it("keeps headers passed as a Headers instance", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { ok: true }));
+
+    await customFetch(ME, { headers: new Headers({ "Accept-Language": "fr" }) });
+
+    const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers["accept-language"] ?? headers["Accept-Language"]).toBe("fr");
+    expect(headers.Authorization).toBe("Bearer stale-access");
+  });
+
+  it("keeps headers passed as an array of pairs", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { ok: true }));
+
+    await customFetch(ME, { headers: [["X-Trace", "abc"]] });
+
+    const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers["X-Trace"]).toBe("abc");
+  });
+
+  it("lets a caller override the default Content-Type", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { ok: true }));
+
+    await customFetch(ME, { headers: { "Content-Type": "text/plain" } });
+
+    const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBe("text/plain");
+  });
+});

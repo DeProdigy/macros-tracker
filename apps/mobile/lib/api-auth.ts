@@ -12,6 +12,7 @@
  */
 
 import {
+  ApiError,
   configureSession,
   getCreateSessionUrl,
   getRefreshSessionUrl,
@@ -57,18 +58,30 @@ const refresh = async (): Promise<string | null> => {
   try {
     const response = await refreshSession({ refresh: refreshToken });
 
+    // Unreachable at runtime: customFetch throws ApiError on any non-2xx, so
+    // only 200 arrives here. It stays as a type guard — the generated response
+    // is a union, and its 400/401/429 members type `data` as void, so TypeScript
+    // needs the status narrowed before it will read `.access`.
     if (response.status !== 200) {
-      await clearTokens();
       return null;
     }
 
     await saveTokens({ access: response.data.access, refresh: response.data.refresh });
     return response.data.access;
-  } catch {
-    // Every failure is the same failure from here: the refresh token is
-    // expired, blacklisted, or belongs to a deleted account, and no amount of
-    // retrying changes that. Clear it so a relaunch does not try again.
-    await clearTokens();
+  } catch (error) {
+    // Two different failures wear the same shape here, and treating them alike
+    // is how an app logs a user out on a bad train connection.
+    //
+    // A 400 or 401 is the server's verdict on the token itself: expired,
+    // blacklisted, or attached to a deleted account. Retrying changes nothing,
+    // so drop it and let the relaunch start clean.
+    //
+    // Anything else — a timeout, a 502, a 500 — says nothing about the token.
+    // Keep it. The next request gets another 401 and another chance to refresh.
+    if (error instanceof ApiError && (error.status === 400 || error.status === 401)) {
+      await clearTokens();
+    }
+
     return null;
   }
 };
