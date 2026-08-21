@@ -27,18 +27,32 @@ boundary for the HTTPS decision. This ticket draws it for a second header.
 
 ## Why this is not one line
 
-Both directions of a wrong `NUM_PROXIES` are bad, and they are not equally
-visible:
+DRF counts **backwards from the right-hand end** of the chain:
+`addrs[-min(n, len(addrs))]`. That direction is the whole design. Each proxy
+appends the address it received the connection from, so entries near the right
+were written by infrastructure and entries near the left were written by the
+caller. Counting from the right walks inward through machines that cannot lie;
+counting far enough walks out into text the caller supplied.
 
-- Too low, or still unset, and the identity stays forgeable. The bug survives,
-  silently.
-- Too high and `addrs[-min(n, len(addrs))]` reaches past the real client into a
-  proxy address. Every caller then shares a small pool of buckets, and ten
-  sign-ins a minute across the whole world locks everyone else out.
+Both directions of a wrong value are bad, and they fail in opposite ways:
 
-The second is worse and would look like an outage, not a bug. Platforms also
-disagree about whether the true client sits at the left or the right of the
-chain. So the number gets measured from a real deployed request rather than read
+- **Too low** stops short of the client and lands on a proxy's own address,
+  which is the same for everybody. Every caller shares one bucket, and ten
+  sign-ins a minute across the whole world locks the rest out. This reads as an
+  outage rather than as a bug.
+- **Too high** reaches past the client into the forged left-hand end. A caller
+  who pads the header with enough junk entries is identified by its own junk,
+  and the original bypass is back.
+
+Note the direction here, because the Linear ticket states it the other way
+round. The behaviour above is what `rest_framework/throttling.py` actually does;
+the ticket's version would put the wrong explanation into the code comment.
+
+Unset is a third case and is not on this scale at all: `get_ident` falls to its
+last line and uses the whole chain, forged portion included.
+
+Platforms also disagree about whether the true client sits at the left or the
+right. So the number gets measured from a real deployed request rather than read
 off a documentation page.
 
 ## Approach: measure first, then fix
@@ -64,9 +78,10 @@ lead to different fixes:
 **PR 2 — fix.** Set the measured value, add the test, remove the temporary log
 format, update doc 09.
 
-Two deploys for a one-line setting is slower than guessing. Guessing upward
-produces a global lockout on the endpoint every client must reach, so the extra
-deploy is cheap by comparison.
+Two deploys for a one-line setting is slower than guessing. Guessing low
+produces a lockout on the endpoint every client must reach, and guessing high
+leaves the bypass in place while looking fixed. The extra deploy is cheap
+against either.
 
 ## Files
 
@@ -106,9 +121,9 @@ because the cached-settings trap catches people writing exactly this test.
 
 ## Alternatives rejected
 
-- **Assume 1 from Railway's documentation.** The failure mode of guessing high
-  is a global lockout, and platform docs are not a substitute for the chain the
-  container actually receives.
+- **Assume 1 from Railway's documentation.** Guessing low locks every caller
+  into one bucket and guessing high leaves the bypass open, so platform docs are
+  not a substitute for the chain the container actually receives.
 - **Read it from an environment variable.** Tempting, because a mistake could
   then be corrected by a restart rather than a rebuild. Rejected: an env
   override reintroduces exactly the gap this ticket is closing, where the tested
@@ -142,5 +157,6 @@ Nothing else reads `NUM_PROXIES`. No API change and no schema change, so
   different fix entirely.
 - `REMOTE_ADDR` was `100.64.0.2` on one probe and `100.64.0.3` on the next, so
   the proxy address is not stable. It does not change the fix, but it does mean
-  a too-high `NUM_PROXIES` would produce a small pool of shared buckets rather
-  than a single one — no better, and harder to recognise.
+  a too-low `NUM_PROXIES` would collapse callers into a small pool of shared
+  buckets rather than a single one. No better, and harder to recognise, because
+  partial throttling looks like bad luck rather than misconfiguration.
