@@ -73,3 +73,10 @@ web-build/
 .env
 .env.*
 !.env.example
+
+# Written by `eas` when it runs from the repo root instead of apps/mobile, where
+# the real config lives. A root eas.json carries no `env` block, so a build that
+# resolved it would ship pointing at localhost and fail on device with nothing
+# useful in the error.
+/eas.json
+/app.json

@@ -1,6 +1,23 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# No `nodeLinker` here on purpose, so the default isolated layout stands.
+#
+# `.npmrc` used to carry `node-linker=hoisted`, citing Expo's monorepo guidance
+# that React Native resolves modules more reliably from a flat node_modules.
+# pnpm 11 does not read that key from `.npmrc` — `pnpm config get node-linker`
+# answers `undefined` — so the workspace has always installed isolated, and the
+# comment described behaviour it never had.
+#
+# Checked rather than assumed before deleting it, on Expo SDK 57: `expo config
+# --type introspect` resolves the Sign in with Apple entitlement, and three EAS
+# iOS builds succeeded on this layout. Isolated also keeps pnpm's protection
+# against phantom dependencies, which hoisting gives up.
+#
+# If native tooling does break later — E4 adds expo-camera and
+# expo-image-manipulator — the fix is `nodeLinker: hoisted` HERE, not in
+# `.npmrc`.
 allowBuilds:
   # Native module resolver pulled in transitively by the JS toolchain.
   unrs-resolver: true
