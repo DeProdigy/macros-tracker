@@ -35,6 +35,20 @@ export const saveTokens = async ({ access, refresh }: AuthTokens): Promise<void>
   await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refresh);
 };
 
+/**
+ * Reads the access token on its own.
+ *
+ * Separate from `getTokens` because `customFetch` needs only this half on every
+ * request, and reading the refresh token it will not use means one more
+ * Keychain hit per call.
+ */
+export const getAccessToken = (): Promise<string | null> =>
+  SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+
+/** Reads the refresh token on its own. Used by the refresh and sign-out calls. */
+export const getRefreshToken = (): Promise<string | null> =>
+  SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+
 /** Reads the stored pair, or null when either half is missing. */
 export const getTokens = async (): Promise<AuthTokens | null> => {
   const [access, refresh] = await Promise.all([

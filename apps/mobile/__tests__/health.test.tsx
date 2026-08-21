@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { ApiError, useHealth } from "@macros/api-client";
 
-import HomeScreen from "../app/index";
+import HealthScreen from "../app/(app)/health";
 import { renderWithProviders } from "../test-utils/render";
 
 // The generated hook is the seam. Mocking it lets each render branch be driven
 // directly, with no network and no fake timers — what's under test here is the
 // screen's handling of each state, not the transport (that's covered by the
 // API's own tests).
+// expo-router's useRouter needs a navigation context this screen does not get
+// in isolation. The back link is not what is under test.
+jest.mock("expo-router", () => ({ useRouter: () => ({ back: jest.fn() }) }));
+
 jest.mock("@macros/api-client", () => {
   // A stand-in for the real ApiError, which the screen uses with `instanceof`.
   // Written with plain fields rather than TypeScript parameter properties:
@@ -46,7 +50,7 @@ const okBody = {
   timestamp: "2026-08-21T06:16:00Z",
 };
 
-describe("HomeScreen", () => {
+describe("HealthScreen", () => {
   beforeEach(() => {
     mockUseHealth.mockReset();
   });
@@ -54,7 +58,7 @@ describe("HomeScreen", () => {
   it("shows a spinner while the check is in flight", () => {
     mockUseHealth.mockReturnValue(healthResult({ data: undefined, isPending: true }));
 
-    const { getByText, queryByText } = renderWithProviders(<HomeScreen />);
+    const { getByText, queryByText } = renderWithProviders(<HealthScreen />);
 
     // Loading is the branch showing neither outcome: no status value yet, and
     // crucially not the error copy — a pending request must not read as a
@@ -73,7 +77,7 @@ describe("HomeScreen", () => {
       }),
     );
 
-    const { getByText } = renderWithProviders(<HomeScreen />);
+    const { getByText } = renderWithProviders(<HealthScreen />);
 
     expect(getByText("ok")).toBeTruthy();
     expect(getByText(/database reachable/i)).toBeTruthy();
@@ -94,7 +98,7 @@ describe("HomeScreen", () => {
       }),
     );
 
-    const { getByText, queryByText } = renderWithProviders(<HomeScreen />);
+    const { getByText, queryByText } = renderWithProviders(<HealthScreen />);
 
     expect(getByText("unhealthy")).toBeTruthy();
     expect(getByText(/database unreachable/i)).toBeTruthy();
@@ -112,7 +116,7 @@ describe("HomeScreen", () => {
       }),
     );
 
-    const { getByText } = renderWithProviders(<HomeScreen />);
+    const { getByText } = renderWithProviders(<HealthScreen />);
 
     expect(getByText(/unreachable/i)).toBeTruthy();
   });
@@ -122,7 +126,7 @@ describe("HomeScreen", () => {
     // empty 200. The screen must not fall through to reading `health.status`.
     mockUseHealth.mockReturnValue(healthResult({ data: undefined, isPending: false }));
 
-    const { getByText } = renderWithProviders(<HomeScreen />);
+    const { getByText } = renderWithProviders(<HealthScreen />);
 
     expect(getByText(/unreachable/i)).toBeTruthy();
   });

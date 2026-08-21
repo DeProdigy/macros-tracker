@@ -6,17 +6,21 @@
  * push mid-sign-in would put an animation between the tap and the sheet, and a
  * back gesture in the middle of a token exchange has no sensible meaning.
  *
- * Routing after success belongs to MAC-31. This screen ends with tokens in the
- * Keychain and nothing else.
+ * MAC-31 added the ending: tokens land in the Keychain, the session adopts the
+ * user the API returned, and the screen redirects. Where to is the same
+ * question the launch gate asks, answered from the same field.
  */
 
 import { ApiError, useCreateSession } from "@macros/api-client";
 import * as AppleAuthentication from "expo-apple-authentication";
+import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, useColorScheme } from "react-native";
 
 import { AppleSignInCancelled, signInWithApple } from "@/lib/apple-sign-in";
 import { saveTokens } from "@/lib/auth-storage";
+import { darkPalette, lightPalette, type Palette } from "@/lib/palette";
+import { useSession } from "@/lib/session";
 
 /**
  * Where the flow is.
@@ -102,6 +106,7 @@ export default function LoginScreen() {
   }, []);
 
   const { mutateAsync: createSession } = useCreateSession();
+  const session = useSession();
 
   const handleSignIn = async () => {
     setPhase("authorizing");
@@ -129,7 +134,11 @@ export default function LoginScreen() {
       }
 
       setPhase("storing");
+      // Tokens first, then state. The redirect below lands on a screen that
+      // immediately makes an authenticated request, and a Keychain write that
+      // has not finished is a 401 on the first frame of Today.
       await saveTokens({ access: response.data.access, refresh: response.data.refresh });
+      session.signIn(response.data.user);
       setPhase("done");
     } catch (error) {
       // Dismissing Apple's sheet is a decision, not a failure. Showing an error
@@ -144,6 +153,17 @@ export default function LoginScreen() {
   };
 
   const palette = isDark ? darkPalette : lightPalette;
+
+  // `created` is not consulted. A returning user whose onboarding never
+  // finished belongs in the same place as a brand-new one, and the server
+  // already tracks that in one field rather than two.
+  if (phase === "done" && session.status === "signedIn") {
+    return session.user.onboarding_completed ? (
+      <Redirect href="/today" />
+    ) : (
+      <Redirect href="/onboarding" />
+    );
+  }
 
   if (VERIFYING_PHASES.includes(phase)) {
     const [first, second, third] = stepStates(phase);
@@ -217,8 +237,6 @@ export default function LoginScreen() {
   );
 }
 
-type Palette = typeof lightPalette;
-
 /** One line of 9c. The marker carries the state; the text never changes. */
 const Step = ({ label, state, palette }: { label: string; state: StepState; palette: Palette }) => (
   <View style={styles.step}>
@@ -242,24 +260,6 @@ const Step = ({ label, state, palette }: { label: string; state: StepState; pale
     </Text>
   </View>
 );
-
-const lightPalette = {
-  background: "#ffffff",
-  text: "#111111",
-  secondaryText: "#5a5a5a",
-  dimText: "#9b9b9b",
-  accent: "#208aef",
-  error: "#c0392b",
-};
-
-const darkPalette: Palette = {
-  background: "#000000",
-  text: "#f5f5f5",
-  secondaryText: "#a8a8a8",
-  dimText: "#6b6b6b",
-  accent: "#4ea3f5",
-  error: "#ff6b5b",
-};
 
 const styles = StyleSheet.create({
   container: {
