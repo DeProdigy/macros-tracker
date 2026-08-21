@@ -52,6 +52,10 @@ from django.db import transaction
 from django.utils import timezone
 from jwt.algorithms import RSAAlgorithm
 from rest_framework.exceptions import APIException, ValidationError
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
 
 from accounts.models import Identity, User
 
@@ -592,30 +596,49 @@ def delete_account(user: User) -> bool:
 
     **Deleting twice does not move `deleted_at`.** A retried request must not
     push the retention deadline forward, and a client that retries a 204 it
-    never saw is ordinary. The early return is what makes the endpoint
-    idempotent rather than merely repeatable.
-    """
-    # Imported here rather than at module scope. The blacklist models live in an
-    # app that is only installed because BLACKLIST_AFTER_ROTATION needs
-    # somewhere to write, and a top-level import would make this module fail to
-    # load if that app were ever removed from INSTALLED_APPS.
-    from rest_framework_simplejwt.token_blacklist.models import (
-        BlacklistedToken,
-        OutstandingToken,
-    )
+    never saw is ordinary. The row is re-read under a lock to decide that,
+    because the instance the caller passes in is a snapshot: `JWTAuthentication`
+    loaded it when it authenticated the request, so `user.deleted_at` says what
+    was true then. Two DELETEs arriving together would both read None from their
+    own stale copy, both pass the check, and the second would move the
+    timestamp -- the exact thing this paragraph promises cannot happen.
 
+    `select_for_update` rather than a conditional UPDATE. Both close the race;
+    the lock also leaves a fresh row to write through, where
+    `filter(...).update(...)` would return a count and leave the in-memory user
+    disagreeing with the database.
+    """
     with transaction.atomic():
-        if user.deleted_at is not None:
+        # The lock is held until this block commits, so a second request blocks
+        # here and then reads the timestamp the first one wrote.
+        locked = User.objects.select_for_update().get(pk=user.pk)
+        if locked.deleted_at is not None:
             return False
 
-        user.deleted_at = timezone.now()
-        user.is_active = False
-        user.save(update_fields=["deleted_at", "is_active"])
+        locked.deleted_at = timezone.now()
+        locked.is_active = False
+        locked.save(update_fields=["deleted_at", "is_active"])
 
-        # get_or_create, not create: a token blacklisted by an earlier sign-out
-        # is still an outstanding row, and `create` would raise on its unique
-        # constraint and roll the whole deletion back.
-        for token in OutstandingToken.objects.filter(user=user):
-            BlacklistedToken.objects.get_or_create(token=token)
+        # Two queries, not one per token. Every refresh mints a new
+        # OutstandingToken -- ROTATE_REFRESH_TOKENS and BLACKLIST_AFTER_ROTATION
+        # are both on -- and nothing here runs `flushexpiredtokens`, so a
+        # long-lived account arrives with hundreds of rows, most already
+        # blacklisted. A per-row get_or_create would issue a SELECT for each one
+        # inside this transaction, and that cost grows for as long as the user
+        # stays signed in.
+        #
+        # `blacklistedtoken__isnull=True` skips the rows already revoked by a
+        # sign-out, and `ignore_conflicts` covers the row a concurrent sign-out
+        # inserts between the SELECT and the INSERT. Without one of the two,
+        # the unique constraint raises and rolls the whole deletion back.
+        BlacklistedToken.objects.bulk_create(
+            [
+                BlacklistedToken(token=token)
+                for token in OutstandingToken.objects.filter(
+                    user=user, blacklistedtoken__isnull=True
+                )
+            ],
+            ignore_conflicts=True,
+        )
 
     return True

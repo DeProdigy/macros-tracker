@@ -993,11 +993,11 @@ export const useUpdateCurrentUser = <TError = void, TContext = unknown>(
 /**
  * Deletes the caller's account. Required by both app stores, which will not ship an app that creates accounts without an in-app way to remove them.
 
-**This is reversible.** Signing in again with the same Apple ID restores the account and everything in it — there is no deadline on that, and no separate 'undelete' call. The row is marked deleted rather than destroyed, and destruction on a retention schedule is a separate piece of work that does not exist yet, so for now nothing is ever erased.
+**This is reversible.** Signing in again with the same Apple ID restores the account and its data, as long as the account has not yet been purged — there is no separate 'undelete' call. The row is marked deleted rather than destroyed; scheduled destruction is not implemented yet, so nothing is currently erased.
 
 Access stops at once. The refresh tokens are blacklisted and the account is deactivated, so the access token the client is holding fails on its next use rather than lasting out its 15 minutes. The client should clear its token storage and route to Welcome.
 
-Deleting an already deleted account returns 204 and changes nothing — a retried request is not an error, and it does not push the deletion timestamp forward.
+Deleting twice changes nothing: the deletion timestamp keeps its original value. Expect a 401 rather than a second 204, though — the account is deactivated by then, so authentication rejects the retry before this endpoint sees it. Either answer means the same thing to the client, which should clear its tokens and move on.
  * @summary Delete the signed-in user's account
  */
 export type deleteCurrentUserResponse204 = {

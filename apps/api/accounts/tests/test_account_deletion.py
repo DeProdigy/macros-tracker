@@ -203,10 +203,29 @@ def test_deleting_twice_does_not_move_the_timestamp(authed_client, url, user):
 
 
 @pytest.mark.django_db
-def test_a_second_delete_does_not_choke_on_an_existing_blacklist_row(user):
-    """`create` instead of `get_or_create` raises on the unique constraint and
-    rolls the whole deletion back. Signing out before deleting is the ordinary
-    way to reach that row."""
+def test_a_stale_user_instance_cannot_re_delete(user):
+    """The guard re-reads the row instead of trusting the caller's copy.
+
+    `request.user` is a snapshot taken when `JWTAuthentication` authenticated
+    the request, so its `deleted_at` says what was true then. Two DELETEs
+    arriving together would each hold a copy reading None. Updating the row
+    behind this instance reproduces exactly that, without needing two threads.
+    """
+    stamped = timezone.now() - timedelta(minutes=5)
+    User.objects.filter(pk=user.pk).update(deleted_at=stamped, is_active=False)
+    assert user.deleted_at is None  # the stale copy, which is the whole point
+
+    assert services.delete_account(user) is False
+
+    user.refresh_from_db()
+    assert user.deleted_at == stamped
+
+
+@pytest.mark.django_db
+def test_deletion_survives_an_already_blacklisted_token(user):
+    """A plain `create` raises on the unique constraint and rolls the whole
+    deletion back. Signing out before deleting is the ordinary way to reach that
+    row, and the `blacklistedtoken__isnull=True` filter is what skips it."""
     token = RefreshToken.for_user(user)
     token.blacklist()
 

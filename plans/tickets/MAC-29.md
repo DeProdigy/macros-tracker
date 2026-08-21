@@ -78,11 +78,20 @@ cannot work that way: a DELETE carries no body, a user can be signed in on more
 than one device, and "delete my account but stay signed in over there" is not a
 thing anyone means. So the sweep is `OutstandingToken.objects.filter(user=user)`.
 
-`get_or_create` rather than `create` on the blacklist row. A token blacklisted
-by an earlier sign-out is still an outstanding row, and `create` would raise on
-the unique constraint inside the transaction and roll the entire deletion back —
-so signing out and then deleting, which is a completely ordinary sequence, would
-fail. A test holds that case.
+The revocation is two queries, not one per token, and the review is what got it
+there. `ROTATE_REFRESH_TOKENS` and `BLACKLIST_AFTER_ROTATION` are both on, so
+every refresh mints a new `OutstandingToken`, and nothing in this repo runs
+`flushexpiredtokens`. A long-lived account therefore arrives with hundreds of
+rows, most already blacklisted. The first version issued a `get_or_create` per
+row inside the transaction, and that cost grows for as long as the user stays
+signed in.
+
+`bulk_create` with `blacklistedtoken__isnull=True` skips the rows an earlier
+sign-out already revoked, and `ignore_conflicts=True` covers the row a
+concurrent sign-out inserts between the SELECT and the INSERT. Either one alone
+is enough for the ordinary case; both together mean the unique constraint cannot
+raise and roll the whole deletion back. A test holds the sign-out-then-delete
+sequence, which is the ordinary way to reach an already blacklisted row.
 
 ### 3. Deleting twice is a no-op, and returns 204 anyway
 
@@ -90,6 +99,17 @@ fail. A test holds that case.
 push the timestamp forward. That column is the input to a retention deadline;
 silently extending it is the kind of bug nobody notices until a purge fails to
 purge.
+
+**The guard re-reads the row under `select_for_update`**, which the review
+caught and the first version got wrong. `request.user` is a snapshot loaded by
+`JWTAuthentication` when it authenticated the request, so reading `deleted_at`
+off it says what was true then. Two DELETEs arriving together would each read
+None from their own stale copy, both pass the check, and the second would move
+the timestamp. The lock makes the second one block and then read what the first
+one wrote. A conditional `filter(...).update(...)` closes the same race in one
+query and no lock; the lock won because it leaves a fresh row to write through,
+where the conditional update returns a count and leaves the in-memory user
+disagreeing with the database.
 
 The endpoint answers 204 either way. A 404 on the second call would report
 failure for a request that got exactly what it asked for. The return flag exists
@@ -130,13 +150,22 @@ instead of every column on the model. It is not only a performance habit — a
 full save writes back whatever the in-memory instance holds, which quietly
 clobbers concurrent updates to fields this code never meant to touch.
 
-**Function-local import.** The blacklist models are imported inside
-`delete_account` rather than at module scope. That app is only in
-`INSTALLED_APPS` because `BLACKLIST_AFTER_ROTATION` needs somewhere to write; a
-top-level import would make the whole module fail to load if it were ever
-removed. This is the right call when a dependency is genuinely optional, and the
-wrong call as a general habit — a local import hides a dependency from anyone
-reading the imports.
+**Row locking.** `select_for_update()` adds `FOR UPDATE` to the SELECT, and
+Postgres holds that lock until the surrounding transaction commits. It only
+means anything inside `transaction.atomic()`, and it is the standard answer to
+read-then-write on a row two requests can reach at once. The read has to be
+inside the lock: locking a row and then trusting a value read before the lock
+protects nothing.
+
+**Where a Django import goes.** The first version imported the blacklist models
+inside the function, arguing that a top-level import would break the module if
+`token_blacklist` ever left `INSTALLED_APPS`. The review took that apart, and it
+was right — if the app were removed, `delete_account` is broken either way,
+because the models it queries are gone. The local import only converts an import
+error at startup, which CI and every deploy catch, into a 500 while a user is
+deleting their account. The genuine reason for a function-local Django import is
+app-registry ordering, for modules imported during `AppConfig.ready()`; a
+`services.py` imported from a view runs long after that. Moved to module scope.
 
 ## Blast radius
 
@@ -158,12 +187,25 @@ ticket has to clear.
 * Any admin view of deleted users beyond the `deleted_at` column the admin
   already shows
 
-## For review
+## What the review changed
 
-* **The 204 on a repeat delete.** Defensible either way; the argument for it is
-  above. Worth a second opinion since it is the one place the endpoint's
-  behaviour is a judgement call rather than a consequence
-* **The endpoint description promises restoration with no deadline.** True today
-  and true after the purge ships, since the purge deletes the row and sign-in
-  then takes the create branch. Flagged because it is a user-visible promise
-  made in a schema description
+Four things, and three of them were mine to get wrong.
+
+* **The blacklist loop was an N+1** that grows with how long the user has been
+  signed in. Now `bulk_create` with `ignore_conflicts`
+* **The idempotency guard read a stale instance.** Now `select_for_update` and a
+  re-read inside the transaction, with a test that reproduces the stale copy
+  without needing two threads
+* **The function-local import did not buy what its comment claimed.** Moved to
+  module scope
+* **The endpoint description promised restoration with no deadline.** True
+  today, false the day the purge ships — and wrong in `openapi.json`, in the
+  generated client, and in any app copy lifted from it. It now states the
+  mechanism and treats the deadline as a variable: restoration works "as long as
+  the account has not yet been purged". It also no longer promises a 204 on a
+  repeat delete, because a deactivated account gets a 401 from authentication
+  before the view runs
+
+The 204 on a repeat was reviewed and kept. It is close to unreachable over HTTP
+for that same reason, so the status is really only the answer `delete_account`
+gives its own caller.
