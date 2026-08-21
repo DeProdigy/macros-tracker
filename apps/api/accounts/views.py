@@ -5,7 +5,7 @@ resolution in services.resolve_apple_user; these views parse, delegate, and
 serialize.
 """
 
-from typing import Any
+from typing import Any, cast
 
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
@@ -368,8 +368,11 @@ class CurrentUserView(APIView):
     `APIView` rather than `RetrieveUpdateAPIView`. The generic view is a better
     fit for everything except one detail -- it also routes `PUT`, and a full
     replace cannot tell "field omitted" from "field cleared". Three explicit
-    methods beat a fourth that has to be suppressed. `DELETE` on this same URL
-    is MAC-29's.
+    methods beat a fourth that has to be suppressed.
+
+    `DELETE` is here rather than at a URL of its own because it acts on this
+    same row. `GET /api/auth/me/` beside `DELETE /api/auth/account/` was one
+    entity under two names, which is what the 20 Aug 2026 route audit removed.
     """
 
     @extend_schema(
@@ -470,3 +473,44 @@ class CurrentUserView(APIView):
         # own user and the useful answer is the whole user -- otherwise it has
         # to follow every PATCH with a GET to refresh its cache.
         return Response(UserSerializer(request.user).data)
+
+    @extend_schema(
+        operation_id="deleteCurrentUser",
+        summary="Delete the signed-in user's account",
+        description=(
+            "Deletes the caller's account. Required by both app stores, which "
+            "will not ship an app that creates accounts without an in-app way "
+            "to remove them.\n\n"
+            "**This is reversible.** Signing in again with the same Apple ID "
+            "restores the account and everything in it — there is no deadline "
+            "on that, and no separate 'undelete' call. The row is marked "
+            "deleted rather than destroyed, and destruction on a retention "
+            "schedule is a separate piece of work that does not exist yet, so "
+            "for now nothing is ever erased.\n\n"
+            "Access stops at once. The refresh tokens are blacklisted and the "
+            "account is deactivated, so the access token the client is holding "
+            "fails on its next use rather than lasting out its 15 minutes. The "
+            "client should clear its token storage and route to Welcome.\n\n"
+            "Deleting an already deleted account returns 204 and changes "
+            "nothing — a retried request is not an error, and it does not push "
+            "the deletion timestamp forward."
+        ),
+        tags=["users"],
+        request=None,
+        responses={
+            status.HTTP_204_NO_CONTENT: None,
+            status.HTTP_401_UNAUTHORIZED: None,
+        },
+    )
+    def delete(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # django-stubs types `request.user` as `User | AnonymousUser`. This view
+        # does not opt out of the project's IsAuthenticated default, so an
+        # anonymous caller never reaches this line. Narrowed rather than
+        # asserted: `assert` is stripped under `python -O`, which would drop the
+        # guarantee in exactly the environment that matters.
+        services.delete_account(cast(User, request.user))
+
+        # 204 whether or not this call is the one that did it. The client asked
+        # for the account to be gone; it is gone. A 404 on the second attempt
+        # would report a failure for a request that got exactly what it wanted.
+        return Response(status=status.HTTP_204_NO_CONTENT)

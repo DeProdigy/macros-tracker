@@ -560,3 +560,62 @@ def resolve_apple_user(claims: AppleClaims, *, name: str = "") -> ResolvedSessio
             created=False,
             reactivated=reactivated,
         )
+
+
+def delete_account(user: User) -> bool:
+    """Soft-delete a user and revoke every refresh token they hold.
+
+    Returns True if this call performed the deletion, False if the account was
+    already deleted. The caller answers 204 either way -- the flag exists for
+    logs and tests, not for the response.
+
+    Three writes, and each one closes a different hole:
+
+    `deleted_at` records the deletion for the purge that a later ticket adds.
+    On its own it stops nothing: no authentication path reads this column.
+
+    `is_active=False` is what actually locks the account. simplejwt's
+    `JWTAuthentication` checks it on every request, so the access token the
+    client is still holding stops working on the next call rather than whenever
+    it expires -- up to 15 minutes of authenticated requests, otherwise.
+
+    Blacklisting the outstanding refresh tokens stops the other half. A refresh
+    is a token exchange, and doc 04 asks for all tokens revoked; without this a
+    stored refresh token still mints new access tokens, which then fail the
+    `is_active` check. Belt and braces on purpose: the two guards fail
+    independently.
+
+    Identities are deliberately left alone. Soft delete is a property of the
+    person, and `resolve_apple_user` restores the account by finding the
+    Identity row for the same Apple `sub`. Deleting it here would turn every
+    return visit into a brand-new account.
+
+    **Deleting twice does not move `deleted_at`.** A retried request must not
+    push the retention deadline forward, and a client that retries a 204 it
+    never saw is ordinary. The early return is what makes the endpoint
+    idempotent rather than merely repeatable.
+    """
+    # Imported here rather than at module scope. The blacklist models live in an
+    # app that is only installed because BLACKLIST_AFTER_ROTATION needs
+    # somewhere to write, and a top-level import would make this module fail to
+    # load if that app were ever removed from INSTALLED_APPS.
+    from rest_framework_simplejwt.token_blacklist.models import (
+        BlacklistedToken,
+        OutstandingToken,
+    )
+
+    with transaction.atomic():
+        if user.deleted_at is not None:
+            return False
+
+        user.deleted_at = timezone.now()
+        user.is_active = False
+        user.save(update_fields=["deleted_at", "is_active"])
+
+        # get_or_create, not create: a token blacklisted by an earlier sign-out
+        # is still an outstanding row, and `create` would raise on its unique
+        # constraint and roll the whole deletion back.
+        for token in OutstandingToken.objects.filter(user=user):
+            BlacklistedToken.objects.get_or_create(token=token)
+
+    return True

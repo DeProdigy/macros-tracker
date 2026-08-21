@@ -524,6 +524,30 @@
                         "description": "No response body"
                     }
                 }
+            },
+            "delete": {
+                "operationId": "deleteCurrentUser",
+                "description": "Deletes the caller's account. Required by both app stores, which will not ship an app that creates accounts without an in-app way to remove them.\n\n**This is reversible.** Signing in again with the same Apple ID restores the account and everything in it — there is no deadline on that, and no separate 'undelete' call. The row is marked deleted rather than destroyed, and destruction on a retention schedule is a separate piece of work that does not exist yet, so for now nothing is ever erased.\n\nAccess stops at once. The refresh tokens are blacklisted and the account is deactivated, so the access token the client is holding fails on its next use rather than lasting out its 15 minutes. The client should clear its token storage and route to Welcome.\n\nDeleting an already deleted account returns 204 and changes nothing — a retried request is not an error, and it does not push the deletion timestamp forward.",
+                "summary": "Delete the signed-in user's account",
+                "tags": [
+                    "users"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "401": {
+                        "description": "No response body"
+                    }
+                }
             }
         }
     },
