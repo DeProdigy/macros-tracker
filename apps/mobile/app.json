@@ -38,6 +38,7 @@
         }
       ],
       "expo-secure-store",
+      "expo-apple-authentication",
       "expo-font",
       "expo-image",
       "expo-status-bar",
