@@ -520,9 +520,7 @@ def revoke_refresh_tokens(user: User) -> None:
     BlacklistedToken.objects.bulk_create(
         [
             BlacklistedToken(token=token)
-            for token in OutstandingToken.objects.filter(
-                user=user, blacklistedtoken__isnull=True
-            )
+            for token in OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True)
         ],
         ignore_conflicts=True,
     )
