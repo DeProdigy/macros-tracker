@@ -10,7 +10,7 @@
  * Keychain and nothing else.
  */
 
-import { useCreateSession } from "@macros/api-client";
+import { ApiError, useCreateSession } from "@macros/api-client";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, useColorScheme } from "react-native";
@@ -29,6 +29,29 @@ type Phase = "idle" | "authorizing" | "verifying" | "storing" | "done" | "error"
 
 /** A 9c line is one of three states, and only one line is ever active. */
 type StepState = "pending" | "active" | "done";
+
+/**
+ * Which failure to explain.
+ *
+ * The distinction is about what the user can do next, not about the status
+ * code. A rejected credential is worth retrying; a 5xx means the server is
+ * broken and retrying now fails identically. Telling someone to try again when
+ * it cannot work is the same lie a spinner tells.
+ *
+ * Everything below 500 collapses into one message on purpose. The API answers
+ * every verification failure with the same opaque 401 so the endpoint is not an
+ * oracle, so there is nothing more specific to say even if we wanted to.
+ */
+type ErrorKind = "credential" | "server";
+
+const errorKindOf = (error: unknown): ErrorKind =>
+  error instanceof ApiError && error.status >= 500 ? "server" : "credential";
+
+const ERROR_COPY: Record<ErrorKind, string> = {
+  credential: "That sign-in didn't go through. Nothing was created, so try again.",
+  server:
+    "Something went wrong on our end. Nothing was created, and it isn't your doing. Try again in a minute.",
+};
 
 const VERIFYING_PHASES: Phase[] = ["authorizing", "verifying", "storing", "done"];
 
@@ -56,6 +79,7 @@ export default function LoginScreen() {
   const isDark = scheme === "dark";
 
   const [phase, setPhase] = useState<Phase>("idle");
+  const [errorKind, setErrorKind] = useState<ErrorKind>("credential");
   const [isAppleAvailable, setIsAppleAvailable] = useState<boolean | null>(null);
 
   // Sign in with Apple exists only on iOS 13+. Checking rather than assuming
@@ -97,6 +121,9 @@ export default function LoginScreen() {
       });
 
       if (response.status !== 201) {
+        // Unreachable in practice: customFetch throws on every non-2xx, so this
+        // catches only a 2xx that is not 201 — a proxy rewriting the status, say.
+        setErrorKind("credential");
         setPhase("error");
         return;
       }
@@ -111,6 +138,7 @@ export default function LoginScreen() {
         setPhase("idle");
         return;
       }
+      setErrorKind(errorKindOf(error));
       setPhase("error");
     }
   };
@@ -145,7 +173,7 @@ export default function LoginScreen() {
         {phase === "error" ? (
           <View style={styles.errorBlock}>
             <Text style={[styles.errorText, { color: palette.error }]}>
-              That sign-in didn&apos;t go through. Nothing was created, so try again.
+              {ERROR_COPY[errorKind]}
             </Text>
           </View>
         ) : null}

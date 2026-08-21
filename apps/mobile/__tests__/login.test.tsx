@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { useCreateSession } from "@macros/api-client";
+import { ApiError, useCreateSession } from "@macros/api-client";
 import { act, fireEvent, waitFor } from "@testing-library/react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Text } from "react-native";
@@ -11,9 +11,25 @@ import { renderWithProviders } from "../test-utils/render";
 
 // Same seam as index.test.tsx: the generated hook. Mocking it drives every
 // branch of the screen with no network.
-jest.mock("@macros/api-client", () => ({
-  useCreateSession: jest.fn(),
-}));
+jest.mock("@macros/api-client", () => {
+  // A stand-in for the real ApiError, which the screen narrows on with
+  // `instanceof` to tell a 5xx from everything else. Plain class fields rather
+  // than TypeScript parameter properties: babel rewrites those into assignments
+  // that jest's out-of-scope guard reads as an external reference, and the
+  // suite then fails to compile.
+  class ApiError extends Error {
+    status: number;
+    body: unknown;
+
+    constructor(status: number, body: unknown) {
+      super(`API request failed with status ${status}`);
+      this.status = status;
+      this.body = body;
+    }
+  }
+
+  return { useCreateSession: jest.fn(), ApiError };
+});
 
 // The two helpers are unit-tested on their own (apple-sign-in.test.ts). Here
 // they are stubbed so the screen's state machine is what is under test, not
@@ -197,9 +213,9 @@ describe("LoginScreen", () => {
     expect(mockSaveTokens).not.toHaveBeenCalled();
   });
 
-  it("shows a recoverable error when the API rejects the token", async () => {
+  it("blames the credential when the API answers 401", async () => {
     const mutateAsync = jest.fn(async () => {
-      throw new Error("401");
+      throw new ApiError(401, { detail: "Could not verify the Apple credential." });
     });
     mockUseCreateSession.mockReturnValue(sessionMutation(mutateAsync as never));
     mockSignInWithApple.mockResolvedValue(credential);
@@ -210,7 +226,30 @@ describe("LoginScreen", () => {
     fireEvent.press(screen.getByText("Continue with Apple"));
 
     await waitFor(() => expect(screen.getByText(/didn't go through/i)).toBeTruthy());
+    expect(screen.queryByText(/on our end/i)).toBeNull();
     // Recoverable means the button is still there, not that a message replaced it.
+    expect(screen.getByText("Continue with Apple")).toBeTruthy();
+    expect(mockSaveTokens).not.toHaveBeenCalled();
+  });
+
+  it("blames the server, not the user, when the API answers 500", async () => {
+    // Found on a real device: APPLE_CLIENT_ID was unset in Railway, so the
+    // verifier raised ImproperlyConfigured and every attempt was a 500. The
+    // screen said "try again" twice, and retrying could not have worked. A 5xx
+    // has to read as somebody else's problem or the advice is a lie.
+    const mutateAsync = jest.fn(async () => {
+      throw new ApiError(500, "<html>Server Error</html>");
+    });
+    mockUseCreateSession.mockReturnValue(sessionMutation(mutateAsync as never));
+    mockSignInWithApple.mockResolvedValue(credential);
+
+    const screen = renderWithProviders(<LoginScreen />);
+    await waitFor(() => expect(mockIsAvailableAsync).toHaveBeenCalled());
+
+    fireEvent.press(screen.getByText("Continue with Apple"));
+
+    await waitFor(() => expect(screen.getByText(/on our end/i)).toBeTruthy());
+    expect(screen.queryByText(/didn't go through/i)).toBeNull();
     expect(screen.getByText("Continue with Apple")).toBeTruthy();
     expect(mockSaveTokens).not.toHaveBeenCalled();
   });
