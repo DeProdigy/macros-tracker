@@ -17,6 +17,7 @@ import {
   getCreateSessionUrl,
   getRefreshSessionUrl,
   refreshSession,
+  type RefreshOutcome,
 } from "@macros/api-client";
 
 import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./auth-storage";
@@ -36,23 +37,38 @@ export const setSessionExpiredListener = (listener: (() => void) | null): void =
 };
 
 /**
- * Runs one refresh, stores the rotated pair, and answers with the new access
- * token — or null when the session is gone for good.
+ * Runs one refresh, stores the rotated pair, and reports which of the three
+ * outcomes happened.
  *
  * Never throws, which is what `SessionBridge` promises the queue upstream. A
  * rejection here would be handed to every caller waiting on the shared promise
  * as a refresh failure rather than as their own original 401.
+ *
+ * The expired/unavailable split is the whole reason the outcome is a tagged
+ * object rather than a nullable string. Upstream ends the session on `expired`,
+ * so a 502 reported as one is a wrongful logout.
  *
  * Note what is stored: the response carries a **different** refresh token,
  * because MAC-25 rotates on every use and blacklists the old one. Storing only
  * the access token would leave a dead refresh token in the Keychain and log the
  * user out at the next expiry.
  */
-const refresh = async (): Promise<string | null> => {
-  const refreshToken = await getRefreshToken();
+const refresh = async (): Promise<RefreshOutcome> => {
+  let refreshToken: string | null;
+
+  try {
+    refreshToken = await getRefreshToken();
+  } catch {
+    // SecureStore can fail on its own terms: a locked Keychain, a device the
+    // user has not unlocked since boot. Read inside the guard, because a throw
+    // out of here used to reach the bridge's catch and end the session over a
+    // storage hiccup.
+    return { status: "unavailable" };
+  }
 
   if (!refreshToken) {
-    return null;
+    // Nothing to present. There is no recovering this one.
+    return { status: "expired" };
   }
 
   try {
@@ -63,11 +79,11 @@ const refresh = async (): Promise<string | null> => {
     // is a union, and its 400/401/429 members type `data` as void, so TypeScript
     // needs the status narrowed before it will read `.access`.
     if (response.status !== 200) {
-      return null;
+      return { status: "unavailable" };
     }
 
     await saveTokens({ access: response.data.access, refresh: response.data.refresh });
-    return response.data.access;
+    return { status: "refreshed", accessToken: response.data.access };
   } catch (error) {
     // Two different failures wear the same shape here, and treating them alike
     // is how an app logs a user out on a bad train connection.
@@ -75,14 +91,15 @@ const refresh = async (): Promise<string | null> => {
     // A 400 or 401 is the server's verdict on the token itself: expired,
     // blacklisted, or attached to a deleted account. Retrying changes nothing,
     // so drop it and let the relaunch start clean.
-    //
-    // Anything else — a timeout, a 502, a 500 — says nothing about the token.
-    // Keep it. The next request gets another 401 and another chance to refresh.
     if (error instanceof ApiError && (error.status === 400 || error.status === 401)) {
       await clearTokens();
+      return { status: "expired" };
     }
 
-    return null;
+    // A timeout, a 502, a dead connection. None of them is a statement about
+    // the refresh token, so it stays in the Keychain and the session stays up.
+    // The caller sees its own 401 and can try again.
+    return { status: "unavailable" };
   }
 };
 

@@ -18,4 +18,5 @@ export * from "./src/model";
 // package its Keychain and its refresh call — see SessionBridge for why the
 // dependency points that way.
 export { ApiError, ApiTimeout, configureSession, customFetch } from "./http-client";
+export type { RefreshOutcome } from "./http-client";
 export type { SessionBridge } from "./http-client";

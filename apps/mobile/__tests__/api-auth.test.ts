@@ -72,7 +72,10 @@ describe("refreshing the session", () => {
       data: { access: "new-access", refresh: "new-refresh" },
     } as Awaited<ReturnType<typeof refreshSession>>);
 
-    await expect(bridgeRefresh()()).resolves.toBe("new-access");
+    await expect(bridgeRefresh()()).resolves.toEqual({
+      status: "refreshed",
+      accessToken: "new-access",
+    });
 
     // Both halves, not just the access token: MAC-25 blacklists the refresh
     // token it was given, so keeping the old one would fail the next expiry.
@@ -82,33 +85,43 @@ describe("refreshing the session", () => {
     });
   });
 
-  it("gives up without a stored refresh token", async () => {
+  it("reports expiry without a stored refresh token", async () => {
     mockGetRefreshToken.mockResolvedValue(null);
 
-    await expect(bridgeRefresh()()).resolves.toBeNull();
+    await expect(bridgeRefresh()()).resolves.toEqual({ status: "expired" });
     expect(mockRefreshSession).not.toHaveBeenCalled();
+  });
+
+  it("reports unavailable when the Keychain read itself fails", async () => {
+    // A locked Keychain is not an expired session. This used to throw straight
+    // through the bridge and sign the user out.
+    mockGetRefreshToken.mockRejectedValue(new Error("keychain locked"));
+
+    await expect(bridgeRefresh()()).resolves.toEqual({ status: "unavailable" });
+    expect(mockClearTokens).not.toHaveBeenCalled();
   });
 
   it.each([400, 401])("clears the tokens when the server rejects them (%i)", async (status) => {
     mockRefreshSession.mockRejectedValue(new ApiError(status, null));
 
-    await expect(bridgeRefresh()()).resolves.toBeNull();
+    await expect(bridgeRefresh()()).resolves.toEqual({ status: "expired" });
     expect(mockClearTokens).toHaveBeenCalled();
   });
 
   it.each([500, 502])("keeps the tokens when the server is merely broken (%i)", async (status) => {
     mockRefreshSession.mockRejectedValue(new ApiError(status, null));
 
-    // A 500 says nothing about the token. Clearing here is the self-inflicted
-    // logout MAC-31 exists to prevent — the next 401 gets another attempt.
-    await expect(bridgeRefresh()()).resolves.toBeNull();
+    // A 500 says nothing about the token. Reporting expiry here is the
+    // self-inflicted logout MAC-31 exists to prevent, because upstream tears
+    // the session down on that word. The next 401 gets another attempt.
+    await expect(bridgeRefresh()()).resolves.toEqual({ status: "unavailable" });
     expect(mockClearTokens).not.toHaveBeenCalled();
   });
 
   it("keeps the tokens when the request never lands", async () => {
     mockRefreshSession.mockRejectedValue(new TypeError("Network request failed"));
 
-    await expect(bridgeRefresh()()).resolves.toBeNull();
+    await expect(bridgeRefresh()()).resolves.toEqual({ status: "unavailable" });
     expect(mockClearTokens).not.toHaveBeenCalled();
   });
 });

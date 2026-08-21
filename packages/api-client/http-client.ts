@@ -64,17 +64,31 @@ export class ApiTimeout extends Error {
  * path), and apps/mobile owns the *bindings* (Keychain, which endpoint, where
  * to route afterwards).
  */
+export type RefreshOutcome =
+  /** A new access token is stored and the retry may proceed. */
+  | { status: "refreshed"; accessToken: string }
+  /** The server rejected the credential. The session is over. */
+  | { status: "expired" }
+  /** The refresh could not be completed. The session may still be good. */
+  | { status: "unavailable" };
+
 export type SessionBridge = {
   /** The stored access token, or null when signed out. */
   getAccessToken: () => Promise<string | null>;
   /**
    * Performs exactly one refresh and stores the result.
    *
-   * Resolves with the new access token, or null when the session is
-   * unrecoverable. Documented as never throwing, so the failure path stays a
-   * value the queue below can hand to every waiter.
+   * Three outcomes, not two, and the third is the one that matters. A 502 or a
+   * dropped connection says nothing about whether the refresh token is still
+   * good, so it must not be reported as an expiry — `onSessionExpired` below
+   * tears down the session, and a user does not want to be signed out because
+   * a train went into a tunnel. `unavailable` leaves the session standing and
+   * lets the original 401 reach the caller, who can retry.
+   *
+   * Documented as never throwing, so the failure path stays a value the queue
+   * below can hand to every waiter.
    */
-  refresh: () => Promise<string | null>;
+  refresh: () => Promise<RefreshOutcome>;
   /** Called once per expiry, after `refresh` gives up. Clears storage, routes to Welcome. */
   onSessionExpired: () => void;
   /**
@@ -129,19 +143,30 @@ const refreshOnce = (active: SessionBridge): Promise<string | null> => {
 
   refreshInFlight = active
     .refresh()
-    .then((accessToken) => {
-      if (!accessToken) {
+    .then((outcome) => {
+      if (outcome.status === "refreshed") {
+        return outcome.accessToken;
+      }
+
+      if (outcome.status === "expired") {
         // Fired inside the shared promise, so it happens once per expiry rather
         // than once per queued caller. Ten stranded requests must not produce
         // ten navigations to Welcome.
         active.onSessionExpired();
       }
-      return accessToken;
+
+      // "unavailable" falls through deliberately: no retry, no teardown. The
+      // caller gets the original 401 and the tokens stay where they are.
+      return null;
     })
     .catch(() => {
       // The bridge is documented as never throwing, but a bug there must not
       // leave a rejected promise cached for every later caller to inherit.
-      active.onSessionExpired();
+      //
+      // Treated as unavailable rather than as an expiry. A thrown error is a
+      // fault in the bridge, not a verdict from the server on the credential,
+      // and reading it as one would sign the user out over a bug in a Keychain
+      // read. The launch gate re-checks the session on the next start.
       return null;
     })
     .finally(() => {

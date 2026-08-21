@@ -13,7 +13,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { ApiError, ApiTimeout, configureSession, customFetch } from "@macros/api-client";
+import {
+  ApiError,
+  ApiTimeout,
+  configureSession,
+  customFetch,
+  type RefreshOutcome,
+} from "@macros/api-client";
 
 const SIGN_IN = "/api/auth/sessions/";
 const REFRESH = "/api/auth/sessions/refresh/";
@@ -36,7 +42,10 @@ const deferred = <T>() => {
 
 const mockFetch = jest.fn<typeof fetch>();
 const getAccessToken = jest.fn<() => Promise<string | null>>();
-const refresh = jest.fn<() => Promise<string | null>>();
+const refresh = jest.fn<() => Promise<RefreshOutcome>>();
+
+/** The happy outcome, spelled out once so the cases below stay readable. */
+const refreshed = (accessToken: string): RefreshOutcome => ({ status: "refreshed", accessToken });
 const onSessionExpired = jest.fn<() => void>();
 
 const authHeaderOf = (call: number): string | null => {
@@ -54,7 +63,7 @@ beforeEach(() => {
   global.fetch = mockFetch as unknown as typeof fetch;
 
   getAccessToken.mockResolvedValue("stale-access");
-  refresh.mockResolvedValue("fresh-access");
+  refresh.mockResolvedValue(refreshed("fresh-access"));
 
   configureSession({
     getAccessToken,
@@ -153,7 +162,7 @@ describe("the 401 path", () => {
  */
 describe("concurrent 401s", () => {
   it("produces exactly one refresh, with every caller awaiting the same promise", async () => {
-    const gate = deferred<string | null>();
+    const gate = deferred<RefreshOutcome>();
     refresh.mockReturnValue(gate.promise);
 
     mockFetch.mockImplementation(async (_input, init) => {
@@ -175,7 +184,7 @@ describe("concurrent 401s", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    gate.resolve("fresh-access");
+    gate.resolve(refreshed("fresh-access"));
     await inFlight;
 
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -185,7 +194,7 @@ describe("concurrent 401s", () => {
   });
 
   it("expires the session once, not once per stranded request", async () => {
-    const gate = deferred<string | null>();
+    const gate = deferred<RefreshOutcome>();
     refresh.mockReturnValue(gate.promise);
     mockFetch.mockResolvedValue(jsonResponse(401, { detail: "expired" }));
 
@@ -198,7 +207,7 @@ describe("concurrent 401s", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    gate.resolve(null);
+    gate.resolve({ status: "expired" });
     const results = await inFlight;
 
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -225,7 +234,7 @@ describe("concurrent 401s", () => {
 
 describe("a refresh that gives up", () => {
   it("expires the session and rethrows the original 401", async () => {
-    refresh.mockResolvedValue(null);
+    refresh.mockResolvedValue({ status: "expired" });
     mockFetch.mockResolvedValue(jsonResponse(401, { detail: "gone" }));
 
     await expect(customFetch(ME, { method: "GET" })).rejects.toMatchObject({
@@ -238,21 +247,40 @@ describe("a refresh that gives up", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it("treats a throwing bridge as a give-up rather than caching a rejection", async () => {
+  it("treats a throwing bridge as unavailable rather than caching a rejection", async () => {
     refresh.mockRejectedValue(new Error("keychain unavailable"));
     mockFetch.mockResolvedValue(jsonResponse(401, {}));
 
     await expect(customFetch(ME, { method: "GET" })).rejects.toBeInstanceOf(ApiError);
-    expect(onSessionExpired).toHaveBeenCalledTimes(1);
+    // A thrown bridge is a bug in the bridge, not the server's verdict on the
+    // credential. Signing the user out over it is the wrong reading.
+    expect(onSessionExpired).not.toHaveBeenCalled();
 
     // The next call must get a clean attempt, not the stored rejection.
-    refresh.mockResolvedValue("fresh-access");
+    refresh.mockResolvedValue(refreshed("fresh-access"));
     mockFetch.mockReset();
     mockFetch
       .mockResolvedValueOnce(jsonResponse(401, {}))
       .mockResolvedValueOnce(jsonResponse(200, {}));
 
     await expect(customFetch(ME, { method: "GET" })).resolves.toBeDefined();
+  });
+
+  it("keeps the session alive when the refresh is merely unavailable", async () => {
+    // The bug this case exists for: a 502 on the refresh used to reach
+    // onSessionExpired, which tears down the session. A user on a bad
+    // connection got signed out by the very code meant to keep them in.
+    refresh.mockResolvedValue({ status: "unavailable" });
+    mockFetch.mockResolvedValue(jsonResponse(401, { detail: "expired" }));
+
+    await expect(customFetch(ME, { method: "GET" })).rejects.toMatchObject({
+      name: "ApiError",
+      status: 401,
+    });
+
+    expect(onSessionExpired).not.toHaveBeenCalled();
+    // No retry either. There is no new token to retry with.
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
 
