@@ -1,8 +1,11 @@
+from decimal import Decimal
+
 from django.contrib.auth.models import (
     AbstractBaseUser,
     BaseUserManager,
     PermissionsMixin,
 )
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
 
 
@@ -136,6 +139,50 @@ class User(AbstractBaseUser, PermissionsMixin):
     # offsets break across DST.
     timezone = models.CharField(max_length=64, default="UTC")
     onboarding_completed = models.BooleanField(default=False)
+
+    # --- settings (doc 05) ---
+    # The four questions doc 05 moved *out* of onboarding. They improve target
+    # quality and none of them blocks computing targets, so onboarding never
+    # asks and `PATCH /api/users/me/` (MAC-28) is the only thing that writes
+    # them.
+    #
+    # All four are nullable/blank because "not answered" is a real, common, and
+    # permanent state -- most users will never fill any of these in. A default
+    # would be a fabricated answer, and target generation cannot tell a
+    # fabricated 3 training days from a stated one.
+    #
+    # Units are in the field names, following protein_g/fiber_g in doc 02. A
+    # bare `goal_weight` is the column that eventually receives pounds from one
+    # call site and kilos from another.
+    goal_weight_kg = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("20")), MaxValueValidator(Decimal("400"))],
+    )
+    # Weeks, not a target date. A date goes stale on its own and then reads as
+    # a missed deadline; a duration stays meaningful whenever it is read.
+    goal_timeline_weeks = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(104)],
+    )
+    training_days_per_week = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MaxValueValidator(7)],
+    )
+    # Free text, not an enum of diets. This feeds an AI prompt (doc 08), which
+    # reads "no dairy, allergic to shellfish" as well as it reads "vegan" --
+    # and a fixed enum would have to be extended for every constraint a real
+    # person has. Bounded because it lands in a prompt: max_length on a
+    # TextField is validation only, no column change.
+    #
+    # blank + default="" rather than null, the same call as `name` above: a
+    # nullable text column gives two ways to say "empty" and every reader then
+    # has to handle both.
+    dietary_constraints = models.TextField(max_length=500, blank=True, default="")
     # Monthly AI-call quota counter (reset externally). Never negative.
     ai_calls_this_month = models.PositiveIntegerField(default=0)
     # Soft delete: set instead of hard-deleting the row.

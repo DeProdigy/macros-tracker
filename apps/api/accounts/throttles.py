@@ -31,3 +31,30 @@ class SignInSustainedThrottle(AnonRateThrottle):
     """Long window. Wide enough for a household behind one NAT."""
 
     scope = "signin-sustained"
+
+
+class RefreshThrottle(AnonRateThrottle):
+    """Rate limit for the refresh endpoint.
+
+    One scope, where sign-in has two, because the shape of legitimate traffic is
+    different. Sign-in is a human tapping a button, so a burst limit and a daily
+    limit answer two different questions about the same caller. Refreshing is a
+    machine on a timer: with a 15-minute access lifetime one device needs about
+    four calls an hour and never needs two in a row. A single generous per-
+    minute cap catches the failure that actually happens here, which is a client
+    stuck in a retry loop, and nothing is gained by also capping the day.
+
+    Generous on purpose. This throttle keys on IP, so a household or an office
+    behind one address shares it, and the endpoint every signed-in client must
+    reach is the worst possible place for a false positive. It is sized to stop
+    a hot loop, not to be tight.
+
+    Not the security control, same as the sign-in throttles. A refresh token is
+    already a credential and there is nothing to brute force -- rejecting an
+    invalid token costs a signature check. This is here for cost, and because an
+    unauthenticated endpoint with no limit at all is a decision nobody should
+    make by omission. MAC-36's proxy problem applies here too: unreliable client
+    attribution weakens the limit, it does not make it pointless.
+    """
+
+    scope = "refresh"

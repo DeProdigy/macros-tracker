@@ -232,6 +232,12 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "signin-burst": "10/min",
         "signin-sustained": "60/hour",
+        # One device needs ~4 refreshes an hour against a 15-minute access
+        # lifetime. 20/min is far above that on purpose: the scope keys on IP,
+        # so an office behind one address shares it, and this is the endpoint
+        # every signed-in client must reach. Sized to stop a client stuck in a
+        # retry loop, which would otherwise run thousands a minute.
+        "refresh": "20/min",
     },
     # drf-spectacular introspects views/serializers to emit the OpenAPI schema
     # that packages/api-client generates its typed hooks from.
