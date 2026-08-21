@@ -183,6 +183,55 @@ describe("signing out", () => {
       await captured.current?.signOut();
     });
 
+    // Once, not twice: the stored token is unchanged, so nothing rotated and a
+    // second attempt would present the credential the server just refused.
+    expect(mockDeleteCurrentSession).toHaveBeenCalledTimes(1);
+    expect(mockClearTokens).toHaveBeenCalled();
+    expect(screen.getByText("signedOut")).toBeTruthy();
+  });
+
+  it("blacklists the rotated token when the 401 handler refreshed mid-sign-out", async () => {
+    // The scenario: the access token had expired, so the DELETE 401s,
+    // customFetch refreshes — rotating the refresh token and blacklisting the
+    // copy already captured in the request body — and the retry presents that
+    // dead copy. Without the second attempt the token minted by that refresh
+    // outlives the sign-out by up to REFRESH_TOKEN_LIFETIME.
+    mockGetRefreshToken
+      .mockResolvedValueOnce("stored-refresh")
+      .mockResolvedValueOnce("rotated-refresh");
+    mockDeleteCurrentSession
+      .mockRejectedValueOnce(new ApiError(400, { refresh: "Token is invalid or expired." }))
+      .mockResolvedValueOnce({ status: 204 } as Awaited<ReturnType<typeof deleteCurrentSession>>);
+
+    const { captured } = renderSession();
+    await waitFor(() => expect(screen.getByText("signedIn")).toBeTruthy());
+
+    await act(async () => {
+      await captured.current?.signOut();
+    });
+
+    expect(mockDeleteCurrentSession).toHaveBeenNthCalledWith(1, { refresh: "stored-refresh" });
+    expect(mockDeleteCurrentSession).toHaveBeenNthCalledWith(2, { refresh: "rotated-refresh" });
+    expect(mockClearTokens).toHaveBeenCalled();
+    expect(screen.getByText("signedOut")).toBeTruthy();
+  });
+
+  it("gives up when the rotated token is refused too", async () => {
+    // Two failures end it. The retry carries a freshly minted access token, so
+    // a third round is not a state the 401 path can reach.
+    mockGetRefreshToken
+      .mockResolvedValueOnce("stored-refresh")
+      .mockResolvedValueOnce("rotated-refresh");
+    mockDeleteCurrentSession.mockRejectedValue(new ApiError(400, null));
+
+    const { captured } = renderSession();
+    await waitFor(() => expect(screen.getByText("signedIn")).toBeTruthy());
+
+    await act(async () => {
+      await captured.current?.signOut();
+    });
+
+    expect(mockDeleteCurrentSession).toHaveBeenCalledTimes(2);
     expect(mockClearTokens).toHaveBeenCalled();
     expect(screen.getByText("signedOut")).toBeTruthy();
   });

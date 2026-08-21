@@ -55,6 +55,52 @@ export type Session = SessionState & {
 
 const SessionContext = createContext<Session | null>(null);
 
+/**
+ * Best-effort blacklist of a refresh token, twice if the 401 handler moved it.
+ *
+ * The second attempt exists because sign-out is the one call whose *body* is a
+ * credential. With an expired access token the DELETE 401s, `customFetch`
+ * refreshes — which rotates the refresh token and blacklists the copy already
+ * captured in this request's body — and then retries with that same dead copy.
+ * The server answers 400, and the token it just minted would live out its full
+ * 30 days on the server while this device throws away its only copy. That is
+ * the opposite of what sign-out promises.
+ *
+ * Re-reading the Keychain is what distinguishes the two failures. A different
+ * token there means a rotation happened underneath this call and the new one is
+ * what needs revoking; the same token means the request failed for its own
+ * reasons — no network, an already-blacklisted token — and repeating it would
+ * only fail again.
+ *
+ * Bounded at two attempts on purpose. The retry carries the access token minted
+ * moments earlier, so a third round is not a state the 401 path can reach.
+ */
+const revokeRefreshToken = async (token: string): Promise<void> => {
+  try {
+    // The refresh token in the body of a DELETE, which looks wrong and is
+    // right: an access token cannot be revoked, so the refresh token is the
+    // only thing there is to destroy.
+    await deleteCurrentSession({ refresh: token });
+    return;
+  } catch {
+    // Fall through to the rotation check. Every other cause is handled by
+    // sending nothing further.
+  }
+
+  const rotated = await getRefreshToken();
+
+  if (!rotated || rotated === token) {
+    return;
+  }
+
+  try {
+    await deleteCurrentSession({ refresh: rotated });
+  } catch {
+    // Already expired, already blacklisted, or the network is down. None of
+    // those should keep the user signed in on this device.
+  }
+};
+
 /** Reads the session. Throws outside the provider rather than returning a fake signed-out. */
 export const useSession = (): Session => {
   const session = useContext(SessionContext);
@@ -143,16 +189,8 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
   const signOut = useCallback(async () => {
     const refreshToken = await getRefreshToken();
 
-    try {
-      if (refreshToken) {
-        // The refresh token in the body of a DELETE, which looks wrong and is
-        // right: an access token cannot be revoked, so the refresh token is the
-        // only thing there is to destroy.
-        await deleteCurrentSession({ refresh: refreshToken });
-      }
-    } catch {
-      // Already expired, already blacklisted, or the network is down. None of
-      // those should keep the user signed in on this device.
+    if (refreshToken) {
+      await revokeRefreshToken(refreshToken);
     }
 
     await endSession();
