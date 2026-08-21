@@ -82,8 +82,15 @@ EXPOSE 8000
 #   in a container means logs that exist nowhere anyone can read them.
 # - --access-logformat: gunicorn's default omits X-Forwarded-For, and %(h)s is
 #   REMOTE_ADDR, which behind Railway is always the proxy. MAC-36 needs the
-#   forwarded chain to count the hops between the client and this container, and
-#   the count cannot be assumed: setting DRF's NUM_PROXIES too high makes every
-#   caller in the world share one throttle bucket. TEMPORARY — this line comes
-#   out in the same ticket, once the count is recorded.
-CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 60 --access-logfile - --error-logfile - --access-logformat '%(h)s xff=%({x-forwarded-for}i)s \"%(r)s\" %(s)s' --forwarded-allow-ips '*'"]
+#   forwarded chain to count the appending hops in front of this container. The
+#   count cannot be assumed — too low lands every caller on a shared proxy
+#   address and locks the world out, too high reads the forged end of the chain
+#   and leaves the bypass open. TEMPORARY: removed in the same ticket once the
+#   count is recorded.
+#
+#   This is gunicorn's default format with one field appended, rather than a
+#   format of its own, so nothing already in the access log is lost while it is
+#   live. The value is quoted because a forwarded chain contains commas and
+#   spaces and would otherwise spill across what look like separate fields. An
+#   absent header logs as "-".
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 60 --access-logfile - --error-logfile - --access-logformat '%(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" xff=\"%({x-forwarded-for}i)s\"' --forwarded-allow-ips '*'"]

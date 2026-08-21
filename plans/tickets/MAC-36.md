@@ -65,15 +65,33 @@ the deployed `/api/ping/`: it logged `100.64.0.3`, a carrier-grade NAT address
 on Railway's internal network, and the forwarded chain appeared nowhere. So the
 log format gains `%({x-forwarded-for}i)s` temporarily. No behaviour changes.
 
-Then probe the deployed endpoint with a known, obviously fake left-hand entry
-and read the chain back with `railway logs`. Three possible answers, and they
-lead to different fixes:
+Then probe the deployed endpoint with a known number of obviously fake left-hand
+entries and read the chain back with `railway logs`.
 
-| Logged chain               | Meaning                    | Fix              |
-| -------------------------- | -------------------------- | ---------------- |
-| `<forged>, <real client>`  | Railway appends. One hop.  | `NUM_PROXIES=1`  |
-| `<real client>`            | Railway replaces the header | `NUM_PROXIES=1` |
-| `<forged>` alone           | Railway passes it through  | Escalate — no value of `NUM_PROXIES` helps |
+Record the machine's public address first, with `curl -s ifconfig.me`. Without
+it the middle of the chain is unreadable, and telling the real client apart from
+a Railway internal address is the entire measurement.
+
+The answer is arithmetic, not a lookup:
+
+```
+NUM_PROXIES = (entries in the logged chain) - (entries you forged)
+```
+
+Every hop that appends adds exactly one entry, so subtracting the forged prefix
+leaves the count of appending hops, which is what DRF wants. Zero means Railway
+passed the header through untouched and no value of `NUM_PROXIES` can help; that
+is the one outcome that needs escalating rather than configuring.
+
+An earlier draft of this plan used a three-row table of example chains instead,
+and it was wrong in a way worth recording. Its first row read "forged, then real
+client, so `NUM_PROXIES=1`". Follow that on a three-entry chain, which is what
+two appending hops produce, and `addrs[-1]` is a Railway internal address rather
+than the caller. Every client in the world then shares one bucket. That is
+precisely the lockout this two-PR split exists to prevent, reached by following
+the plan correctly. The probe evidence already hints at two nodes: `REMOTE_ADDR`
+came back as `100.64.0.2` on one request and `100.64.0.3` on the next, and
+nothing so far rules out more than one of them appending.
 
 **PR 2 — fix.** Set the measured value, add the test, remove the temporary log
 format, update doc 09.
