@@ -2,7 +2,7 @@
 linear_id: 9431886b-eaea-4453-9452-e692a88a009d
 linear_title: "18 — Design: Edge and Failure States"
 linear_url: https://linear.app/hintology/document/18-design-edge-and-failure-states-a84fd519c181
-linear_updated_at: 2026-08-01T14:26:15.150Z
+linear_updated_at: 2026-08-29T05:13:37.157Z
 generated: true
 ---
 
@@ -56,12 +56,14 @@ A failed AI call must never cost the user their photo or block the log. Manual e
 
 ## 4 · Monthly AI limit reached — orange
 
-> **300 analyses this month. That is the ceiling.**
-> Photo estimates come back on the 1st. Until then you can log entries by typing the numbers, and everything else — targets, streaks, history — works exactly as before.
+> **300 analyses in the last 30 days. That is the ceiling.**
+> Your oldest estimates age out over the next few days and the allowance comes back with them. Until then you can log entries by typing the numbers, and everything else — targets and history — works exactly as before.
 
 `LOG WITHOUT AI` · *Why there is a limit*
 
 Doc 09 requires a clear message rather than a silent failure. Note what the copy does: it names what still works. A quota screen that only says "you are out" reads as the app being broken.
+
+**Rewritten 29 Aug 2026 for a rolling window.** The quota used to be a monthly counter reset on the 1st, and the copy said so. It is now a count of the user's calls over the last 30 days (docs 02 and 09), so nothing resets and the allowance returns gradually. "Comes back on the 1st" would have been a sentence the app could not keep. The word "streaks" also went, since doc 21 cut them.
 
 ## 5 · Session expired — dim, blocking
 

@@ -2,7 +2,7 @@
 linear_id: 5ef505b1-e867-495a-befd-17e7be52fb42
 linear_title: "09 — Deployment & Production Ops"
 linear_url: https://linear.app/hintology/document/09-deployment-and-production-ops-90968f6ad784
-linear_updated_at: 2026-08-29T04:08:05.272Z
+linear_updated_at: 2026-08-29T05:13:31.654Z
 generated: true
 ---
 
@@ -85,12 +85,12 @@ cannot forge this identity, and 2 selects the caller.
 
 Two things worth carrying forward:
 
-* **Too low is the dangerous direction. **`1` selects the Railway address, which
+* Too low is the dangerous direction. `1` selects the Railway address, which
   every caller shares, so the sign-in endpoint would rate-limit the whole world
   into one bucket. That reads as an outage rather than as a bug. Too high is
   harmless here only because `addrs[-min(n, len(addrs))]` clamps against a
   two-entry chain.
-* **Leaving it unset is not neutral. **`get_ident` then uses the whole chain,
+* Leaving it unset is not neutral. `get_ident` then uses the whole chain,
   and Railway's own address rotates: `152.233.47.65` through `.69` all appeared
   within five minutes. One caller was split across several buckets and got a
   multiple of the intended allowance. That was the live bug, and it is a
@@ -104,12 +104,18 @@ changes when the platform does.
 
 The unit-economics problem: every photo analysis is a paid vision call. One user with a script can burn the API budget.
 
-* `ai_calls_this_month` counter on the user, reset monthly
+* **The quota is a query, not a counter.** Every call writes an `AICall` row (doc 02) and the allowance is a count over a rolling 30-day window. There was an `ai_calls_this_month` column on the user and it is gone
 * Hard ceiling per user; beyond it, a clear message rather than a silent failure
 * The ceiling should be generous enough that normal use never touches it and abuse stops fast
 * Log spend per call so real cost per active user is measurable
 
 Knowing the actual cost per user is what makes any future pricing conversation possible.
+
+**Why the counter went away.** A stored count is a cache of something the rows already know, and it has to be reset by something. A monthly cron is the obvious answer and the fragile one: the first missed run locks every user out, silently, and the failure reads as the app being broken rather than as a job not running. Counting rows has nothing to reset and cannot drift.
+
+**Rolling 30 days, not calendar month.** Nobody falls off a cliff at midnight, usage does not pile up on the 1st, and a user who burns their allowance on the 3rd is not dead for 28 days. Doc 18's quota copy is written to match.
+
+The same table carries the request, the raw response, and an `outcome` field, which is what makes a regressed prompt visible without anyone reading logs. Retention and deletion rules are in doc 02, and they matter: the stored request is health data with a person attached.
 
 ## Observability
 

@@ -2,7 +2,7 @@
 linear_id: 794ca722-e849-40c9-9d7c-804cdee285e3
 linear_title: "02 — Data Model"
 linear_url: https://linear.app/hintology/document/02-data-model-2b01a7aaa301
-linear_updated_at: 2026-08-20T18:23:06.109Z
+linear_updated_at: 2026-08-29T05:12:54.474Z
 generated: true
 ---
 
@@ -52,7 +52,7 @@ FoodItem
   position        IntegerField
 ```
 
-**No** `local_date` **column on** `FoodEntry`**.** Day membership is the FK, not a denormalized copy. `created_at`, `updated_at`, and `eaten_at` are plain UTC — normal Django practice, no special handling.
+No `local_date` **column on** `FoodEntry`. Day membership is the FK, not a denormalized copy. `created_at`, `updated_at`, and `eaten_at` are plain UTC — normal Django practice, no special handling.
 
 ### Why line items
 
@@ -162,6 +162,37 @@ TargetVersion
 
 This is the standard slowly-changing-dimension pattern — worth internalizing, since "why did last month's numbers change?" is a bug class it eliminates entirely.
 
+## AI calls
+
+```
+AICall
+  id
+  user          FK → User
+  kind          CharField    # "target_proposal" | "food_analysis" | "advice"
+  request       JSONField    # what we sent, prompt included
+  response      JSONField, NULLABLE   # raw model output, before validation
+  outcome       CharField    # "ok" | "malformed" | "out_of_bounds" | "timeout" | "error"
+  model         CharField    # which model answered
+  duration_ms   IntegerField, NULLABLE
+  created_at
+
+  INDEX (user, created_at)
+```
+
+Lives in the `ai` app, not in whichever feature happens to call it first. Target proposals, food analysis, and advice all write here.
+
+**The quota is a query, not a counter.** A user's remaining allowance is a count of their rows in a rolling 30-day window. There was a `User.ai_calls_this_month` column and it is gone, because a stored counter is a cache of something the rows already know — and this document already rejects that shape for daily totals. The same argument applies.
+
+The practical win is that nothing has to reset it. A monthly cron locks every user out silently the first time a run is missed, and that failure reads as the app being broken rather than as a job not running.
+
+Rolling, not calendar month. Nobody falls off a cliff at midnight, usage does not pile up on the 1st, and a user who burns their allowance on the 3rd is not dead for 28 days.
+
+`outcome` earns its column. Out-of-bounds model output has to be logged (doc 05), and a log line is where that goes to die. A field you can group by is how a regressed prompt gets noticed without anyone reading anything.
+
+**Text only.** Images stay in R2 and are addressed by `FoodEntry.photo_key`. Storing them twice costs money and buys nothing.
+
+**Retention is a decision, not a default.** The stored request holds age, biological sex, height, and weight, attached to a person. That is health data. Rows are purged with the account and aged out on a retention window rather than kept forever. Using them to train a model later is a separate decision needing a privacy-policy line, an App Store label, and an answer to how it squares with account deletion. This table does not presume it.
+
 ## Accounts
 
 ```
@@ -170,8 +201,8 @@ User (custom, AbstractBaseUser)
   email                  unique, NULLABLE              # from Apple, may be a relay address
   name                   CharField, blank              # display only, UNVERIFIED
   timezone               CharField                     # IANA name, e.g. "America/New_York"
-  onboarding_completed   BooleanField
-  ai_calls_this_month    IntegerField                  # quota counter
+  onboarding_completed   BooleanField                  # server-derived: has a TargetVersion
+  onboarding_skipped_at  DateTimeField, nullable       # user chose "Not now" on 9d
   created_at
   deleted_at             DateTimeField, nullable       # soft delete
 
@@ -192,15 +223,25 @@ Identity
 
 The forcing case is not a hypothetical second provider. It is an **app transfer**: move the app to another Apple developer team and Apple reissues every user's `sub`. With the subject inlined on `User` that migration rewrites the user table under live traffic. With a join table it inserts rows. Every federated identity system lands here — Supabase's `auth.identities`, allauth's `SocialAccount`. The shape is not clever; the mistake is skipping it because one provider fits in a column.
 
-**The unique constraint is on the pair, never on** `subject` **alone.** A subject is only unique *within* a provider: each mints opaque strings from its own namespace and nothing coordinates them. A unique index on `subject` by itself would be a cross-provider collision that fires once, years later, and cannot be reproduced.
+The unique constraint is on the pair, never on `subject` **alone.** A subject is only unique *within* a provider: each mints opaque strings from its own namespace and nothing coordinates them. A unique index on `subject` by itself would be a cross-provider collision that fires once, years later, and cannot be reproduced.
 
-**Superusers have no** `Identity` **at all.** They have a password and log in at `/admin/`. That is the sentence that makes the split easy to reason about: authentication is not something every row must have.
+Superusers have no `Identity` **at all.** They have a password and log in at `/admin/`. That is the sentence that makes the split easy to reason about: authentication is not something every row must have.
+
+**Two onboarding fields, and why not one. **`onboarding_completed` is **server-derived**: it turns true when the user's first `TargetVersion` is written, and no client can set it. `PATCH /api/users/me/` refuses it, and a test asserts that refusal, because a shared read/write serializer would let any client skip onboarding by sending one field.
+
+`onboarding_skipped_at` records a **user choice** and *is* client-writable through that same endpoint. The asymmetry is deliberate. A derived fact asserted by a client is a client lying. A choice has nothing to derive it from, and the worst a bad actor achieves by writing it is skipping a screen they could skip by tapping the button.
+
+The launch gate routes to Today when either is set.
+
+One field would have been tidier and worse. Overloading the boolean to mean "completed or skipped" makes the name lie, and it throws away the ability to tell the two apart, which the re-prompt row on Today needs. Deriving it purely from "has targets" is worse still: a user who takes the *Not now* exit doc 26 designed would land back in onboarding on every cold start, and the exit stops being an exit.
+
+The general shape is worth keeping: **a flag meaning "the user resolved this" is not the same as one meaning "the data exists", and choosing the second because it is derivable is how a supported choice becomes a nag.**
 
 `is_private_email` **is three-valued on purpose.** NULL means Apple did not tell us, which is not the same as `False`. Defaulting to `False` would assert a deliverable address we were never told about, and the field exists precisely to say whether mail to it can be relied on. It is refreshed on every sign-in, because a user can switch between a relay and their real address.
 
 `real_user_status` **is written once and never updated.** Apple sends it on the first authorization only, so later tokens carry nothing — and if one ever carried `UNKNOWN`, writing it would silently downgrade a stored `LIKELY_REAL`. The field means "what Apple thought when this identity was first seen", which is a fact about one moment rather than current state.
 
-**No** `email` **column on** `Identity` **yet.** Supabase keeps one on both sides and it is tempting, but nothing would read it until a second provider asserts a different address. Adding a column nothing reads is what MVP deleted `is_email_verified` for.
+No `email` column on `Identity` **yet.** Supabase keeps one on both sides and it is tempting, but nothing would read it until a second provider asserts a different address. Adding a column nothing reads is what MVP deleted `is_email_verified` for.
 
 **Custom user model from the very first migration.** Swapping Django's user model after tables exist is genuinely painful. Non-negotiable, and already done.
 
@@ -210,7 +251,7 @@ MVP is Sign in with Apple only, so no app user ever has a usable password, and t
 
 `User.last_login` is person-level and covers a superuser's admin password login. `Identity.last_authenticated_at` is credential-level. With one provider they move together; with two, the second answers "which login did they actually use?", which is the first question support asks.
 
-**There is still a** `password` **column, and it is** `NOT NULL`**.** It comes from `AbstractBaseUser`, not from anything declared in `accounts/models.py`, and the schema block above omits it along with the other Django auth plumbing (`last_login`, `is_active`, `is_staff`, `is_superuser`, groups, permissions). Do not read that omission as "the column does not exist".
+There is still a `password` **column, and it is** `NOT NULL`. It comes from `AbstractBaseUser`, not from anything declared in `accounts/models.py`, and the schema block above omits it along with the other Django auth plumbing (`last_login`, `is_active`, `is_staff`, `is_superuser`, groups, permissions). Do not read that omission as "the column does not exist".
 
 Apple users get `set_unusable_password()`, which stores `!` plus 40 random characters. The `!` prefix makes `is_password_usable()` false, so `check_password()` returns false for every input including the stored value itself. That is stronger than an empty string, which Django would treat as a *usable* password it then cannot parse. Consequence: an Apple user cannot log in through the Django admin form under any input.
 
@@ -218,7 +259,7 @@ The column earns its place for staff only. `createsuperuser` still sets a real h
 
 **Hazard if email/password ever returns** (doc 04 parks it for a possible web client): calling `set_password()` on an existing Apple user would hand them a usable password and create a second way into the same account that bypasses Apple entirely. Any future password flow has to exclude users who have an `Identity`.
 
-**Why** `email` **is nullable.** Apple does not guarantee an email claim. It is normally present in the identity token, but it can be absent for a stale app association, for a Managed Apple ID under Sign in with Apple at Work & School, or when a client reads the first-authorization-only `credential.email` property instead of the token. A `NOT NULL` column would leave the sign-in path two options in those cases: reject a legitimate user, or invent a placeholder that then occupies a unique column. Both are worse than storing NULL.
+Why `email` **is nullable.** Apple does not guarantee an email claim. It is normally present in the identity token, but it can be absent for a stale app association, for a Managed Apple ID under Sign in with Apple at Work & School, or when a client reads the first-authorization-only `credential.email` property instead of the token. A `NOT NULL` column would leave the sign-in path two options in those cases: reject a legitimate user, or invent a placeholder that then occupies a unique column. Both are worse than storing NULL.
 
 It stays `unique` regardless, because Postgres treats NULLs as distinct — the same property `apple_user_id` already depends on.
 
@@ -238,7 +279,8 @@ What changed the decision was not a new use for the name. It was the asymmetry: 
 
 1. `accounts` — custom User (first, before any migration references `AUTH_USER_MODEL`)
 2. `targets` — TargetVersion
-3. `entries` — DailyLog (FKs User + TargetVersion), then FoodEntry (FK DailyLog), then FoodItem (FK FoodEntry)
+3. `ai` — AICall (FK User)
+4. `entries` — DailyLog (FKs User + TargetVersion), then FoodEntry (FK DailyLog), then FoodItem (FK FoodEntry)
 
 **Note on app naming:** the app holding DailyLog/FoodEntry must **not** be called `logging` — it would shadow Python's stdlib `logging` module and break imports across Django and third-party packages. Use `entries`.
 
@@ -249,6 +291,7 @@ What changed the decision was not a new use for the name. It was the asymmetry: 
 * `FoodEntry (daily_log, eaten_at)` — ordering entries within a day
 * `FoodItem (food_entry, position)` — ordering items within an entry
 * `FoodItem (name, portion_label)` — supports the recents distinctness query
+* `AICall (user, created_at)` — the rolling-window quota count
 
 ## Not in the model
 

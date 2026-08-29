@@ -2,7 +2,7 @@
 linear_id: b31889be-59e4-4e47-bd80-4d8a1a9e689c
 linear_title: "15 — Design: Onboarding and Targets (E3)"
 linear_url: https://linear.app/hintology/document/15-design-onboarding-and-targets-e3-85c87496432b
-linear_updated_at: 2026-08-19T23:48:25.327Z
+linear_updated_at: 2026-08-29T05:14:09.895Z
 generated: true
 ---
 
@@ -24,6 +24,8 @@ _[image omitted — see the Linear doc]_
 _[image omitted — see the Linear doc]_
 
 ## Question flow (6e)
+
+> **Superseded twice over.** Doc 26 cuts these ten questions to six and resequences the flow behind the first logged meal, so its inventory wins over the table below. And the numeric inputs are US units as of 29 Aug 2026: height in feet and inches shown as `5'11"`, weight in pounds, converted to cm and kg by the client before the request. Sections `6f`, `6g` and `6h` below are still current.
 
 **One question per screen.** Ten of them, in this order:
 
@@ -84,7 +86,13 @@ Non-negotiable for a health-adjacent public app, and Apple review will look for 
 
 Heading `Your call`. Three steppers — kcal ±10, protein ±5 g, fiber ±1 g — then two notes.
 
-**Live bounds feedback.** The baseline row turns orange with `OUTSIDE BOUNDS — SERVER WILL CLAMP` when a value leaves the accepted range (calories 1,500–3,200; protein 100–260 g in the prototype). The server clamps regardless; the UI says so *before* the user discovers it by saving.
+**Live bounds feedback.** The baseline row turns orange with one of two warnings, rewritten 29 Aug 2026. The original text said `OUTSIDE BOUNDS — SERVER WILL CLAMP` and that the server clamps regardless. It does not, for a value the user typed themselves. Doc 05 carries the full ruling.
+
+Outside the **suggested** range (calories 1,500–3,200; protein 100–260 g in the prototype), the row turns orange with `OUTSIDE THE RANGE WE SUGGEST` and the value saves exactly as typed. A person is allowed to disagree with the app about their own body.
+
+Outside the **absolute** range, calories under 1,000 being the case that matters, the server rejects the write with a `400`. The stepper should not let the user reach it, so this is a backstop rather than a screen anyone should meet.
+
+The distinction is the point. A warning says "we think this is unwise". A refusal says "this is not a target". Silently storing a different number than the one someone typed is worse than either.
 
 **Versioning, stated:**
 
