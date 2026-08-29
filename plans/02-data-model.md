@@ -2,7 +2,7 @@
 linear_id: 794ca722-e849-40c9-9d7c-804cdee285e3
 linear_title: "02 — Data Model"
 linear_url: https://linear.app/hintology/document/02-data-model-2b01a7aaa301
-linear_updated_at: 2026-08-29T05:12:54.474Z
+linear_updated_at: 2026-08-29T15:42:25.255Z
 generated: true
 ---
 
@@ -52,7 +52,7 @@ FoodItem
   position        IntegerField
 ```
 
-No `local_date` **column on** `FoodEntry`. Day membership is the FK, not a denormalized copy. `created_at`, `updated_at`, and `eaten_at` are plain UTC — normal Django practice, no special handling.
+No `local_date` column on `FoodEntry`. Day membership is the FK, not a denormalized copy. `created_at`, `updated_at`, and `eaten_at` are plain UTC — normal Django practice, no special handling.
 
 ### Why line items
 
@@ -149,18 +149,28 @@ TargetVersion
   protein_g        IntegerField
   fiber_g          IntegerField
   source           CharField     # "onboarding_ai" | "manual"
-  ai_rationale     TextField     # explanation shown to the user, nullable
+  ai_rationale     TextField     # explanation shown to the user, blank for a manual edit
   effective_from   DateField
   created_at
+
+  INDEX (user, -created_at)
 ```
 
 **Append-only. Never updated in place.** Adjusting targets writes a new row.
 
-* Current targets = latest `TargetVersion` by `created_at`
+* Current targets = latest `TargetVersion` by `created_at`, with `id` as the tiebreak. Two rows can share a timestamp, and without the tiebreak the database is free to return either one
 * A `DailyLog` captures its `target_version` FK at creation, so past days are evaluated against what was true then
 * Changing targets today does not retroactively rewrite last week's progress
 
 This is the standard slowly-changing-dimension pattern — worth internalizing, since "why did last month's numbers change?" is a bug class it eliminates entirely.
+
+**Three amendments, made 29 Aug 2026 after** [MAC-38](https://linear.app/hintology/issue/MAC-38/targets-app-foundations-the-targetversion-model) **shipped the model.** This section described the table before the code existed, and it drifted from the code in three places.
+
+The index is new here, not new in the code. [MAC-38](https://linear.app/hintology/issue/MAC-38/targets-app-foundations-the-targetversion-model) shipped `(user, -created_at)` in the initial migration. The FK indexes `user` alone, which still leaves a sort, and both readers of this table filter by user and order by recency: the current-targets lookup and the history screen's card list.
+
+The tiebreak is the same story. The code orders by `(-created_at, -id)`. "Latest by `created_at`" alone is ambiguous the moment two rows share a timestamp, which `bulk_create`, a data migration, or a fixture can all produce.
+
+`ai_rationale` is **not** nullable. It is `blank=True` and a manual edit stores `""`. A nullable text field gives two ways to spell "empty" and forces every reader to handle both.
 
 ## AI calls
 
@@ -227,7 +237,7 @@ The unique constraint is on the pair, never on `subject` **alone.** A subject is
 
 Superusers have no `Identity` **at all.** They have a password and log in at `/admin/`. That is the sentence that makes the split easy to reason about: authentication is not something every row must have.
 
-**Two onboarding fields, and why not one. **`onboarding_completed` is **server-derived**: it turns true when the user's first `TargetVersion` is written, and no client can set it. `PATCH /api/users/me/` refuses it, and a test asserts that refusal, because a shared read/write serializer would let any client skip onboarding by sending one field.
+**Two onboarding fields, and why not one.** The field `onboarding_completed` is **server-derived**: it turns true when the user's first `TargetVersion` is written, and no client can set it. `PATCH /api/users/me/` refuses it, and a test asserts that refusal, because a shared read/write serializer would let any client skip onboarding by sending one field.
 
 `onboarding_skipped_at` records a **user choice** and *is* client-writable through that same endpoint. The asymmetry is deliberate. A derived fact asserted by a client is a client lying. A choice has nothing to derive it from, and the worst a bad actor achieves by writing it is skipping a screen they could skip by tapping the button.
 
@@ -251,7 +261,7 @@ MVP is Sign in with Apple only, so no app user ever has a usable password, and t
 
 `User.last_login` is person-level and covers a superuser's admin password login. `Identity.last_authenticated_at` is credential-level. With one provider they move together; with two, the second answers "which login did they actually use?", which is the first question support asks.
 
-There is still a `password` **column, and it is** `NOT NULL`. It comes from `AbstractBaseUser`, not from anything declared in `accounts/models.py`, and the schema block above omits it along with the other Django auth plumbing (`last_login`, `is_active`, `is_staff`, `is_superuser`, groups, permissions). Do not read that omission as "the column does not exist".
+There is still a `password` column, and it is `NOT NULL`. It comes from `AbstractBaseUser`, not from anything declared in `accounts/models.py`, and the schema block above omits it along with the other Django auth plumbing (`last_login`, `is_active`, `is_staff`, `is_superuser`, groups, permissions). Do not read that omission as "the column does not exist".
 
 Apple users get `set_unusable_password()`, which stores `!` plus 40 random characters. The `!` prefix makes `is_password_usable()` false, so `check_password()` returns false for every input including the stored value itself. That is stronger than an empty string, which Django would treat as a *usable* password it then cannot parse. Consequence: an Apple user cannot log in through the Django admin form under any input.
 
@@ -291,6 +301,7 @@ What changed the decision was not a new use for the name. It was the asymmetry: 
 * `FoodEntry (daily_log, eaten_at)` — ordering entries within a day
 * `FoodItem (food_entry, position)` — ordering items within an entry
 * `FoodItem (name, portion_label)` — supports the recents distinctness query
+* `TargetVersion (user, created_at DESC)` — the current-targets lookup and the history list. The FK indexes `user` alone, which still leaves a sort
 * `AICall (user, created_at)` — the rolling-window quota count
 
 ## Not in the model
