@@ -431,3 +431,64 @@ def test_a_throttled_request_creates_nothing(api_client, url, verifier, rates):
     sign_in(api_client, url)
     assert sign_in(api_client, url).status_code == status.HTTP_429_TOO_MANY_REQUESTS
     assert User.objects.count() == 1
+
+
+# --- who the throttle thinks you are ------------------------------------------
+#
+# MAC-36. These pin NUM_PROXIES, which decides which entry of X-Forwarded-For
+# becomes the throttle bucket key. Both tests fail if the setting is removed,
+# and the first one is the bug that was actually live in production.
+#
+# The chain shape here is the measured one, not an invented one. Railway
+# replaces whatever the caller sends with "<caller>, <Railway address>", so a
+# test that forges a left-hand entry and expects it to matter would be asserting
+# against a request that cannot arrive.
+
+
+def sign_in_from(api_client, url, chain: str):
+    """Sign in as if Railway had written `chain` into X-Forwarded-For."""
+    body = {"identity_token": "any.jwt.here", "nonce": RAW_NONCE}
+    return api_client.post(url, body, format="json", headers={"x-forwarded-for": chain})
+
+
+@pytest.mark.django_db
+def test_one_caller_stays_in_one_bucket_when_the_proxy_address_rotates(
+    api_client, url, verifier, rates
+):
+    """The live bug. Railway's own address is not stable -- 152.233.47.65
+    through .69 all appeared within five minutes of probing -- so with
+    NUM_PROXIES unset the whole chain was the key and each rotation handed the
+    same caller a fresh allowance."""
+    rates(**{"signin-burst": "2/min"})
+
+    assert sign_in_from(api_client, url, "203.0.113.7, 152.233.47.65").status_code == (
+        status.HTTP_201_CREATED
+    )
+    assert sign_in_from(api_client, url, "203.0.113.7, 152.233.47.66").status_code == (
+        status.HTTP_201_CREATED
+    )
+    assert sign_in_from(api_client, url, "203.0.113.7, 152.233.47.67").status_code == (
+        status.HTTP_429_TOO_MANY_REQUESTS
+    )
+
+
+@pytest.mark.django_db
+def test_two_callers_do_not_share_a_bucket(api_client, url, verifier, rates):
+    """Guards the opposite mistake. NUM_PROXIES=1 would select the Railway
+    address, which is identical for everybody, so one caller exhausting the
+    limit would lock out every other caller on the endpoint every client has to
+    reach. That failure reads as an outage rather than as a bug, which is why it
+    gets its own test rather than trusting the number above."""
+    rates(**{"signin-burst": "1/min"})
+
+    assert sign_in_from(api_client, url, "203.0.113.7, 152.233.47.65").status_code == (
+        status.HTTP_201_CREATED
+    )
+    assert sign_in_from(api_client, url, "203.0.113.7, 152.233.47.65").status_code == (
+        status.HTTP_429_TOO_MANY_REQUESTS
+    )
+    # 201 again, not 200: every successful sign-in creates a session, whether or
+    # not it also created a user. See the comment on the view's return.
+    assert sign_in_from(api_client, url, "198.51.100.4, 152.233.47.65").status_code == (
+        status.HTTP_201_CREATED
+    )
