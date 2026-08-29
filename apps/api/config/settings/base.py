@@ -239,6 +239,35 @@ REST_FRAMEWORK = {
         # retry loop, which would otherwise run thousands a minute.
         "refresh": "20/min",
     },
+    # How many hops in front of this container append to X-Forwarded-For.
+    # `BaseThrottle.get_ident` reads it as `addrs[-min(n, len(addrs))]`, so it
+    # counts backwards from the right of the chain. Leaving it unset is not
+    # neutral: get_ident then falls to its last line and uses the entire chain
+    # as the throttle identity.
+    #
+    # Measured, not assumed. MAC-36 logged the real chain from the deployed
+    # container in Aug 2026 and probed /api/ping/ with 0, 1, 2, and 5 forged
+    # left-hand entries. Every probe arrived as exactly two entries,
+    # "<caller public IP>, <Railway address>", with the forged ones gone.
+    # So Railway replaces the header rather than appending to it, and 2 lands
+    # on the caller.
+    #
+    # Two facts that follow, both easy to get backwards:
+    #
+    # - The caller cannot forge this identity, because Railway overwrites what
+    #   it sends. The bypass this ticket was filed for does not exist. What did
+    #   exist is narrower: unset, the identity was the whole chain, and the
+    #   right-hand Railway address rotates. 152.233.47.65 through .69 all
+    #   appeared inside five minutes, so one caller was spread over several
+    #   buckets and got a multiple of the intended allowance.
+    # - Setting this too low is the dangerous direction, not too high. 1 would
+    #   select the Railway address, which every caller shares, and the sign-in
+    #   endpoint would rate-limit the whole world into one bucket.
+    #
+    # Tied to Railway's topology. A CDN in front of it, or a platform change to
+    # how the header is written, invalidates the number. Re-measure the same
+    # way rather than adjusting it by reasoning.
+    "NUM_PROXIES": 2,
     # drf-spectacular introspects views/serializers to emit the OpenAPI schema
     # that packages/api-client generates its typed hooks from.
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",

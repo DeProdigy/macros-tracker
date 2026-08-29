@@ -2,7 +2,7 @@
 linear_id: c77c29c9-be49-4acc-9720-c446ad327b36
 linear_title: "04 — Feature: Authentication"
 linear_url: https://linear.app/hintology/document/04-feature-authentication-8efb3525d18e
-linear_updated_at: 2026-08-20T18:23:21.189Z
+linear_updated_at: 2026-08-21T00:53:21.269Z
 generated: true
 ---
 

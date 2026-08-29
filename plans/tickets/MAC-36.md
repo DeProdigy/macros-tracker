@@ -13,9 +13,11 @@ see it.
 DRF decides who a request came from in `BaseThrottle.get_ident`. With
 `NUM_PROXIES` unset it falls through to its last line and uses the **entire**
 `X-Forwarded-For` chain as the throttle identity. Railway always sends that
-header and the client controls its left-hand end, so a different forged value
-per request means a different cache key per request and a counter that never
-climbs.
+header, so the identity carries Railway's own address as well as the caller's.
+
+The ticket assumed the caller could forge its left-hand end and mint a fresh
+cache key per request. **The measurement disproved that**; see the section
+below. The bug that was really live is narrower and is written up there.
 
 Locally there is no proxy, no header, and `get_ident` returns `REMOTE_ADDR`.
 The bug exists only where it matters, which is why the tests are green.
@@ -57,49 +59,55 @@ off a documentation page.
 
 ## Approach: measure first, then fix
 
-Two PRs, deliberately.
-
-**PR 1 — measure.** Gunicorn's default access log format shows `%(h)s`, which is
-`REMOTE_ADDR`, which behind Railway is always the proxy. Confirmed by probing
-the deployed `/api/ping/`: it logged `100.64.0.3`, a carrier-grade NAT address
-on Railway's internal network, and the forwarded chain appeared nowhere. So the
-log format gains `%({x-forwarded-for}i)s` temporarily. No behaviour changes.
-
-Then probe the deployed endpoint with a known number of obviously fake left-hand
-entries and read the chain back with `railway logs`.
-
-Record the machine's public address first, with `curl -s ifconfig.me`. Without
-it the middle of the chain is unreadable, and telling the real client apart from
-a Railway internal address is the entire measurement.
-
-The answer is arithmetic, not a lookup:
-
-```
-NUM_PROXIES = (entries in the logged chain) - (entries you forged)
-```
-
-Every hop that appends adds exactly one entry, so subtracting the forged prefix
-leaves the count of appending hops, which is what DRF wants. Zero means Railway
-passed the header through untouched and no value of `NUM_PROXIES` can help; that
-is the one outcome that needs escalating rather than configuring.
-
-An earlier draft of this plan used a three-row table of example chains instead,
-and it was wrong in a way worth recording. Its first row read "forged, then real
-client, so `NUM_PROXIES=1`". Follow that on a three-entry chain, which is what
-two appending hops produce, and `addrs[-1]` is a Railway internal address rather
-than the caller. Every client in the world then shares one bucket. That is
-precisely the lockout this two-PR split exists to prevent, reached by following
-the plan correctly. The probe evidence already hints at two nodes: `REMOTE_ADDR`
-came back as `100.64.0.2` on one request and `100.64.0.3` on the next, and
-nothing so far rules out more than one of them appending.
-
-**PR 2 — fix.** Set the measured value, add the test, remove the temporary log
-format, update doc 09.
+Two PRs, deliberately. PR 1 turned on the logging. PR 2, this one, sets the
+value and turns the logging back off.
 
 Two deploys for a one-line setting is slower than guessing. Guessing low
-produces a lockout on the endpoint every client must reach, and guessing high
-leaves the bypass in place while looking fixed. The extra deploy is cheap
-against either.
+produces a lockout on the endpoint every client must reach. The extra deploy was
+cheap against that, and it turned out to be the only thing that could have
+caught what the header actually does.
+
+## What the measurement found
+
+Run 29 Aug 2026 against `https://api-production-2884.up.railway.app/api/ping/`
+from a machine whose public address was `108.6.37.101`.
+
+| Forged entries sent | Chain the container received |
+| --- | --- |
+| none | `108.6.37.101, 152.233.47.68` |
+| `1.1.1.1` | `108.6.37.101, 152.233.47.67` |
+| `9.9.9.9, 8.8.8.8` | `108.6.37.101, 152.233.47.66` |
+| five entries | `108.6.37.101, 152.233.47.65` |
+
+**Railway replaces the header rather than appending to it.** Not one forged
+entry survived, and the chain was two entries long regardless of what went in.
+So `NUM_PROXIES = 2` selects `addrs[-2]`, which is the caller.
+
+That kills the arithmetic rule this plan carried into PR 1
+(`NUM_PROXIES = entries logged - entries forged`). The rule assumed appending
+and returns 0 here, which is wrong. Recorded rather than deleted, because the
+rule is right for a platform that appends and the failure was assuming which
+kind of platform this is. Only the log could tell them apart.
+
+Two consequences, both the opposite of what the ticket said:
+
+- **The identity is not forgeable.** Railway overwrites what the caller sends.
+  The bypass in the ticket title does not exist. Worth saying plainly, because
+  the throttle also is not the security control (see `accounts/throttles.py`) —
+  Apple sign-in has no password to guess and a forged token dies at the
+  signature check. The throttle is a cost and denial-of-service guard.
+- **The real bug is bucket fragmentation.** Unset, the identity was the whole
+  chain, and the right-hand Railway address rotates. `152.233.47.65` through
+  `.69` all appeared within five minutes, and older log lines carry
+  `79.127.177.114` and `152.233.76.9`. One caller was therefore spread across
+  several buckets and got a multiple of the intended allowance. Real, worth
+  fixing, and much smaller than filed.
+
+**Too low is the dangerous direction; too high is now unreachable.** With the
+chain fixed at two entries, `addrs[-min(n, len(addrs))]` clamps, so any `n`
+above 2 gives the same answer as 2. `n = 1` selects the shared Railway address
+and rate-limits the whole world into one bucket. Both directions still have a
+test.
 
 ## Files
 
@@ -124,14 +132,21 @@ The test then forges a chain and proves the real deployed value ignores it.
 
 ## The test, and how it could pass while proving nothing
 
-A real proxy **appends** what it observed to whatever the client sent. Production
-therefore sees `X-Forwarded-For: <anything the caller typed>, <address Railway
-saw>`. A test that sends a bare forged header and asserts the bucket changed is
-testing a request shape that cannot occur.
+The plan originally described a test that forges a left-hand entry and asserts
+it is ignored. The measurement rules that shape out: Railway strips it, so the
+request cannot arrive. A test asserting against an impossible request passes
+forever and guards nothing.
 
-So the test sends two requests with different forged left-hand entries and the
-same trailing address, and asserts both land in one bucket. It fails if
-`NUM_PROXIES` is removed.
+The two tests that shipped use the measured shape instead, both in
+`accounts/tests/test_sessions.py`:
+
+- One caller, rotating Railway address, must stay in one bucket. This is the
+  bug that was live.
+- Two callers behind the same Railway address must not share a bucket. This
+  catches `NUM_PROXIES = 1`, which reads as an outage rather than as a bug.
+
+Mutation-checked all three ways. Comment the setting out and the first test
+fails. Set it to 1 and both fail. Set it to 2 and both pass.
 
 DRF caches settings in `api_settings` but reloads them on Django's
 `setting_changed` signal, so `override_settings` works here. Worth knowing,
@@ -168,13 +183,13 @@ Nothing else reads `NUM_PROXIES`. No API change and no schema change, so
 - **A future CDN in front of Railway.** It would change the hop count, which is
   what the doc 09 note exists to catch.
 
-## Open questions
+## Open questions, answered
 
-- Does Railway append to a client-supplied `X-Forwarded-For`, or replace it? PR
-  1 answers this, and the third outcome in the table above would need a
-  different fix entirely.
-- `REMOTE_ADDR` was `100.64.0.2` on one probe and `100.64.0.3` on the next, so
-  the proxy address is not stable. It does not change the fix, but it does mean
-  a too-low `NUM_PROXIES` would collapse callers into a small pool of shared
-  buckets rather than a single one. No better, and harder to recognise, because
-  partial throttling looks like bad luck rather than misconfiguration.
+- **Does Railway append or replace?** Replace. Four probes, none of the forged
+  entries survived.
+- **Is `REMOTE_ADDR` stable?** No, and neither is the right-hand chain entry.
+  That instability is the bug rather than a footnote to it: it is what split one
+  caller across buckets.
+- **`base.py` or `production.py`?** `base.py`, departing from the ticket. The
+  reasoning is the section above. No ruling came back, so this went the way the
+  plan argued.

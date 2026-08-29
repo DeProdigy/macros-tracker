@@ -2,7 +2,7 @@
 linear_id: 5ef505b1-e867-495a-befd-17e7be52fb42
 linear_title: "09 — Deployment & Production Ops"
 linear_url: https://linear.app/hintology/document/09-deployment-and-production-ops-90968f6ad784
-linear_updated_at: 2026-08-20T04:02:38.250Z
+linear_updated_at: 2026-08-29T04:08:05.272Z
 generated: true
 ---
 
@@ -60,6 +60,45 @@ DRF throttling, tighter on the endpoints that cost money:
 | `POST /api/targets/proposals/` | Per user, low ceiling |
 | `POST /api/advice/` | Per user, low ceiling |
 | Everything else | Generous default |
+
+### Who the throttle thinks you are (`NUM_PROXIES`)
+
+`REST_FRAMEWORK["NUM_PROXIES"] = 2` in `apps/api/config/settings/base.py`. It
+decides which entry of `X-Forwarded-For` becomes the throttle bucket key.
+
+**This number is tied to Railway's topology and is not a matter of reasoning.**
+Re-measure it if the platform changes how it writes the header, or if anything
+is put in front of Railway, a CDN most likely. Adjusting it by argument is how
+the wrong value gets shipped.
+
+How it was measured ([MAC-36](https://linear.app/hintology/issue/MAC-36/throttle-is-bypassable-behind-railways-proxy-num-proxies-is-unset), 29 Aug 2026). Log the chain by appending
+`xff="%({x-forwarded-for}i)s"` to gunicorn's default `--access-logformat` in
+`apps/api/Dockerfile`, deploy, then hit `/api/ping/` with a known number of
+forged left-hand entries and read it back with `railway logs --service api`.
+Record the machine's public address first with `curl -s ifconfig.me`, otherwise
+the caller's entry cannot be told from a Railway internal one.
+
+The result: Railway **replaces** the header rather than appending to it. Probes
+with 0, 1, 2, and 5 forged entries all arrived as exactly two entries,
+`<caller public IP>, <Railway address>`, with the forged ones gone. So a caller
+cannot forge this identity, and 2 selects the caller.
+
+Two things worth carrying forward:
+
+* **Too low is the dangerous direction. **`1` selects the Railway address, which
+  every caller shares, so the sign-in endpoint would rate-limit the whole world
+  into one bucket. That reads as an outage rather than as a bug. Too high is
+  harmless here only because `addrs[-min(n, len(addrs))]` clamps against a
+  two-entry chain.
+* **Leaving it unset is not neutral. **`get_ident` then uses the whole chain,
+  and Railway's own address rotates: `152.233.47.65` through `.69` all appeared
+  within five minutes. One caller was split across several buckets and got a
+  multiple of the intended allowance. That was the live bug, and it is a
+  weakened limit rather than an absent one.
+
+The log format is temporary by design and came back out in the same ticket.
+Keeping it would publish the proxy topology into a log for a value that only
+changes when the platform does.
 
 ## AI quotas
 
