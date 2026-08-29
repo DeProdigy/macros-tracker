@@ -4,6 +4,21 @@ Pure functions. No HTTP, no database, no model provider. Everything here is
 arithmetic and comparison, which is why it is the most thoroughly tested module
 in the epic and the thing the AI path falls back to when it misbehaves.
 
+**Pounds, not kilograms.** This is a US app and the whole stack speaks pounds,
+from the onboarding stepper to the wire format to this module. An earlier draft
+took kilograms, on the reasoning that Mifflin-St Jeor is defined in metric so the
+client should convert at its edge. That was backwards. It put a conversion in
+every client for the convenience of one formula, and it meant the API spoke a
+unit no screen ever shows.
+
+The formula still needs kilograms. MAC-51 converts once, where the formula lives.
+One conversion in one place beats one in every caller.
+
+The evidence behind these numbers is published per kilogram, so each constant is
+written as the per-kg figure divided by `POUNDS_PER_KG` rather than as a
+pre-computed decimal. That keeps the citable number visible in the source instead
+of hiding it behind a conversion a reader would have to reverse to check.
+
 **Two ranges, not one**, ruled 29 Aug 2026. One range forces a choice between
 two bad outcomes: clamp everything, and a person eating 1,400 kcal under medical
 supervision cannot record it while the app silently rewrites their number; clamp
@@ -34,6 +49,19 @@ from enum import StrEnum
 
 from rest_framework.exceptions import ValidationError
 
+POUNDS_PER_KG = Decimal("2.20462262")
+
+
+def _per_pound(per_kg: str) -> Decimal:
+    """A published per-kilogram figure, expressed per pound.
+
+    Written this way so the citable number stays in the source. A pre-computed
+    `0.7257` tells a reader nothing and cannot be checked without reversing the
+    conversion first.
+    """
+    return Decimal(per_kg) / POUNDS_PER_KG
+
+
 # --- what the bounds are made of ---------------------------------------------
 #
 # Honesty about provenance, because these numbers will be questioned later and
@@ -52,15 +80,15 @@ class Sex(StrEnum):
     MALE = "male"
 
 
-# Calories per kg of body weight, for the suggested range.
+# Calories per pound of body weight, for the suggested range.
 #
 # **Judgement, not a citation.** 22 kcal/kg lands near an aggressive but ordinary
 # cut and 40 near a generous bulk. Doc 15's prototype used a fixed 1,500-3,200,
-# which is right for a mid-sized adult and wrong at both ends: it forbids a 50 kg
-# woman a sensible target and warns a 100 kg man about a reasonable one.
-SUGGESTED_CALORIES_PER_KG = (Decimal("22"), Decimal("40"))
+# which is right for a mid-sized adult and wrong at both ends: it forbids a
+# 110 lb woman a sensible target and warns a 220 lb man about a reasonable one.
+SUGGESTED_CALORIES_PER_LB = (_per_pound("22"), _per_pound("40"))
 
-# A floor under the per-kg figure, because 22 kcal/kg gets very low for a small
+# A floor under the per-pound figure, because the ratio gets very low for a small
 # person. **Rules of thumb**, widely repeated in consumer nutrition guidance
 # rather than drawn from one authority. Treat them as such.
 SUGGESTED_CALORIE_FLOOR_BY_SEX = {
@@ -68,21 +96,22 @@ SUGGESTED_CALORIE_FLOOR_BY_SEX = {
     Sex.MALE: 1500,
 }
 
-# Protein per kg, for the suggested range.
+# Protein per pound, for the suggested range.
 #
 # **The best-supported numbers in this module.** 1.6 to 2.2 g/kg for muscle
 # retention in a deficit is replicated across many trials. The ceiling is widened
 # to 2.5 deliberately: the evidence says there is no *added* benefit above ~2.2,
 # not that 2.4 is unwise, and warning a high-protein eater on every save trains
 # them to ignore the warning that matters.
-SUGGESTED_PROTEIN_G_PER_KG = (Decimal("1.6"), Decimal("2.5"))
+SUGGESTED_PROTEIN_G_PER_LB = (_per_pound("1.6"), _per_pound("2.5"))
 
 # Fiber per 1,000 kcal, for the suggested range.
 #
 # **14 g per 1,000 kcal is the US Dietary Guidelines figure**, and the band here
 # brackets it. Note what this keys off: fiber scales with the *calorie target*,
 # not with body weight. A 1,400 kcal day and a 3,000 kcal day genuinely need
-# different amounts, and tying fiber to weight would miss that.
+# different amounts, and tying fiber to weight would miss that. No pound
+# conversion, because the guideline is already written per calorie.
 SUGGESTED_FIBER_G_PER_1000_KCAL = (Decimal("10"), Decimal("20"))
 
 # The absolute range. Nothing crosses it.
@@ -96,12 +125,17 @@ ABSOLUTE_CALORIE_RANGE = (1000, 5000)
 
 # Wide on purpose. 0.5 g/kg is below the RDA and 3.5 is above any studied
 # benefit, so a value outside this is a mistyped number rather than a preference.
-ABSOLUTE_PROTEIN_G_PER_KG = (Decimal("0.5"), Decimal("3.5"))
+ABSOLUTE_PROTEIN_G_PER_LB = (_per_pound("0.5"), _per_pound("3.5"))
 
 # Zero is allowed: a user may not want a fiber target at all, and refusing that
 # would be the app having an opinion where it has no standing. 100 g is roughly
 # three times the guideline intake, which makes it a typo.
 ABSOLUTE_FIBER_RANGE = (0, 100)
+
+# Below this the fixed sex floor passes the per-pound ceiling and a `Range`
+# inverts. 83 lb is where it happens for a man and 66 lb for a woman, so this
+# sits above both with room. See `Profile` for what enforces it.
+MINIMUM_SUPPORTED_WEIGHT_LB = Decimal("85")
 
 
 # --- value types -------------------------------------------------------------
@@ -114,10 +148,23 @@ class Profile:
     Deliberately smaller than the six onboarding answers. Age, height, goal, and
     activity feed Mifflin-St Jeor in MAC-51; none of them changes what counts as
     a safe target. Passing the whole answer set here would imply they do.
+
+    **A weight at or above `MINIMUM_SUPPORTED_WEIGHT_LB` is a precondition**, not
+    a suggestion. The sex floors are fixed and the calorie ceiling scales with
+    weight, so below about 83 lb for a man the two cross and the range inverts.
+
+    MAC-40 validates the weight on the way in, so a user gets a 400 rather than
+    reaching here. `Range.__post_init__` is the backstop for a caller that
+    forgets, and it raises rather than repairing: silently widening the ceiling
+    to meet the floor would invent a recommendation for a body these numbers were
+    never derived for.
+
+    The realistic trigger is a typo, not a child. A user who types 70 instead of
+    170 lands here.
     """
 
     sex: Sex
-    weight_kg: Decimal
+    weight_lb: Decimal
 
 
 @dataclass(frozen=True)
@@ -129,15 +176,28 @@ class Targets:
 
 @dataclass(frozen=True)
 class Range:
-    """A floor and a ceiling, named.
+    """A floor and a ceiling, named, and checked.
 
     A plain tuple would be cheaper and `bounds[0]` at a call site tells the
     reader nothing. Worse, swapping floor and ceiling would pass every type
     check and every linter.
+
+    So would **crossing** them, which is the same thought carried one step
+    further. An inverted range fails silently in both directions: `clamp` returns
+    the floor for every input and ignores the ceiling, and `contains` returns
+    False for every input. Nothing raises, nothing logs, and the numbers are
+    quietly wrong.
+
+    The guard makes that impossible for all six range functions at once, rather
+    than for the one that happened to have the bug.
     """
 
     floor: int
     ceiling: int
+
+    def __post_init__(self) -> None:
+        if self.floor > self.ceiling:
+            raise ValueError(f"Range floor {self.floor} is above ceiling {self.ceiling}.")
 
     def clamp(self, value: int) -> int:
         return max(self.floor, min(self.ceiling, value))
@@ -174,7 +234,7 @@ class ClampResult:
 
 # --- rounding ----------------------------------------------------------------
 #
-# Per-kg arithmetic produces fractions and targets are whole numbers, so every
+# Per-pound arithmetic produces fractions and targets are whole numbers, so every
 # bound gets rounded. The direction is not arbitrary.
 #
 # **Floors round up, ceilings round down.** Both tighten the range. Rounding a
@@ -199,43 +259,68 @@ def _ceiling_of(value: Decimal) -> int:
 # with the calorie target. A single `suggested_bounds(profile)` would have to
 # hide the calorie dependency, and hiding it is how someone later computes fiber
 # against the wrong number.
+#
+# Every suggested range nests inside its absolute counterpart **by construction**,
+# with a `min` and a `max`, rather than by an ordering the caller has to get
+# right. A suggested range that leaves the absolute one recommends a number the
+# write path refuses, and the first person to hit it is someone the design never
+# pictured.
 
 
 def suggested_calorie_range(profile: Profile) -> Range:
     """The calorie band a target is expected to sit in.
 
-    Nested inside the absolute range, always. At 40 kcal/kg the per-kg ceiling
-    passes 5,000 at about 125 kg, and real people weigh more than that. Without
-    the `min` the app would recommend a number its own write path rejects, and
-    the first person to hit it would be someone the design never pictured.
+    Two crossings to keep in view, and they are mirror images.
+
+    At the top, the per-pound ceiling passes 5,000 at about 276 lb. The `min`
+    stops the app suggesting more than its own write path allows.
+
+    At the bottom, the fixed sex floor passes the per-pound ceiling at about
+    83 lb for a man and 66 lb for a woman, and the range inverts. That one is not
+    repaired here. `Profile` states the precondition, MAC-40 enforces it, and
+    `Range.__post_init__` raises if both are bypassed.
     """
-    per_kg_floor, per_kg_ceiling = SUGGESTED_CALORIES_PER_KG
+    per_lb_floor, per_lb_ceiling = SUGGESTED_CALORIES_PER_LB
     absolute = absolute_calorie_range()
 
-    floor = max(
-        _floor_of(per_kg_floor * profile.weight_kg),
-        SUGGESTED_CALORIE_FLOOR_BY_SEX[profile.sex],
+    return Range(
+        floor=max(
+            _floor_of(per_lb_floor * profile.weight_lb),
+            SUGGESTED_CALORIE_FLOOR_BY_SEX[profile.sex],
+        ),
+        ceiling=min(_ceiling_of(per_lb_ceiling * profile.weight_lb), absolute.ceiling),
     )
-    ceiling = min(_ceiling_of(per_kg_ceiling * profile.weight_kg), absolute.ceiling)
-
-    return Range(floor=max(floor, absolute.floor), ceiling=ceiling)
 
 
 def suggested_protein_range(profile: Profile) -> Range:
-    per_kg_floor, per_kg_ceiling = SUGGESTED_PROTEIN_G_PER_KG
+    per_lb_floor, per_lb_ceiling = SUGGESTED_PROTEIN_G_PER_LB
+    absolute = absolute_protein_range(profile)
+
     return Range(
-        floor=_floor_of(per_kg_floor * profile.weight_kg),
-        ceiling=_ceiling_of(per_kg_ceiling * profile.weight_kg),
+        floor=max(_floor_of(per_lb_floor * profile.weight_lb), absolute.floor),
+        ceiling=min(_ceiling_of(per_lb_ceiling * profile.weight_lb), absolute.ceiling),
     )
 
 
 def suggested_fiber_range(calories: int) -> Range:
-    """Keyed on the calorie target, not on body weight. See the constant."""
+    """Keyed on the calorie target, not on body weight. See the constant.
+
+    Nested inside the absolute fiber range for the same reason the calorie one
+    is. This function is public, so a caller can hand it an unclamped number:
+    `suggested_fiber_range(6000)` would otherwise return a ceiling of 120 when
+    the write path refuses anything over 100.
+
+    Inside `clamp_to_suggested` the calorie clamp runs first and hides that.
+    Relying on call order to keep a public function honest is how the order
+    eventually gets changed by someone who does not know it was load-bearing.
+    """
     per_1000_floor, per_1000_ceiling = SUGGESTED_FIBER_G_PER_1000_KCAL
+    absolute = absolute_fiber_range()
     thousands = Decimal(calories) / Decimal(1000)
+
     return Range(
-        floor=_floor_of(per_1000_floor * thousands),
-        ceiling=_ceiling_of(per_1000_ceiling * thousands),
+        floor=max(_floor_of(per_1000_floor * thousands), absolute.floor),
+        ceiling=min(_ceiling_of(per_1000_ceiling * thousands), absolute.ceiling),
     )
 
 
@@ -248,10 +333,10 @@ def absolute_calorie_range() -> Range:
 
 
 def absolute_protein_range(profile: Profile) -> Range:
-    per_kg_floor, per_kg_ceiling = ABSOLUTE_PROTEIN_G_PER_KG
+    per_lb_floor, per_lb_ceiling = ABSOLUTE_PROTEIN_G_PER_LB
     return Range(
-        floor=_floor_of(per_kg_floor * profile.weight_kg),
-        ceiling=_ceiling_of(per_kg_ceiling * profile.weight_kg),
+        floor=_floor_of(per_lb_floor * profile.weight_lb),
+        ceiling=_ceiling_of(per_lb_ceiling * profile.weight_lb),
     )
 
 
@@ -271,7 +356,7 @@ def clamp_to_suggested(targets: Targets, profile: Profile) -> ClampResult:
 
     Calories are clamped first, and fiber's range is then derived from the
     *clamped* calorie value rather than the one that arrived. A model that asks
-    for 6,000 kcal and 60 g of fiber should be judged on the 5,000 it actually
+    for 6,000 kcal and 110 g of fiber should be judged on the 5,000 it actually
     gets, not on the number it was refused.
     """
     adjustments: list[Adjustment] = []

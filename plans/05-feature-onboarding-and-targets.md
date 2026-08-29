@@ -2,7 +2,7 @@
 linear_id: f8247a39-754e-4586-bf01-9ee129a98aa2
 linear_title: "05 — Feature: Onboarding & Targets"
 linear_url: https://linear.app/hintology/document/05-feature-onboarding-and-targets-e112a3975b9a
-linear_updated_at: 2026-08-29T05:13:21.049Z
+linear_updated_at: 2026-08-29T18:45:25.025Z
 generated: true
 ---
 
@@ -49,16 +49,24 @@ Everything Mifflin-St Jeor needs, nothing else.
 | -- | -- |
 | Age | int |
 | Biological sex | enum |
-| Height | int, cm |
-| Current weight | decimal, kg |
+| Height | int, inches |
+| Current weight | decimal, pounds |
 | Goal | enum — cut / maintain / gain |
 | Activity level | enum — sedentary → very active |
 
 One question per screen. Progress indicator. Back navigation preserves answers.
 
-**US units on screen, metric on the wire.** Ruled 29 Aug 2026. Height is entered as feet and inches, weight in pounds. The client converts once at its edge and sends cm and kg; the server never learns the user thinks in pounds.
+**US units end to end. Corrected 29 Aug 2026**, reversing a decision made the same day.
 
-Mifflin-St Jeor is defined in cm and kg, so storing anything else means converting on every calculation and carrying rounding error into a health number. Convert at the boundary, not in the formula.
+Height is entered in feet and inches, weight in pounds, and **those are the units the API takes and the units the server works in**. No conversion in the client.
+
+The first version of this section said the opposite: US units on screen, metric on the wire, with the client converting at its edge. The reasoning was that Mifflin-St Jeor is defined in cm and kg, so the formula should get what it wants.
+
+That was backwards. It put a conversion in every client for the convenience of one formula, and it meant the API spoke a unit no screen ever shows. Debugging a request then means converting in your head before you can tell whether a number is sensible.
+
+The formula still needs metric. It converts once, where the formula lives. One conversion in one place beats one in every caller.
+
+Where published evidence is written per kilogram, such as protein grams per kg, the constant keeps the per-kg figure visible in the source and divides by the conversion factor there. A pre-computed `0.7257` cannot be checked against a paper without reversing it first.
 
 Height stays **one** control despite feet-and-inches looking like two. Hold total inches as the value, step by one, and format the label as `5'11"`. A second control on that screen would break the one-question-per-screen rule the whole flow is built on.
 
