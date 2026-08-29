@@ -20,7 +20,7 @@ for it, MAC-40's endpoints read and write it, MAC-44's history screen renders it
 | `apps/api/targets/admin.py`                     | Superuser-write, staff-read registration     |
 | `apps/api/targets/migrations/0001_initial.py`   | Generated                                    |
 | `apps/api/targets/tests/test_models.py`         | 11 tests                                     |
-| `apps/api/targets/tests/test_admin.py`          | 6 tests, added in review                     |
+| `apps/api/targets/tests/test_admin.py`          | 9 tests, added in review                     |
 | `apps/api/config/settings/base.py`              | `INSTALLED_APPS`                             |
 | `apps/api/pyproject.toml`                       | mypy's `files` list                          |
 
@@ -121,6 +121,22 @@ Deleting is superuser-only too, and is the least dangerous of the three because
 unlike an edit it is visible. What a `DailyLog` referencing a deleted version
 should do is E4's call, when that FK gets its `on_delete`.
 
+**`user` is frozen once the row exists.** A second review pass caught that the
+change form still offered it. The escape hatch is about the *numbers*, and
+reassigning ownership came along for free: moving a row to another account drags
+every `DailyLog` pointing at it, which is the history rewrite the model prevents,
+reachable from a dropdown.
+
+The obvious fix, `readonly_fields = ("user", "created_at")`, breaks adding.
+Django drops read-only fields from the form, so the add form posts no `user` and
+the save hits the not-null constraint. Confirmed by writing the test first: it
+saved a row with a null owner. `get_readonly_fields` freezes `user` only when
+`obj` is not None.
+
+Worth naming, because it recurs: **a test that opens a form proves nothing about
+whether the form can save.** `test_a_superuser_can_open_the_add_form` returned
+200 the whole time the add path was broken. The test that caught it posts.
+
 ## Blast radius
 
 Almost none. New app, new table, and nothing imports it yet. No endpoints means
@@ -137,8 +153,10 @@ Five mutations, each caught:
 | `for_user` drops its filter           | The cross-user isolation test fails |
 | `current()` leans on `Meta.ordering`  | The chainability test fails         |
 | `has_change_permission` returns `True`| The staff read-only test fails      |
+| Flat `readonly_fields` including `user`| The add-form save and settable tests fail |
+| `user` never frozen on the change form| The frozen-owner test fails         |
 
-Gates: ruff, ruff format, mypy on 50 files, 272 tests, `makemigrations --check`
+Gates: ruff, ruff format, mypy on 50 files, 275 tests, `makemigrations --check`
 clean, prettier clean.
 
 ## Deliberately unhandled

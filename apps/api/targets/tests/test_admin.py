@@ -132,3 +132,53 @@ def test_staff_can_still_see_the_list(staff_client, version):
 
     assert response.status_code == 200
     assert response.context["cl"].result_count == 1
+
+
+@pytest.mark.django_db
+def test_a_superuser_can_actually_save_a_new_version(superuser_client, owner):
+    """POSTs the add form rather than just opening it.
+
+    A GET returning 200 proves nothing about whether the form can save. A
+    required field left out of the form -- which is what `readonly_fields` does
+    -- renders fine and fails on submit.
+    """
+    response = superuser_client.post(
+        reverse("admin:targets_targetversion_add"),
+        {
+            "user": owner.pk,
+            "calories": 2150,
+            "protein_g": 176,
+            "fiber_g": 32,
+            "source": TargetVersion.Source.MANUAL,
+            "ai_rationale": "",
+            "effective_from": timezone.now().date().isoformat(),
+        },
+    )
+
+    assert response.status_code == 302, (
+        getattr(response, "context", None) and response.context["adminform"].form.errors
+    )
+    assert TargetVersion.objects.filter(user=owner).count() == 1
+
+
+@pytest.mark.django_db
+def test_user_is_frozen_once_the_version_exists(superuser_client, version):
+    """Reassigning ownership is not what the escape hatch is for.
+
+    Moving a row to another account drags every `DailyLog` pointing at it along,
+    which is exactly the history rewrite the append-only model prevents. Editing
+    the numbers is a supported repair; changing the owner is not.
+    """
+    response = change_page(superuser_client, version)
+
+    assert "user" in response.context["adminform"].readonly_fields
+
+
+@pytest.mark.django_db
+def test_user_is_still_settable_on_the_add_form(superuser_client):
+    """The other half of the same rule. A flat readonly tuple would freeze
+    `user` here too, and Django drops read-only fields from the form, so the add
+    would post nothing for it and fail on the not-null constraint."""
+    response = superuser_client.get(reverse("admin:targets_targetversion_add"))
+
+    assert "user" not in response.context["adminform"].readonly_fields

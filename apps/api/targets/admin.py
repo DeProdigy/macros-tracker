@@ -41,6 +41,27 @@ class TargetVersionAdmin(admin.ModelAdmin):
     # nothing.
     readonly_fields = ("created_at",)
 
+    def get_readonly_fields(self, request: HttpRequest, obj: TargetVersion | None = None):
+        """`user` is editable while adding and frozen once the row exists.
+
+        Locking it matters. The escape hatch above is about the *numbers* --
+        fixing a target set the API cannot express. Reassigning ownership came
+        along for free with the change form, and it is a different operation
+        entirely: moving the row to another account drags every `DailyLog`
+        pointing at it along with it, which is the history rewrite this model
+        exists to prevent, reachable from a dropdown.
+
+        It cannot be a flat `readonly_fields = ("user", "created_at")`, which is
+        the obvious one-liner and breaks adding. Django drops read-only fields
+        from the form entirely, so the add form would post no `user` and the
+        save would hit the not-null constraint. `test_a_superuser_can_actually_
+        save_a_new_version` posts the form rather than opening it, because a GET
+        returning 200 says nothing about whether a save works.
+        """
+        if obj is None:
+            return self.readonly_fields
+        return ("user", *self.readonly_fields)
+
     def has_add_permission(self, request: HttpRequest) -> bool:
         return bool(request.user.is_superuser)
 
