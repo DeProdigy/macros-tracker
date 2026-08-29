@@ -2,7 +2,7 @@
 linear_id: b635a58a-dae7-40f7-ac71-3fb35e84112b
 linear_title: "03 — Working Agreement & AI Workflow"
 linear_url: https://linear.app/hintology/document/03-working-agreement-and-ai-workflow-74c0d25e7dd2
-linear_updated_at: 2026-08-19T04:53:19.175Z
+linear_updated_at: 2026-08-29T16:34:01.939Z
 generated: true
 ---
 
@@ -22,7 +22,9 @@ This is a deliberate trade. Reviewing code teaches recognition — spotting a ba
 ## The loop
 
 ```
-Pick ticket
+Cut the epic into slices
+  → GATE 0 — check every slice ends with "a user can now..."
+  → Pick ticket
   → Claude produces an implementation plan
   → REVIEW GATE 1 — interrogate the plan
   → Claude implements
@@ -32,6 +34,46 @@ Pick ticket
 ```
 
 No ticket skips a gate. A ticket that feels too trivial to review is a ticket that should have been three lines of config.
+
+Gate 0 was added 29 Aug 2026. The loop used to start at "pick ticket", which quietly assumed the tickets were already cut well. E3 proved they were not: nine tickets, layered model to endpoint to screen, with the only model-provider call sitting fourth and nothing runnable on a phone until the sixth.
+
+## Gate 0 — cutting the epic into slices
+
+An epic is cut into tickets that go **through every layer**, from the database to a screen someone can tap. The opposite is layering: all the models, then all the endpoints, then all the screens.
+
+The test is **INVEST** (Bill Wake, 2003). A story should be Independent, Negotiable, **Valuable**, Estimable, Small, and Testable. Valuable is the word that forces the slice: value to a person using the app, not to the developer building it.
+
+**Each slice ends with a sentence starting "a user can now...". If that sentence cannot be written, it is not a slice.**
+
+E1 already worked this way. Doc 09 calls it "deploy early, deploy always", and a walking skeleton (Alistair Cockburn's term) is a vertical slice at epic scale.
+
+### Why, and it is not the usual reason
+
+Vertical slices normally pay off through early user feedback. This project has no users yet, so that argument does not apply.
+
+The payoff here is **risk order**. Layering builds the safe parts first and the dangerous part last. A vertical cut ships a working product before the risk arrives, so a bad answer costs a slice rather than an epic.
+
+### How to cut one
+
+Pick the thinnest thing a person can do end to end, then take these in order:
+
+1. **Happy path first.** Defer the error states, the empty states, and the variations
+2. **One rule at a time.** Ship the calculation without the special cases
+3. **Manual before automatic.** A user typing the value is a real product. The computed version is the next slice
+4. **Deterministic before AI.** The formula alone is shippable. Doc 18 already says so: the fallback numbers "are sound"
+
+### When a horizontal ticket is right
+
+These are allowed. Name which one applies, in the plan.
+
+* **No user-visible face exists yet.** A custom user model, a `TargetVersion` table. Forcing these into a slice invents a screen nobody asked for
+* **The generated client makes thin slices expensive.** Every API change costs a `pnpm generate:api`, a committed diff, and a drift check. Batching two or three related endpoints is often cheaper than three slices
+* **The plan gate makes tickets expensive.** Every ticket needs a written plan and a review before code. Small stories are nearly free on a team. They are not free here
+* **A safety control has to land before the thing it guards.** The clamp ships before the AI call that needs clamping. Order by danger, not by demo value
+
+The exception is the reason to write one sentence, not the reason to skip the question.
+
+**A ticket may claim one exception, not two. **[MAC-39](https://linear.app/hintology/issue/MAC-39/server-side-target-guardrails-the-two-tier-clamp) originally claimed "no user-visible face" and then also carried the Mifflin-St Jeor formula, which had no caller for a whole slice. The formula moved to the ticket that calls it. A ticket that names one rule and then quietly carries a second, unrelated job is how the exception list turns into a loophole.
 
 ## Gate 1 — the implementation plan
 
@@ -43,6 +85,7 @@ No ticket skips a gate. A ticket that feels too trivial to review is a ticket th
 4. **Where it touches existing code** — and anything it might break
 5. **What's deliberately not handled** — edge cases punted, and why that's safe
 6. **Open questions** — things the ticket doesn't answer that need a call
+7. **Which slice this is in**, and the "a user can now..." sentence that slice ends on. If the ticket is horizontal, name which Gate 0 exception it claims
 
 **The review is not "looks good."** Useful interrogation:
 
@@ -79,32 +122,11 @@ Then ask Claude to explain anything unfamiliar **before** merging. "Why is this 
 
 ## CLAUDE.md
 
-Replace the `you-implement` block in the repo's `CLAUDE.md` with:
+The repo's `CLAUDE.md` is where these rules are enforced, and it is the copy that wins. Read it there.
 
-```
-This is a learning project. The owner is levelling up React Native and Django
-by reviewing plans and code rather than writing it.
+This section used to hold the file's text verbatim. That copy drifted, which is exactly the failure it should have predicted: two places spelling the same rule, and only one of them getting updated. The "how to write" and vertical slice rules both landed in `CLAUDE.md` on 29 Aug 2026 and never reached this block.
 
-For every ticket:
-- Produce a full implementation plan BEFORE writing code
-- Plan must cover: files touched, approach, alternatives rejected,
-  Django/RN concepts in play, blast radius, what's deliberately unhandled,
-  and open questions
-- Wait for plan approval before implementing
-- Save the approved plan to plans/tickets/MAC-NN.md and commit it
-- In the PR description, call out anything the owner should look at closely
-  and anything you were unsure about
-
-When asked "why", explain the concept, not just this instance. Name the
-pattern. Say when it's the wrong choice.
-
-Always:
-- Regenerate packages/api-client after any API change
-- Explicit DRF serializers, never fields = "__all__"
-- Business logic in services.py, thin views
-- TypeScript strict; no `any` without a comment justifying it
-- Tests for anything with branching logic
-```
+So the block is gone. `CLAUDE.md` holds the operational rules. This doc holds the reasoning behind them, which is the half worth reading twice.
 
 ## Labels
 
@@ -121,6 +143,7 @@ Unchanged, minus the split label:
 * **Acceptance criteria** — checkable, specific
 * **Implementation guidance** — enough to pick up cold
 * **Before you start / Gotchas** — environment and traps
+* **Which slice**, and the "a user can now..." sentence it belongs to. Added 29 Aug 2026 with Gate 0. A ticket that cannot name its slice has not been cut, only listed
 
 ## Spike tickets
 
