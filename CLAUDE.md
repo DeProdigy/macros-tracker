@@ -37,6 +37,54 @@ Existing tickets still carry them; ignore them. Every ticket now gets the plan
 gate above and a full diff review before merge. The per-language rules that used
 to sit here are the sections below.
 
+## How to write
+
+Everything written here follows **ASD-STE100 Simplified Technical English**.
+That is the controlled language aircraft maintenance manuals use. Its rules stop
+a tired reader misreading an instruction.
+
+This covers READMEs, code comments, docstrings, `plans/tickets/`, commit
+messages, and PR descriptions. It covers user-facing copy too.
+
+### The sentence rules, everywhere
+
+- **Active voice.** Name who acts. "The compiler validates queries", not
+  "queries are validated"
+- **One idea per sentence.** If you need a comma to bolt on a second thought,
+  make it a second sentence
+- **Plain words.** "use", not "utilize". "help", not "facilitate". "many", not
+  "numerous". If a technical term is the accurate word, keep it and explain it
+  once
+- **Short paragraphs.** Three or four sentences
+- **Present tense.** "The clamp rejects the value", not "the clamp will reject"
+- **No em dashes.** Use a period or a comma
+
+### Length is not the same rule
+
+Simple sentences do not mean thin content. These two need different amounts of
+text and the difference is deliberate.
+
+**READMEs and runbooks say only what to do.** Exact commands, exact paths, the
+order to run them. Cut everything else. Someone reads these while something is
+broken.
+
+**Code comments and plan docs explain why, at whatever length that takes.** This
+is a learning project. A comment that names the pattern, says what was rejected,
+and says when the choice would be wrong is the deliverable, not decoration.
+Write those long thoughts in short sentences.
+
+The test for a comment: it should say something the code cannot. A comment that
+restates the line above it is noise at any reading level.
+
+### What not to write
+
+- Filler. "It is important to note that", "in order to", "due to the fact that"
+- Puffery. "load-bearing", "robust", "seamless", "powerful"
+- Metaphor nouns where a plain one exists. "substrate" is "base". "surface" is
+  "the set of endpoints"
+- Bold on every proper noun
+- Emoji in headings
+
 ## Layout
 
 pnpm + turbo monorepo (`pnpm@11.15.1`), workspaces `apps/*` and `packages/*`:

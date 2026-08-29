@@ -2,13 +2,15 @@
 
 [![CI](https://github.com/DeProdigy/macros-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/DeProdigy/macros-tracker/actions/workflows/ci.yml)
 
-A photo-based macro tracker. Snap or upload a photo of food, add a short
-description, an AI estimates calories / protein / fiber, and the entry persists
-against your daily targets — with a home dashboard, streaks, and an on-demand
-"what should I eat?" suggestion.
+A photo-based macro tracker.
 
-This is a **learning project** (levelling up React Native + Django end to end).
-The full plan lives in [`plans/`](./plans); start with
+Take a photo of your food and add a short description. An AI estimates the
+calories, protein, and fiber. The entry is saved against your daily targets.
+A home dashboard shows the day, and an on-demand suggestion answers "what should
+I eat?".
+
+This is a **learning project**, levelling up React Native and Django end to end.
+The full plan lives in [`plans/`](./plans). Start with
 [`plans/00-app-overview.md`](./plans/00-app-overview.md).
 
 ## Repo layout
@@ -25,30 +27,35 @@ macros-tracker/
 └── package.json      # pnpm workspace root
 ```
 
-The load-bearing architectural decision is the typed API contract:
-Django serializers → drf-spectacular → `openapi.json` → Orval → typed React
-Query hooks consumed by the mobile app. See
-[`plans/01-architecture.md`](./plans/01-architecture.md).
+One architectural decision shapes the rest: the API contract is generated, not
+written twice.
+
+```
+Django serializers → drf-spectacular → openapi.json → Orval → typed React Query hooks
+```
+
+The mobile app calls those hooks. Nobody hand-writes a request type. See
+[`plans/01-architecture-and-repo-structure.md`](./plans/01-architecture-and-repo-structure.md).
 
 ## Prerequisites
 
-- **Node** — the version pinned in [`.nvmrc`](./.nvmrc) (Node 22 LTS). Use
-  [nvm](https://github.com/nvm-sh/nvm), not Homebrew, so it doesn't fight your
-  PATH:
+- **Node**, at the version pinned in [`.nvmrc`](./.nvmrc), currently Node 22 LTS.
+  Use [nvm](https://github.com/nvm-sh/nvm), not Homebrew. Homebrew's Node fights
+  your PATH.
   ```bash
   nvm install   # reads .nvmrc
   nvm use
   ```
-- **pnpm** — managed via Corepack (pinned by the `packageManager` field in
-  `package.json`, no separate install needed):
+- **pnpm**, managed by Corepack. The `packageManager` field in `package.json`
+  pins the version, so there is nothing separate to install.
   ```bash
   corepack enable
   ```
-- **git** and, for repo/CI tasks, the **GitHub CLI** (`gh`).
+- **git**, and the **GitHub CLI** (`gh`) for repo and CI tasks.
 
-The backend (`apps/api`) additionally needs **Python 3.12+** (via [uv](https://docs.astral.sh/uv/))
-and **Docker** for its Postgres database — see [`apps/api/README.md`](./apps/api/README.md)
-for the backend quickstart (`docker compose up`, migrations, dev server).
+The backend needs two more things: **Python 3.12+** through
+[uv](https://docs.astral.sh/uv/), and **Docker** to run its Postgres database.
+[`apps/api/README.md`](./apps/api/README.md) has the backend quickstart.
 
 ## Setup from a clean clone
 

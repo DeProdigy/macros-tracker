@@ -1,13 +1,16 @@
 # API (Django)
 
-The Django + DRF backend. Postgres runs in Docker; the Django app runs natively
-(see [`plans/01-architecture.md`](../../plans/01-architecture.md)).
+The Django and DRF backend.
+
+Postgres runs in Docker. The Django app runs natively on your machine. See
+[`plans/01-architecture-and-repo-structure.md`](../../plans/01-architecture-and-repo-structure.md).
 
 ## Prerequisites
 
-- **[uv](https://docs.astral.sh/uv/)** — manages the Python version and dependencies
-  (pinned in `.python-version` / `pyproject.toml`).
-- **Docker Desktop running** — hosts the Postgres server. Check with `docker info`.
+- **[uv](https://docs.astral.sh/uv/)** manages the Python version and the
+  dependencies. Both are pinned, in `.python-version` and `pyproject.toml`.
+- **Docker Desktop must be running.** It hosts the Postgres server. Check it with
+  `docker info`.
 
 ## Quickstart (from a clean clone)
 
@@ -29,8 +32,9 @@ uv run python manage.py createsuperuser
 uv run python manage.py runserver
 ```
 
-`uv run <cmd>` executes inside the venv without activating it; run `source .venv/bin/activate`
-first if you'd rather call `python`/`manage.py` directly.
+`uv run <cmd>` runs a command inside the venv without activating it. If you would
+rather call `python` or `manage.py` directly, activate it first with
+`source .venv/bin/activate`.
 
 ## Settings
 
@@ -42,9 +46,11 @@ Split by environment under `config/settings/`, values via `django-environ`:
 | `local.py`      | dev (default via `manage.py`) | `DEBUG=True`, console email, browsable API       |
 | `production.py` | deploy (via `wsgi`/`asgi`)    | `DEBUG=False`, required secrets, HTTPS hardening |
 
-Config comes from the environment. Copy the repo-root `.env.example` to `apps/api/.env`
-and fill in values as needed — the `DATABASE_URL` default already matches the Docker
-Compose Postgres, so `migrate` works out of the box with no `.env`.
+Config comes from the environment. Copy the repo-root `.env.example` to
+`apps/api/.env` and fill in what you need.
+
+You can skip that for a first run. The `DATABASE_URL` default already matches the
+Docker Compose Postgres, so `migrate` works with no `.env` at all.
 
 ## Common commands
 
@@ -58,8 +64,8 @@ uv run python manage.py shell            # Django shell
 
 ## Tests
 
-Run from `apps/api`, with Docker Postgres running — tests use a separate,
-rolled-back test database (pytest ≈ RSpec).
+Run these from `apps/api`, with Docker Postgres running. The tests use their own
+database and roll it back after each test, so your dev data is safe.
 
 ```bash
 uv run pytest                                # run the whole suite
@@ -87,7 +93,7 @@ uv run mypy                 # type-check
 ## Deployment (Railway)
 
 Deployed to Railway: a Django service plus a managed Postgres 18, auto-deploying
-on merge to `main`. See [`plans/09-deployment.md`](../../plans/09-deployment.md).
+on merge to `main`. See [`plans/09-deployment-and-production-ops.md`](../../plans/09-deployment-and-production-ops.md).
 
 The service's **root directory is set to `apps/api`**. Without that, Railway's
 builder sees the repo-root `package.json` and tries to build a Node app.
