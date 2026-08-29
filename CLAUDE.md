@@ -37,6 +37,65 @@ Existing tickets still carry them; ignore them. Every ticket now gets the plan
 gate above and a full diff review before merge. The per-language rules that used
 to sit here are the sections below.
 
+## Slice epics vertically
+
+An epic is cut into tickets that each go **through every layer**, from the
+database to a screen someone can tap. The opposite is layering: all the models,
+then all the endpoints, then all the screens. Layering is the default this repo
+keeps drifting into, so it needs a rule.
+
+The agile name for the test is **INVEST** (Bill Wake, 2003). A story should be
+Independent, Negotiable, **Valuable**, Estimable, Small, and Testable. Valuable
+is the one that forces the slice: value means value to a person using the app,
+not to the developer building it.
+
+E1 already worked this way. Doc 09 calls it "deploy early, deploy always", and a
+walking skeleton (Alistair Cockburn's term) is a vertical slice at epic scale.
+
+### Why it matters here, and it is not the usual reason
+
+Vertical slices usually pay off through early user feedback. This project has no
+users yet, so that argument does not apply.
+
+The payoff here is **risk order**. Layering builds the safe parts first and the
+dangerous part last. E3 as first planned put the AI call fourth: the only piece
+that talks to an outside service, the only one that can return garbage, the only
+one with no precedent in this repo. A vertical cut ships a working product
+before that risk arrives, so a bad answer costs a slice instead of an epic.
+
+### How to cut one
+
+Pick the thinnest thing a person can do end to end. Then take these in order:
+
+1. **Happy path first.** Defer the error states, the empty states, and the
+   variations
+2. **One rule at a time.** Ship the calculation without the special cases
+3. **Manual before automatic.** A user typing the value is a real product. The
+   computed version is the next slice
+4. **Deterministic before AI.** The formula alone is shippable. Doc 18 already
+   says so: the fallback numbers "are sound"
+
+Each slice should end with a sentence starting "a user can now...". If you cannot
+write that sentence, it is not a slice.
+
+### When a horizontal ticket is right
+
+These are allowed. Say which one applies, in the plan.
+
+- **No user-visible face exists yet.** A custom user model, a `TargetVersion`
+  table. Forcing these into a slice invents a screen nobody asked for
+- **The generated client makes thin slices expensive.** Every API change costs a
+  `pnpm generate:api`, a committed diff, and a drift check. Batching two or three
+  related endpoints into one ticket is often cheaper than three slices
+- **The plan gate makes tickets expensive.** Every ticket needs a written plan
+  and a review before code. Small stories are nearly free on a team. They are not
+  free here
+- **A safety control has to land before the thing it guards.** The clamp ships
+  before the AI call that needs clamping. Order by danger, not by demo value
+
+The exception is the reason to write one sentence, not the reason to skip the
+question.
+
 ## How to write
 
 Everything written here follows **ASD-STE100 Simplified Technical English**.
