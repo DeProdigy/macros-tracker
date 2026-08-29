@@ -99,6 +99,25 @@ def test_current_is_deterministic_when_timestamps_collide(user):
 
 
 @pytest.mark.django_db
+def test_current_ignores_a_callers_ordering(user):
+    """`current()` orders explicitly instead of inheriting Meta.ordering.
+
+    It is a queryset method, so it is chainable. Leaning on the ambient ordering
+    means a caller who has already sorted the queryset gets the oldest row back
+    from a method whose whole job is returning the newest. Nobody does this
+    today; the point is that they cannot.
+    """
+    oldest = make_version(user, calories=2000)
+    newest = make_version(user, calories=2200)
+
+    reordered = TargetVersion.objects.order_by("created_at", "id")
+
+    assert reordered.current(user) == newest
+    # The caller's own ordering is untouched; only current() overrides it.
+    assert list(reordered.for_user(user)) == [oldest, newest]
+
+
+@pytest.mark.django_db
 def test_current_ignores_another_users_versions(user, other_user):
     """Cross-user isolation gets its own test rather than being assumed. This
     queryset has no permission layer above it -- MAC-40's views do -- so the

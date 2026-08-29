@@ -7,7 +7,24 @@ class TargetVersionQuerySet(models.QuerySet["TargetVersion"]):
         return self.filter(user=user)
 
     def current(self, user) -> "TargetVersion | None":
-        """The version in effect now, or None if the user has never set targets.
+        """The user's most recently created version, or None if they have none.
+
+        **"Most recently created", not "in effect on a given date".** The two are
+        the same row only while `effective_from` can never be in the future, and
+        nothing here enforces that -- MAC-40's create endpoint has to, by
+        rejecting a future date. If that ever changes, this method starts
+        returning a version that has not begun applying and its name becomes a
+        lie. The honest alternative would be
+        `.filter(effective_from__lte=<the caller's local date>).first()`, which
+        forces every caller to supply a date. Heavier than anything needs today,
+        and the note is here so the trade is visible from this file rather than
+        buried in a serializer validator.
+
+        Orders explicitly rather than leaning on `Meta.ordering`. This is a
+        queryset method, so it is chainable: `TargetVersion.objects
+        .order_by("created_at").current(user)` would otherwise hand back the
+        oldest row. No caller does that today, and one line removes the
+        possibility entirely.
 
         A method rather than a stored `is_current` boolean. A boolean would be a
         second source of truth that can disagree with the ordering, and keeping
@@ -18,7 +35,7 @@ class TargetVersionQuerySet(models.QuerySet["TargetVersion"]):
         state (they logged a meal and skipped onboarding), not an exception, and
         `.latest()` would force every caller to wrap this in a try block.
         """
-        return self.for_user(user).first()
+        return self.for_user(user).order_by("-created_at", "-id").first()
 
 
 class TargetVersion(models.Model):
@@ -44,9 +61,13 @@ class TargetVersion(models.Model):
         related_name="target_versions",
     )
 
-    calories = models.IntegerField()
-    protein_g = models.IntegerField()
-    fiber_g = models.IntegerField()
+    # `_g` is grams. The suffix comes from doc 02 and matches `FoodItem` in E4,
+    # so the two halves of the app measure protein the same way. help_text
+    # rather than a rename: it reaches the admin and, once MAC-40 serializes
+    # these, the generated OpenAPI schema and the TypeScript client with it.
+    calories = models.IntegerField(help_text="Daily calorie target, kcal.")
+    protein_g = models.IntegerField(help_text="Daily protein target, in grams.")
+    fiber_g = models.IntegerField(help_text="Daily fiber target, in grams.")
 
     source = models.CharField(max_length=32, choices=Source.choices)
 
@@ -55,7 +76,14 @@ class TargetVersion(models.Model):
     # Blank rather than null, per Django's own guidance on text fields: a
     # nullable CharField gives two ways to spell "empty" and every reader then
     # has to handle both. A manual edit has no rationale and stores "".
-    ai_rationale = models.TextField(blank=True)
+    ai_rationale = models.TextField(
+        blank=True,
+        help_text=(
+            "The model's plain-English explanation, shown under WHY THESE NUMBERS "
+            "on screen 9f. Around 60 words, naming the deficit, the rate, and why "
+            "protein is set per kilo of bodyweight. Empty for a manual edit."
+        ),
+    )
 
     # The calendar date these targets start applying to.
     #
@@ -76,11 +104,15 @@ class TargetVersion(models.Model):
         # and the history screen's card list.
         #
         # `-id` is not decoration. "Latest by created_at" is ambiguous the moment
-        # two rows share a timestamp, and `auto_now_add` inside one transaction
-        # can produce exactly that. Without the tiebreak, `current()` picks
-        # arbitrarily between them -- a nondeterminism at the centre of an
-        # append-only model, which would surface as a flaky test long before
-        # anyone saw it in production.
+        # two rows share a timestamp, and the database is then free to return
+        # either -- a nondeterminism at the centre of an append-only model.
+        #
+        # Ordinary saves do not collide: `auto_now_add` reads Python's clock per
+        # row, so two creates land microseconds apart even inside one
+        # transaction. Equal timestamps come from `bulk_create`, a data
+        # migration, a fixture that sets the column, or an `update()`. That is
+        # why the test has to force the collision, and why an earlier version of
+        # it passed with the tiebreak removed.
         ordering = ("-created_at", "-id")
         indexes = [
             # Covers both reads: current() and the history list. The FK's own

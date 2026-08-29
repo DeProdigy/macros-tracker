@@ -17,9 +17,10 @@ for it, MAC-40's endpoints read and write it, MAC-44's history screen renders it
 | ----------------------------------------------- | -------------------------------------------- |
 | `apps/api/targets/{__init__,apps}.py`           | New app                                      |
 | `apps/api/targets/models.py`                    | `TargetVersion` and its queryset             |
-| `apps/api/targets/admin.py`                     | Read-only registration                       |
+| `apps/api/targets/admin.py`                     | Superuser-write, staff-read registration     |
 | `apps/api/targets/migrations/0001_initial.py`   | Generated                                    |
-| `apps/api/targets/tests/test_models.py`         | 10 tests                                     |
+| `apps/api/targets/tests/test_models.py`         | 11 tests                                     |
+| `apps/api/targets/tests/test_admin.py`          | 6 tests, added in review                     |
 | `apps/api/config/settings/base.py`              | `INSTALLED_APPS`                             |
 | `apps/api/pyproject.toml`                       | mypy's `files` list                          |
 
@@ -58,7 +59,7 @@ Worth recording how the test for this went wrong first. The original version
 created two rows inside one transaction and asserted determinism, on the
 assumption that `auto_now_add` would collide. It does not: `auto_now_add` reads
 Python's clock per row, so ordinary saves land microseconds apart. Removing
-`-id` left all ten tests green.
+`-id` left every test green.
 
 The rewritten test forces the collision with a `.update()` on `created_at`,
 which is what `bulk_create`, a data migration, or a fixture would produce. It now
@@ -93,20 +94,32 @@ outstanding.
   to handle both. `blank=True` with `""` is the one place Django's own docs are
   unambiguous.
 
-## The admin is read-only
+## The admin: superusers write, staff read
 
-Editing a version in place contradicts the model: a `DailyLog` already points at
-the row, so changing its numbers silently rewrites history for every day that
-referenced it. The admin is exactly where someone does that by accident while
-trying to help a user.
+Revised in review. The first version was read-only for everyone, enforced by
+listing all eight fields in `readonly_fields`. Two pieces of review feedback
+pulled in opposite directions and the answer is a synthesis of both.
 
-Adding is blocked too. A hand-made row skips MAC-39's clamp and MAC-47's
-`onboarding_completed` write, so it would be a target set no code path can
-produce.
+The mechanism was wrong either way. A read-only field tuple is an allowlist
+maintained by hand: add a column in MAC-39 or MAC-47, forget `admin.py`, and
+that column is quietly editable with no test and no CI job to notice.
+`has_change_permission` states the rule once and covers every field that will
+ever exist. Same argument as `ai_rationale` being `blank` rather than nullable:
+one way to spell it beats two that can drift apart.
 
-Deleting stays available. Support occasionally needs to undo a bad row, and
-unlike an edit it is visible: the version disappears rather than quietly holding
-different numbers.
+The access was the owner's call. Superusers can add and edit; staff can only
+read. Editing still rewrites history, because a `DailyLog` captures its
+`target_version` FK at creation and changing the row changes what every day
+pointing at it was measured against. So the form is the escape hatch for a case
+the API cannot express, not the normal way to change someone's targets, and the
+docstring says so.
+
+Staff keep read access. Support answering "what are this user's targets?" should
+not need a superuser.
+
+Deleting is superuser-only too, and is the least dangerous of the three because
+unlike an edit it is visible. What a `DailyLog` referencing a deleted version
+should do is E4's call, when that FK gets its `on_delete`.
 
 ## Blast radius
 
@@ -115,15 +128,17 @@ Almost none. New app, new table, and nothing imports it yet. No endpoints means
 
 ## Verification
 
-Three mutations, each caught:
+Five mutations, each caught:
 
-| Mutation                         | Result                                        |
-| -------------------------------- | --------------------------------------------- |
-| Drop `-id` from the ordering     | The collision test fails                      |
-| `current()` returns `.last()`    | Two tests fail                                |
-| `for_user` drops its filter      | The cross-user isolation test fails           |
+| Mutation                              | Result                              |
+| ------------------------------------- | ----------------------------------- |
+| Drop `-id` from the ordering          | The collision test fails            |
+| `current()` returns `.last()`         | Two tests fail                      |
+| `for_user` drops its filter           | The cross-user isolation test fails |
+| `current()` leans on `Meta.ordering`  | The chainability test fails         |
+| `has_change_permission` returns `True`| The staff read-only test fails      |
 
-Gates: ruff, ruff format, mypy on 49 files, 265 tests, `makemigrations --check`
+Gates: ruff, ruff format, mypy on 50 files, 272 tests, `makemigrations --check`
 clean, prettier clean.
 
 ## Deliberately unhandled
@@ -133,11 +148,37 @@ clean, prettier clean.
 - **Setting `onboarding_completed`.** MAC-47.
 - **Endpoints** (MAC-40), **the clamp** (MAC-39), **the `AICall` table** (MAC-49).
 
+## What review changed
+
+Four things, all from the PR #28 round.
+
+**`current()` was named for a promise it did not keep.** The docstring said "the
+version in effect now"; the code returned the most recently *created* row and
+never read `effective_from`. Identical today, because nothing can write a future
+date. They diverge the moment MAC-40 accepts one, and then the method name is a
+lie. The docstring now says what the code does and names the invariant it leans
+on, so the obligation is visible from this file rather than buried in a
+serializer validator.
+
+**`current()` leaned on ambient ordering.** It is a queryset method, so it is
+chainable: `TargetVersion.objects.order_by("created_at").current(user)` returned
+the oldest row. Nobody does that today. One `.order_by()` removes the
+possibility, and it has a test.
+
+**The `Meta` comment contradicted the test that proved it.** It repeated the
+claim my own test disproved, that `auto_now_add` in one transaction produces
+equal timestamps. Two explanations of the same tiebreak disagreeing is worse
+than one, because the reader has to work out which is wrong.
+
+**`_g` was ambiguous.** It is grams, from doc 02, and it matches `FoodItem` in
+E4 so both halves of the app measure protein the same way. `help_text` rather
+than a rename, because it reaches the admin now and the generated OpenAPI schema
+and TypeScript client once MAC-40 serializes these. `ai_rationale` got one too,
+naming the screen it appears on and roughly how long it runs.
+
 ## Open questions
 
 - Doc 02's index section should gain the `TargetVersion (user, created_at)` line.
   A Linear edit, not a repo one, and not done here.
-- Whether `effective_from` should ever differ from the save date, which is what
-  a client-supplied value makes possible. No screen offers a future start date,
-  so MAC-40 should validate that it is not in the future rather than leaving the
-  question open.
+- **MAC-40 must reject a future `effective_from`.** Promoted from a musing to an
+  obligation by the review: `current()` is only correct while that holds.
