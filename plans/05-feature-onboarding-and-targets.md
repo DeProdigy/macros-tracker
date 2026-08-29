@@ -2,7 +2,7 @@
 linear_id: f8247a39-754e-4586-bf01-9ee129a98aa2
 linear_title: "05 — Feature: Onboarding & Targets"
 linear_url: https://linear.app/hintology/document/05-feature-onboarding-and-targets-e112a3975b9a
-linear_updated_at: 2026-08-20T04:01:49.867Z
+linear_updated_at: 2026-08-29T05:13:21.049Z
 generated: true
 ---
 
@@ -49,12 +49,20 @@ Everything Mifflin-St Jeor needs, nothing else.
 | -- | -- |
 | Age | int |
 | Biological sex | enum |
-| Height | int |
-| Current weight | decimal |
+| Height | int, cm |
+| Current weight | decimal, kg |
 | Goal | enum — cut / maintain / gain |
 | Activity level | enum — sedentary → very active |
 
 One question per screen. Progress indicator. Back navigation preserves answers.
+
+**US units on screen, metric on the wire.** Ruled 29 Aug 2026. Height is entered as feet and inches, weight in pounds. The client converts once at its edge and sends cm and kg; the server never learns the user thinks in pounds.
+
+Mifflin-St Jeor is defined in cm and kg, so storing anything else means converting on every calculation and carrying rounding error into a health number. Convert at the boundary, not in the formula.
+
+Height stays **one** control despite feet-and-inches looking like two. Hold total inches as the value, step by one, and format the label as `5'11"`. A second control on that screen would break the one-question-per-screen rule the whole flow is built on.
+
+No units toggle. Nothing in any doc asks for one, and adding it later means a `units` field on `User` plus a preference screen. If a metric user complains, that is a real signal rather than a guess.
 
 ### Moved to settings
 
@@ -86,6 +94,22 @@ Public app, health-adjacent numbers. AI output is **never** trusted directly:
 
 **Disclaimer required in the UI:** these are estimates, not medical advice. Non-negotiable for a health-adjacent public app, and App Review looks for it.
 
+### Two ranges, not one
+
+Ruled 29 Aug 2026, resolving a contradiction between this doc and doc 15. Doc 15's `6h` said the server clamps whatever it is given; this doc said adjusting past the safe bounds is permitted. Both were half right.
+
+**The suggested range** is the one above, derived from sex and body weight. AI output is clamped into it, always, with no exception. A user who steps outside it gets an orange warning and their number is saved exactly as typed.
+
+**The absolute range** is wider and nothing crosses it, not the model and not the user. Calories floor at **1,000**. Below that the request is rejected with a `400` rather than clamped, because silently storing a different number than the one someone typed is worse than telling them no. Protein and fiber get the same treatment.
+
+The two ranges answer two different questions. The suggested range asks "is this a sensible target?", and a person is allowed to disagree with the app about their own body. The absolute range asks "is this a target at all?", and nobody gets to disagree, the model included.
+
+One range would have forced a choice between two bad outcomes: clamp everything and someone eating 1,400 under medical supervision cannot record it while the app rewrites their number, or clamp nothing the user typed and someone sets 400.
+
+**Where 1,000 comes from, honestly.** A judgement call, not a clinical citation. Under roughly 800 is medically supervised territory a phone app has no business in, and 1,000 sits below every ordinary aggressive cut while still refusing the genuinely dangerous. The reasoning belongs in a comment above the constant, because this number will get questioned later.
+
+Both ranges are hardcoded constants in the `targets` app, never environment variables. Same reasoning as the JWT lifetimes: a safety-shaped constant should move through a pull request where someone reads the diff, and an env override splits the tested value from the live one.
+
 ## Endpoints
 
 ```
@@ -106,7 +130,7 @@ Accepting onboarding targets and manually adjusting them both write a `TargetVer
 ## Adjusting targets later
 
 * Editable at any time from settings
-* Every change writes a **new** `TargetVersion`; nothing is updated in place
+* Every change writes a new `TargetVersion`; nothing is updated in place
 * Existing `DailyLog` rows keep pointing at their original version
 * A history view showing targets over time makes the versioning tangible — and is genuinely interesting on a long cut
 
