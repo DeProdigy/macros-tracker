@@ -1,24 +1,28 @@
 # Mobile (Expo)
 
-The React Native app — Expo (managed workflow), **expo-router** for file-based
-navigation, TypeScript strict. Talks to the Django API in `apps/api`.
+The React Native app. Expo managed workflow, **expo-router** for file-based
+navigation, TypeScript in strict mode. It talks to the Django API in `apps/api`.
 
-On **Expo SDK 57**. Track the latest SDK rather than pinning back to match an
-older Expo Go: iOS Expo Go runs only the newest SDK, so the project and a
-current Expo Go stay aligned by both moving forward. MAC-20 replaces Expo Go
-with an EAS dev build, which embeds its own runtime and drops the constraint.
+We are on **Expo SDK 57**, and we track the newest SDK rather than pinning back.
+The reason is iOS Expo Go: it runs only the newest SDK. If both move forward
+together they stay compatible. MAC-20 replaces Expo Go with an EAS dev build,
+which carries its own runtime and removes the constraint.
 
 ## Prerequisites
 
 - **Node** (via [nvm](https://github.com/nvm-sh/nvm)) + **pnpm** (via Corepack) — see the repo root README.
-- **[Expo Go](https://expo.dev/go)** installed on your phone (App Store), and
-  **up to date** — check the supported SDK under Settings in the app. An older
-  Expo Go rejects the project before it loads any JS, which reads like a
-  connection failure but is a version mismatch.
-- **watchman** recommended (`brew install watchman`) so Metro sees file changes.
-- Phone and Mac on the **same Wi-Fi** for Metro to connect.
+- **[Expo Go](https://expo.dev/go)** on your phone, from the App Store, and
+  **up to date**. Check the supported SDK under Settings in the app.
 
-Docker/Postgres are **not** needed for the mobile app (that's the backend).
+  An old Expo Go rejects the project before it loads any JavaScript. That looks
+  like a connection failure. It is a version mismatch.
+
+- **watchman**, so Metro sees file changes. Install it with
+  `brew install watchman`.
+- Your phone and your Mac on the **same Wi-Fi**. Metro cannot connect otherwise.
+
+You do **not** need Docker or Postgres for the mobile app. Those are for the
+backend.
 
 ## Run it
 
@@ -28,8 +32,10 @@ cd apps/mobile
 pnpm dev              # start Metro (alias for `expo start`) -> scan the QR with Expo Go
 ```
 
-You should see the "Macros Tracker" home screen. Edit files under `app/` — routing
-is folder structure (`app/index.tsx` -> `/`, `app/(auth)/login.tsx` -> `/login`).
+You should see the "Macros Tracker" home screen.
+
+Edit files under `app/`. The folder structure is the routing: `app/index.tsx`
+becomes `/`, and `app/(auth)/login.tsx` becomes `/login`.
 
 ## Layout
 
@@ -43,16 +49,20 @@ app.json        static Expo config
 metro.config.js monorepo module resolution
 ```
 
-Config comes from the environment: set `EXPO_PUBLIC_API_URL` (see the repo-root
-`.env.example`). Anything with the `EXPO_PUBLIC_` prefix is inlined into the app
-bundle — **never put a secret there.**
+Config comes from the environment. Set `EXPO_PUBLIC_API_URL`, and see the
+repo-root `.env.example`.
+
+**Never put a secret in an `EXPO_PUBLIC_` variable.** The build copies anything
+with that prefix straight into the app bundle, where anyone can read it.
 
 ### Pointing the app at Django from a physical device
 
-`EXPO_PUBLIC_API_URL` defaults to `http://localhost:8000`, which is correct for
-the iOS simulator and web, but **wrong on a real phone**: there `localhost` is
-the phone itself, not the Mac running Django. The home screen's "API status"
-card reads `unreachable` and nothing else explains why.
+`EXPO_PUBLIC_API_URL` defaults to `http://localhost:8000`. That is right for the
+iOS simulator and for web. It is **wrong on a real phone**.
+
+On the phone, `localhost` means the phone itself, not the Mac running Django. The
+home screen's "API status" card reads `unreachable`, and nothing on screen
+explains why.
 
 Set it to your Mac's LAN IP (`ipconfig getifaddr en0`):
 
@@ -63,13 +73,13 @@ EXPO_PUBLIC_API_URL=http://192.168.1.x:8000 pnpm dev
 Two things have to agree for that to work:
 
 - Django must listen beyond loopback: `uv run python manage.py runserver 0.0.0.0:8000`.
-- That IP must be in `ALLOWED_HOSTS` in `apps/api/config/settings/local.py`,
-  which lists only `localhost`, `127.0.0.1` and `0.0.0.0` by default. Django
-  answers a missing host with `DisallowedHost`, not a connection error.
+- That IP must be in `ALLOWED_HOSTS` in `apps/api/config/settings/local.py`. By
+  default that list holds only `localhost`, `127.0.0.1`, and `0.0.0.0`. Django
+  answers a missing host with `DisallowedHost`, not with a connection error.
 
 ## Tests (Jest + React Native Testing Library)
 
-Runs in Node — **no Metro or device needed.**
+These run in Node. You need **no Metro and no device.**
 
 ```bash
 pnpm test                 # run once (jest)
@@ -78,8 +88,9 @@ pnpm test -- smoke        # only files matching "smoke"
 pnpm test -- -t "renders" # only tests whose name matches "renders"
 ```
 
-Test files live in `__tests__/` (or `*.test.tsx`). The stack is jest-expo 57 +
-jest 29 + RNTL 13 + react-test-renderer, matched to Expo SDK 57.
+Test files live in `__tests__/`, or anywhere as `*.test.tsx`. The stack is
+jest-expo 57, jest 29, RNTL 13, and react-test-renderer. All four are matched to
+Expo SDK 57.
 
 ## Lint & types
 
@@ -88,5 +99,5 @@ pnpm lint           # eslint (inherits the root flat config)
 pnpm check-types    # tsc --noEmit
 ```
 
-All four (`dev`/`lint`/`check-types`/`test`) also run from the repo root via
-Turborepo (e.g. `pnpm lint` at the root includes this package).
+All four scripts also run from the repo root through Turborepo. Running
+`pnpm lint` at the root includes this package.
