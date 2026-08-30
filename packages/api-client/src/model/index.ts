@@ -21,3 +21,4 @@ export * from "./sessionRefresh";
 export * from "./sessionRefreshRequest";
 export * from "./sexEnum";
 export * from "./user";
+export * from "./userSex";

@@ -110,6 +110,68 @@ def test_get_401s_with_an_expired_token(api_client, user):
 
 
 @pytest.mark.django_db
+@pytest.mark.django_db
+def test_patch_writes_sex_and_current_weight(authed_client, user):
+    """The two answers MAC-53 started storing, on the success path.
+
+    Kept apart from the four older settings fields because they arrive from
+    somewhere else: onboarding answers the app asks for, rather than settings a
+    user opens a screen to fill in.
+    """
+    response = authed_client.patch(
+        reverse("users:current"),
+        {"sex": "female", "current_weight_lb": "155.00"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    user.refresh_from_db()
+    assert user.sex == "female"
+    assert user.current_weight_lb == Decimal("155.00")
+
+
+@pytest.mark.django_db
+def test_sex_clears_with_an_empty_string_and_not_with_null(authed_client, user):
+    """The one inconsistency on this serializer, pinned so it stays deliberate.
+
+    Every other clearable field here takes `null`. `sex` is a blank-string column
+    and takes `""`. Review asked for `allow_null` with a coercion to match the
+    rest, and it does not survive the toolchain: `allow_null` on a blank-capable
+    ChoiceField makes drf-spectacular emit `nullable: true` *and* a `NullEnum`
+    member, and orval refuses the result with a duplicate-name error. The
+    generated client stops building, which is worse than the papercut.
+
+    So the difference is documented in the field's help text, which reaches the
+    OpenAPI schema and the client. This test is what stops someone "fixing" the
+    asymmetry without discovering that cost again.
+    """
+    user.sex = "male"
+    user.save(update_fields=["sex"])
+
+    assert (
+        authed_client.patch(reverse("users:current"), {"sex": ""}).status_code == status.HTTP_200_OK
+    )
+    user.refresh_from_db()
+    assert user.sex == ""
+
+    assert (
+        authed_client.patch(reverse("users:current"), {"sex": None}).status_code
+        == status.HTTP_400_BAD_REQUEST
+    )
+
+
+@pytest.mark.django_db
+def test_the_read_shape_reports_an_unanswered_sex_as_an_empty_string(authed_client):
+    """What the generated client has to be able to express.
+
+    Before this, `User.sex` was typed `SexEnum` with no blank member, so a client
+    switching over it with no default would have every unanswered user fall
+    through the switch with nothing raised.
+    """
+    response = authed_client.get(reverse("users:current"))
+
+    assert response.data["sex"] == ""
+
+
 def test_patch_writes_the_settings_fields(authed_client, user):
     response = authed_client.patch(
         reverse("users:current"),
@@ -213,6 +275,16 @@ def test_patch_cannot_rewrite_the_email(authed_client, user):
     "payload",
     [
         {"goal_weight_lb": "5.00"},
+        # The 500 this PR exists to prevent. 50 lb is below the band
+        # `suggested_calorie_range` can describe, and 600 is above it: both make
+        # the range invert and raise. The claim that the column validator turns
+        # that into a 400 is the reason it sits on the field, so it gets a test
+        # rather than trust in DRF copying model validators onto the serializer.
+        {"current_weight_lb": "50.00"},
+        {"current_weight_lb": "600.00"},
+        # Proves the choices actually gate the column, which `test_units.py`
+        # assumes when it maps every stored Sex to a calorie floor.
+        {"sex": "other"},
         {"goal_weight_lb": "2000.00"},
         {"goal_timeline_weeks": 0},
         {"goal_timeline_weeks": 500},

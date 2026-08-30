@@ -5,7 +5,7 @@
  * Typed contract consumed by apps/mobile via packages/api-client.
  * OpenAPI spec version: 0.1.0
  */
-import type { SexEnum } from "./sexEnum";
+import type { UserSex } from "./userSex";
 
 /**
  * The signed-in user, as the client is allowed to see them.
@@ -36,7 +36,7 @@ export interface User {
   readonly timezone: string;
   /** Whether the client should route to onboarding or to Today. */
   readonly onboarding_completed: boolean;
-  readonly sex: SexEnum;
+  readonly sex: (typeof UserSex)[keyof typeof UserSex];
   /**
    * @nullable
    * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$

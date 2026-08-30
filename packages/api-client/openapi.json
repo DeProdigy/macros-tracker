@@ -617,7 +617,7 @@
                         "maxLength": 64
                     },
                     "sex": {
-                        "description": "Biological sex, `female` or `male`. Asked during onboarding and stored because editing targets later needs it. Biological rather than gender: it feeds a formula fitted to body composition. Empty string means not answered.\n\n* `female` - Female\n* `male` - Male",
+                        "description": "Biological sex, `female` or `male`. Asked during onboarding and stored because editing targets later needs it. Biological rather than gender: it feeds a formula fitted to body composition.\n\n**Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `\"\"`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.\n\n* `female` - Female\n* `male` - Male",
                         "oneOf": [
                             {
                                 "$ref": "#/components/schemas/SexEnum"
@@ -841,7 +841,7 @@
                     "male"
                 ],
                 "type": "string",
-                "description": "* `female` - Female\n* `male` - Male"
+                "description": "**Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `\"\"`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.\n\n* `female` - Female\n* `male` - Male"
             },
             "User": {
                 "type": "object",
@@ -873,12 +873,15 @@
                         "description": "Whether the client should route to onboarding or to Today."
                     },
                     "sex": {
-                        "allOf": [
+                        "readOnly": true,
+                        "oneOf": [
                             {
                                 "$ref": "#/components/schemas/SexEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
                             }
-                        ],
-                        "readOnly": true
+                        ]
                     },
                     "current_weight_lb": {
                         "type": "string",

@@ -26,7 +26,9 @@ export interface PatchedUserSettingsRequest {
    * @maxLength 64
    */
   timezone?: string;
-  /** Biological sex, `female` or `male`. Asked during onboarding and stored because editing targets later needs it. Biological rather than gender: it feeds a formula fitted to body composition. Empty string means not answered.
+  /** Biological sex, `female` or `male`. Asked during onboarding and stored because editing targets later needs it. Biological rather than gender: it feeds a formula fitted to body composition.
+
+**Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `""`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.
 
 * `female` - Female
 * `male` - Male */

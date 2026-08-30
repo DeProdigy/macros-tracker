@@ -7,8 +7,10 @@
  */
 
 /**
- * * `female` - Female
- * `male` - Male
+ * **Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `""`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.
+
+* `female` - Female
+* `male` - Male
  */
 export type SexEnum = (typeof SexEnum)[keyof typeof SexEnum];
 

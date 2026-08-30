@@ -2,7 +2,7 @@
 linear_id: 794ca722-e849-40c9-9d7c-804cdee285e3
 linear_title: "02 — Data Model"
 linear_url: https://linear.app/hintology/document/02-data-model-2b01a7aaa301
-linear_updated_at: 2026-08-30T01:41:34.414Z
+linear_updated_at: 2026-08-30T02:05:16.816Z
 generated: true
 ---
 
@@ -164,7 +164,7 @@ TargetVersion
 
 This is the standard slowly-changing-dimension pattern — worth internalizing, since "why did last month's numbers change?" is a bug class it eliminates entirely.
 
-**Three amendments, made 29 Aug 2026 after **[MAC-38](https://linear.app/hintology/issue/MAC-38/targets-app-foundations-the-targetversion-model) **shipped the model.** This section described the table before the code existed, and it drifted from the code in three places.
+**Three amendments, made 29 Aug 2026.** They landed after [MAC-38](https://linear.app/hintology/issue/MAC-38/targets-app-foundations-the-targetversion-model) shipped the model. This section described the table before the code existed, and it drifted from the code in three places.
 
 The index is new here, not new in the code. [MAC-38](https://linear.app/hintology/issue/MAC-38/targets-app-foundations-the-targetversion-model) shipped `(user, -created_at)` in the initial migration. The FK indexes `user` alone, which still leaves a sort, and both readers of this table filter by user and order by recency: the current-targets lookup and the history screen's card list.
 
@@ -258,7 +258,7 @@ Before this the app asked for current weight and threw it away while keeping the
 
 This stores the **latest** weight, not a history. A weight log is a real feature and it is not this. When it arrives, `current_weight_lb` becomes a denormalized copy of the newest row and needs the same argument the daily totals get.
 
-**Everything is pounds. **`goal_weight_kg` shipped in [MAC-28](https://linear.app/hintology/issue/MAC-28/session-endpoints-refresh-sign-out-and-me) before the US units decision and was renamed with a converting migration. The unit suffix was always right; only the unit was wrong. A bare `goal_weight` is still the column that eventually receives pounds from one call site and something else from another.
+**Every weight is stored in pounds.** The column now called `goal_weight_lb` shipped as `goal_weight_kg` in [MAC-28](https://linear.app/hintology/issue/MAC-28/session-endpoints-refresh-sign-out-and-me) before the US units decision and was renamed with a converting migration. The unit suffix was always right; only the unit was wrong. A bare `goal_weight` is still the column that eventually receives pounds from one call site and something else from another.
 
 `sex` is `blank` with a `""` default rather than nullable, matching `name` and `dietary_constraints`. The two weights are genuinely nullable, because 0 lb is a value rather than an absence.
 

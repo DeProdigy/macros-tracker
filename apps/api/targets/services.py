@@ -76,8 +76,16 @@ def _per_pound(published_per_kg: str) -> Decimal:
 class Sex(StrEnum):
     """Biological sex, as Mifflin-St Jeor and the calorie floors need it.
 
-    Not a model field. The six onboarding answers are not persisted (doc 05
-    leaves that open), so this only ever travels through a request.
+    **Mirrors `accounts.models.Sex`, which is canonical and backs the `User.sex`
+    column.** A plain `StrEnum` here rather than Django's `TextChoices`, because
+    this module is pure functions with no Django in it.
+
+    `targets` holds a foreign key to `accounts`, so importing the real one back
+    would invert the app order doc 02 sets out. The values are written twice
+    instead, and `targets/tests/test_units.py` asserts they agree.
+
+    An earlier version of this docstring said the six onboarding answers are not
+    persisted. Two of them are, as of MAC-53.
     """
 
     FEMALE = "female"
@@ -136,10 +144,23 @@ ABSOLUTE_PROTEIN_G_PER_LB = (_per_pound("0.5"), _per_pound("3.5"))
 # three times the guideline intake, which makes it a typo.
 ABSOLUTE_FIBER_RANGE = (0, 100)
 
-# Below this the fixed sex floor passes the per-pound ceiling and a `Range`
-# inverts. That happens at 82.67 lb for a man and 66.14 lb for a woman, so 85
-# sits above both with room. See `Profile` for what enforces it.
+# The weight band the suggested calorie range can actually describe. Outside it
+# the floor and the ceiling cross and `Range` raises.
+#
+# **It inverts at both ends, for opposite reasons.** At the bottom the fixed sex
+# floor passes the per-pound ceiling: 82.67 lb for a man, 66.14 lb for a woman.
+# At the top the ceiling stops at ABSOLUTE_CALORIE_RANGE's 5,000 while the floor
+# keeps climbing, so they cross again at 501.05 lb.
+#
+# Review found the top one after the bottom one had already shipped, which is the
+# second time this shape has caught me out. A bound that clamps against a
+# constant while its opposite scales freely will cross somewhere. The only
+# question is whether anyone looked at both ends.
+#
+# 85 and 500 sit inside both crossings with room. `accounts.User` enforces them
+# on the column, and `targets/tests/test_units.py` pins the pair together.
 MINIMUM_SUPPORTED_WEIGHT_LB = Decimal("85")
+MAXIMUM_SUPPORTED_WEIGHT_LB = Decimal("500")
 
 
 # --- value types -------------------------------------------------------------
@@ -153,18 +174,20 @@ class Profile:
     activity feed Mifflin-St Jeor in MAC-51; none of them changes what counts as
     a safe target. Passing the whole answer set here would imply they do.
 
-    **A weight at or above `MINIMUM_SUPPORTED_WEIGHT_LB` is a precondition**, not
-    a suggestion. The sex floors are fixed and the calorie ceiling scales with
-    weight, so below 82.67 lb for a man the two cross and the range inverts.
+    **A weight between `MINIMUM_SUPPORTED_WEIGHT_LB` and
+    `MAXIMUM_SUPPORTED_WEIGHT_LB` is a precondition**, not a suggestion. Outside
+    that band the suggested calorie floor and ceiling cross and the range
+    inverts. See those constants for both crossings.
 
-    MAC-40 validates the weight on the way in, so a user gets a 400 rather than
-    reaching here. `Range.__post_init__` is the backstop for a caller that
-    forgets, and it raises rather than repairing: silently widening the ceiling
-    to meet the floor would invent a recommendation for a body these numbers were
-    never derived for.
+    `User.current_weight_lb` carries the same bounds as validators, so a bad
+    weight is a 400 at the edge rather than a 500 from in here.
+    `Range.__post_init__` is the backstop for a caller that builds a `Profile`
+    some other way, and it raises rather than repairing: silently widening the
+    ceiling to meet the floor would invent a recommendation for a body these
+    numbers were never derived for.
 
-    The realistic trigger is a typo, not a child. A user who types 70 instead of
-    170 lands here.
+    The realistic trigger is a typo, not an unusual person. 70 instead of 170 at
+    the bottom, 1000 instead of 100.0 at the top.
     """
 
     sex: Sex
@@ -279,10 +302,14 @@ def suggested_calorie_range(profile: Profile) -> Range:
     At the top, the per-pound ceiling passes 5,000 at about 276 lb. The `min`
     stops the app suggesting more than its own write path allows.
 
-    At the bottom, the fixed sex floor passes the per-pound ceiling at about
-    82.67 lb for a man and 66.14 lb for a woman, and the range inverts. That one is not
-    repaired here. `Profile` states the precondition, MAC-40 enforces it, and
-    `Range.__post_init__` raises if both are bypassed.
+    At the bottom, the fixed sex floor passes the per-pound ceiling at 82.67 lb
+    for a man and 66.14 lb for a woman, and the range inverts. The `min` above
+    creates a third crossing at the top: the ceiling stops at 5,000 while the
+    floor keeps climbing, so they meet again at 501.05 lb.
+
+    Neither inversion is repaired here. `Profile` states the band,
+    `User.current_weight_lb` enforces it, and `Range.__post_init__` raises if
+    both are bypassed.
     """
     per_lb_floor, per_lb_ceiling = SUGGESTED_CALORIES_PER_LB
     absolute = absolute_calorie_range()

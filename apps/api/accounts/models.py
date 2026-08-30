@@ -94,6 +94,27 @@ class UserManager(BaseUserManager["User"]):
         return self.create_user(email, password, **extra_fields)
 
 
+# The weight band `targets.services` can compute a calorie range for. Neither
+# number is a general sanity bound: outside them the suggested calorie floor and
+# ceiling cross and the range raises.
+#
+# It inverts at both ends. At the bottom the fixed sex floor passes the per-pound
+# ceiling at 82.67 lb. At the top the ceiling stops at 5,000 kcal while the floor
+# keeps climbing, so they meet again at 501.05 lb. Enforcing both here is what
+# makes a bad weight a 400 at the edge rather than a 500 from the range guard.
+#
+# The first version of this used 85 to 1000, and 1000 was picked as "catches a
+# typo" without checking the top crossing. Review found it: `PATCH` with 600 lb
+# was accepted and then crashed. A typo is exactly how you get there, since 1000
+# is what a mistyped 100.0 looks like.
+#
+# Duplicated from MINIMUM_SUPPORTED_WEIGHT_LB and MAXIMUM_SUPPORTED_WEIGHT_LB
+# rather than imported, because `accounts` importing `targets` inverts the app
+# dependency doc 02 sets out. `targets/tests/test_units.py` asserts they agree.
+WEIGHT_FLOOR_LB = Decimal("85")
+WEIGHT_CEILING_LB = Decimal("500")
+
+
 class Sex(models.TextChoices):
     """Biological sex, as Mifflin-St Jeor and the calorie floors need it.
 
@@ -182,20 +203,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     # than an absence.
     sex = models.CharField(max_length=16, choices=Sex.choices, blank=True, default="")
 
-    # 85 lb is not a general sanity bound, it is `targets.services`'s stated
-    # precondition: below it the suggested calorie floor passes the ceiling and
-    # the range inverts. Enforcing it here is what makes a bad weight a 400
-    # rather than a 500 from the range guard. 1000 catches a typo.
-    #
-    # Duplicated from MINIMUM_SUPPORTED_WEIGHT_LB rather than imported, because
-    # `accounts` importing `targets` inverts the app dependency doc 02 sets out.
-    # `test_units.py` asserts the two agree, which is the guard against drift.
     current_weight_lb = models.DecimalField(
         max_digits=6,
         decimal_places=2,
         null=True,
         blank=True,
-        validators=[MinValueValidator(Decimal("85")), MaxValueValidator(Decimal("1000"))],
+        validators=[MinValueValidator(WEIGHT_FLOOR_LB), MaxValueValidator(WEIGHT_CEILING_LB)],
     )
 
     # --- settings (doc 05) ---
@@ -218,12 +231,19 @@ class User(AbstractBaseUser, PermissionsMixin):
     # shows pounds, so the column was one call site away from receiving them
     # under a name that said otherwise. That is the exact failure the suffix
     # exists to prevent, so the suffix was right and the unit was wrong.
+    #
+    # Same band as `current_weight_lb` above, and review is why. The first
+    # version carried 44 to 880 across from the old 20 to 400 kg, so a goal of
+    # 44 lb passed while a current weight of 44 lb failed. Same measurement, same
+    # unit, opposite answers, and no comment explaining it because there was no
+    # reason. Nobody had picked 44 or 880 in pounds; the conversion just landed
+    # there.
     goal_weight_lb = models.DecimalField(
         max_digits=6,
         decimal_places=2,
         null=True,
         blank=True,
-        validators=[MinValueValidator(Decimal("44")), MaxValueValidator(Decimal("880"))],
+        validators=[MinValueValidator(WEIGHT_FLOOR_LB), MaxValueValidator(WEIGHT_CEILING_LB)],
     )
     # Weeks, not a target date. A date goes stale on its own and then reads as
     # a missed deadline; a duration stays meaningful whenever it is read.
