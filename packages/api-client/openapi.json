@@ -324,6 +324,132 @@
                 }
             }
         },
+        "/api/targets/": {
+            "get": {
+                "operationId": "listTargets",
+                "description": "The collection. Read it, or add to it.\n\n**There is deliberately no `history/` route.** Targets are append-only, so\nthis collection *is* the history, and MAC-44's history screen reads it. Two\nURLs for one list is the mistake the 20 Aug 2026 route audit removed, and it\nsurvives only because \"history\" is what the screen is called.\n\n**No `PATCH` and no `PUT` either.** Editing writes a new version through this\nsame `POST`, differing only in `source`. That is the append-only model\nshowing through the URL design rather than hiding behind it.",
+                "summary": "Every target version, newest first",
+                "tags": [
+                    "targets"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/TargetVersion"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "createTarget",
+                "description": "The collection. Read it, or add to it.\n\n**There is deliberately no `history/` route.** Targets are append-only, so\nthis collection *is* the history, and MAC-44's history screen reads it. Two\nURLs for one list is the mistake the 20 Aug 2026 route audit removed, and it\nsurvives only because \"history\" is what the screen is called.\n\n**No `PATCH` and no `PUT` either.** Editing writes a new version through this\nsame `POST`, differing only in `source`. That is the append-only model\nshowing through the URL design rather than hiding behind it.",
+                "summary": "Set new targets",
+                "tags": [
+                    "targets"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TargetVersionCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TargetVersionCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TargetVersionCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TargetVersion"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "401": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/targets/current/": {
+            "get": {
+                "operationId": "getCurrentTarget",
+                "description": "The version in effect now.\n\nA named singleton, which the route conventions allow: the client cannot\naddress this row by id, and \"the version in effect now\" is state the server\ngenuinely owns. Unlike `today`, which doc 07 rejected for the same test.\n\n**404 when the user has no versions**, not an empty 200. A user without\ntargets is a supported state rather than an error, but the resource genuinely\ndoes not exist, and a 200 with an empty body makes every caller null-check\nsomething that claims to be a target.",
+                "summary": "The targets in effect now",
+                "tags": [
+                    "targets"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TargetVersion"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "description": "No response body"
+                    },
+                    "404": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/uploads/": {
             "post": {
                 "operationId": "presignUpload",
@@ -842,6 +968,104 @@
                 ],
                 "type": "string",
                 "description": "**Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `\"\"`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.\n\n* `female` - Female\n* `male` - Male"
+            },
+            "SourceEnum": {
+                "enum": [
+                    "onboarding_ai",
+                    "manual"
+                ],
+                "type": "string",
+                "description": "* `onboarding_ai` - Onboarding (AI proposal)\n* `manual` - Manual edit"
+            },
+            "TargetVersion": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "calories": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Daily calorie target, kcal."
+                    },
+                    "protein_g": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Daily protein target, in grams."
+                    },
+                    "fiber_g": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Daily fiber target, in grams."
+                    },
+                    "source": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SourceEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "ai_rationale": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "The model's plain-English explanation, shown under WHY THESE NUMBERS on screen 9f. Around 60 words, naming the deficit, the rate, and why protein is set from body weight. Empty for a manual edit."
+                    },
+                    "effective_from": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "ai_rationale",
+                    "calories",
+                    "created_at",
+                    "effective_from",
+                    "fiber_g",
+                    "id",
+                    "protein_g",
+                    "source"
+                ]
+            },
+            "TargetVersionCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "calories": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "description": "Daily calorie target, kcal."
+                    },
+                    "protein_g": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "description": "Daily protein target, in grams."
+                    },
+                    "fiber_g": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "description": "Daily fiber target, in grams."
+                    },
+                    "effective_from": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                },
+                "required": [
+                    "calories",
+                    "effective_from",
+                    "fiber_g",
+                    "protein_g"
+                ]
             },
             "User": {
                 "type": "object",
