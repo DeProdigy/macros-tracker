@@ -2,7 +2,7 @@
 linear_id: 794ca722-e849-40c9-9d7c-804cdee285e3
 linear_title: "02 — Data Model"
 linear_url: https://linear.app/hintology/document/02-data-model-2b01a7aaa301
-linear_updated_at: 2026-08-30T02:05:16.816Z
+linear_updated_at: 2026-08-30T02:21:11.067Z
 generated: true
 ---
 
@@ -214,8 +214,8 @@ User (custom, AbstractBaseUser)
   onboarding_completed   BooleanField                  # server-derived: has a TargetVersion
   onboarding_skipped_at  DateTimeField, nullable       # user chose "Not now" on 9d
   sex                    CharField, blank              # "female" | "male", from onboarding
-  current_weight_lb      DecimalField, nullable        # pounds, 85-1000
-  goal_weight_lb         DecimalField, nullable        # pounds, 44-880
+  current_weight_lb      DecimalField, nullable        # pounds, 85-500
+  goal_weight_lb         DecimalField, nullable        # pounds, 85-500
   created_at
   deleted_at             DateTimeField, nullable       # soft delete
 
@@ -260,7 +260,13 @@ This stores the **latest** weight, not a history. A weight log is a real feature
 
 **Every weight is stored in pounds.** The column now called `goal_weight_lb` shipped as `goal_weight_kg` in [MAC-28](https://linear.app/hintology/issue/MAC-28/session-endpoints-refresh-sign-out-and-me) before the US units decision and was renamed with a converting migration. The unit suffix was always right; only the unit was wrong. A bare `goal_weight` is still the column that eventually receives pounds from one call site and something else from another.
 
+**Both weights share one band, 85 to 500 lb.** They measure the same thing in the same unit, so disagreeing would need a reason and there is not one. The numbers are not a sanity check: outside them the suggested calorie floor and ceiling cross and the range raises. It inverts at 82.67 lb going down, and again at 501.05 lb going up, because the ceiling stops at 5,000 kcal while the floor keeps climbing.
+
+The old `goal_weight_kg` allowed 20 to 400 kg, which does not nest inside the new band: 20 kg is 44.09 lb and 400 kg is 881.85 lb. Migration 0006 refuses to convert a row that would land outside, rather than writing one its own validators reject.
+
 `sex` is `blank` with a `""` default rather than nullable, matching `name` and `dietary_constraints`. The two weights are genuinely nullable, because 0 lb is a value rather than an absence.
+
+`sex` also clears with `""` and not with `null`, unlike every other clearable field on `PATCH /api/users/me/`. That is a toolchain compromise rather than a design choice: `allow_null` on a blank-capable `ChoiceField` makes drf-spectacular emit a shape orval cannot name, and the client stops building. The field's help text says so.
 
 `accounts.models.Sex` is the canonical enum, and `targets.services.Sex` mirrors it as a plain `StrEnum` because that module holds pure functions with no Django in it. `targets` cannot import `accounts` without inverting the app order above, so the values are written twice and `targets/tests/test_units.py` asserts they agree. The same test pins the 85 lb weight floor against `MINIMUM_SUPPORTED_WEIGHT_LB`, which is a precondition rather than a sanity bound: below it the suggested calorie range inverts.
 

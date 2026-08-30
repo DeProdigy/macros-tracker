@@ -179,7 +179,7 @@ class UserSettingsSerializer(serializers.ModelSerializer):
             },
             "current_weight_lb": {
                 "help_text": (
-                    "Current body weight in pounds, 85–1000. Asked during onboarding "
+                    "Current body weight in pounds, 85–500. Asked during onboarding "
                     "and kept, because a target set in Settings weeks later has to be "
                     "bounded against something. The 85 floor is not a sanity check: "
                     "below it the suggested calorie range inverts. Null means not "
@@ -188,7 +188,9 @@ class UserSettingsSerializer(serializers.ModelSerializer):
             },
             "goal_weight_lb": {
                 "help_text": (
-                    "Target body weight in pounds, 44–880. Null clears it back to unanswered."
+                    "Target body weight in pounds, 85–500, the same band as the current "
+                    "weight because they measure the same thing. Null clears it back "
+                    "to unanswered."
                 )
             },
             "goal_timeline_weeks": {
@@ -223,16 +225,6 @@ class UserSettingsSerializer(serializers.ModelSerializer):
         exactly one empty value in the database. Clients still say "clear this"
         with null, the same way they clear the numeric fields, and this is the
         one place that difference is absorbed.
-        """
-        return value or ""
-
-    def validate_sex(self, value: str) -> str:
-        """Turn a cleared `sex` into the empty string the column stores.
-
-        `allow_null` lets the request through; this is what stops `None` reaching
-        a `NOT NULL` column. The field is blank-with-default rather than nullable
-        (ruff DJ001, and the same call as `name`), so `""` is what "unanswered"
-        looks like in the database, and clients should not have to know that.
         """
         return value or ""
 

@@ -21,6 +21,45 @@ from django.db import migrations, models
 
 POUNDS_PER_KG = Decimal("2.20462262")
 
+# The band the new validators enforce, repeated here because a migration must
+# not import from models: the model moves on and the migration has to keep
+# describing the schema as it was at this point.
+NEW_FLOOR_LB = Decimal("85")
+NEW_CEILING_LB = Decimal("500")
+
+
+def refuse_unconvertible_rows(apps, schema_editor):
+    """Stop before writing a row the new bounds will reject.
+
+    The old column allowed 20 to 400 kg. The new one allows 85 to 500 lb, which
+    is 38.56 to 226.80 kg, so the two do not nest: a legacy value at either
+    extreme converts to something the `AlterField` below refuses. Left alone the
+    migration would write it anyway, because validators do not run on a
+    `RunPython` save, and the row would exist and be unsavable.
+
+    Raising rather than clamping. Clamping would silently change a number a
+    person entered, and this migration was hand-written specifically to avoid
+    doing that. Raising makes a deploy stop and an operator look, which is the
+    right amount of noise for a row nobody expected to exist.
+
+    Against an empty table this does nothing, which is the case today.
+    """
+    User = apps.get_model("accounts", "User")
+    db = schema_editor.connection.alias
+
+    unconvertible = [
+        (user.pk, user.goal_weight_lb)
+        for user in User.objects.using(db).exclude(goal_weight_lb=None).iterator()
+        if not (NEW_FLOOR_LB <= (user.goal_weight_lb * POUNDS_PER_KG) <= NEW_CEILING_LB)
+    ]
+    if unconvertible:
+        raise RuntimeError(
+            "These goal weights convert to pounds outside the new "
+            f"{NEW_FLOOR_LB}-{NEW_CEILING_LB} lb band, so the migration would write "
+            f"rows their own validators reject: {unconvertible}. Decide what each "
+            "should become and set it before migrating."
+        )
+
 
 def kilograms_to_pounds(apps, schema_editor):
     # `using=` on both, matching 0003 in this app. Without it a `migrate
@@ -55,19 +94,20 @@ class Migration(migrations.Migration):
             old_name="goal_weight_kg",
             new_name="goal_weight_lb",
         ),
+        migrations.RunPython(refuse_unconvertible_rows, migrations.RunPython.noop),
         migrations.RunPython(kilograms_to_pounds, pounds_to_kilograms),
-        # Widened to six digits, and re-bounded to the band `targets.services`
-        # can actually compute a calorie range for.
+        # Re-bounded to the band `targets.services` can compute a calorie range
+        # for, and deliberately not a conversion of the old 20-400 kg.
         #
-        # Not a conversion of the old 20-400 kg. The first version of this used
-        # 44 to 880, eyeballed from those, and both ends were wrong: 400 kg is
-        # 881.85 lb, so a stored maximum would have converted to a value its own
-        # validator then rejected. The row would exist and be unsavable through
-        # PATCH or the admin.
+        # The two do not nest. 20 kg is 44.09 lb, below the new floor, and 400 kg
+        # is 881.85 lb, well above the new ceiling. So a legacy value at either
+        # extreme converts to something this AlterField then rejects, and the row
+        # would exist while being unsavable through PATCH or the admin.
         #
-        # The table is empty, so nothing breaks today. The reason this migration
-        # was hand-written was to be correct for rows that do exist, and a bound
-        # that rejects the value it just wrote is not that.
+        # `refuse_unconvertible_rows` above is what stops that happening quietly.
+        # The bounds are not the thing to loosen: 500 lb is where the suggested
+        # calorie range stops working, and 85 lb is where it starts. A goal of
+        # 20 kg was never a real answer either.
         migrations.AlterField(
             model_name="user",
             name="goal_weight_lb",

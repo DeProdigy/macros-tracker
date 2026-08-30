@@ -94,9 +94,28 @@ The first version had 44 to 880 on one and 85 to 1000 on the other, so a goal of
 
 Nobody had picked 44 or 880 in pounds. They were 20 and 400 kg carried across, and
 carried wrong: 400 kg is 881.85 lb, so a stored maximum would have converted to a
-value its own validator then rejected. The row would exist and be unsavable.
+value its own validator then rejected.
 
 Both share `WEIGHT_FLOOR_LB` and `WEIGHT_CEILING_LB` now.
+
+**Tightening the ceiling to 500 made that gap wider, not narrower**, which review
+caught after I had written a comment claiming the opposite. The old column
+allowed 20 to 400 kg; the new one allows 38.56 to 226.80 kg in disguise. Neither
+end nests:
+
+```
+ 20 kg ->  44.09 lb   below 85
+400 kg -> 881.85 lb   above 500
+```
+
+Validators do not run on a `RunPython` save, so the migration would have written
+those rows regardless and left them unsavable. `refuse_unconvertible_rows` stops
+before the conversion and raises, naming the rows.
+
+Raising rather than clamping. Clamping silently changes a number a person
+entered, and avoiding exactly that is why the migration was hand-written. Raising
+makes a deploy stop and someone look, which is the right amount of noise for a row
+nobody expected. Against an empty table it does nothing.
 
 ## Two values written twice, and the tests that make that safe
 
@@ -154,7 +173,7 @@ writing them.
 
 ## Verification
 
-Four mutations, each caught:
+Five mutations, each caught:
 
 | Mutation | Result |
 | ------------------------------------------- | ------------------------ |
@@ -162,8 +181,9 @@ Four mutations, each caught:
 | A third `Sex` value with no calorie floor | Two tests fail |
 | The migration's `*` becomes `/` | Two migration tests fail |
 | The `RunPython` line is deleted | The conversion test fails |
+| The refusal guard is removed | The out-of-bounds test fails |
 
-Gates: ruff, ruff format, mypy on 53 files, 333 tests, `makemigrations --check`
+Gates: ruff, ruff format, mypy on 53 files, 334 tests, `makemigrations --check`
 clean, prettier, `pnpm lint`, `pnpm check-types`, `pnpm test`.
 
 ## Deliberately unhandled

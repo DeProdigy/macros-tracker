@@ -34,13 +34,13 @@ export interface PatchedUserSettingsRequest {
 * `male` - Male */
   sex?: (typeof PatchedUserSettingsRequestSex)[keyof typeof PatchedUserSettingsRequestSex];
   /**
-   * Current body weight in pounds, 85–1000. Asked during onboarding and kept, because a target set in Settings weeks later has to be bounded against something. The 85 floor is not a sanity check: below it the suggested calorie range inverts. Null means not answered.
+   * Current body weight in pounds, 85–500. Asked during onboarding and kept, because a target set in Settings weeks later has to be bounded against something. The 85 floor is not a sanity check: below it the suggested calorie range inverts. Null means not answered.
    * @nullable
    * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
    */
   current_weight_lb?: string | null;
   /**
-   * Target body weight in pounds, 44–880. Null clears it back to unanswered.
+   * Target body weight in pounds, 85–500, the same band as the current weight because they measure the same thing. Null clears it back to unanswered.
    * @nullable
    * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
    */

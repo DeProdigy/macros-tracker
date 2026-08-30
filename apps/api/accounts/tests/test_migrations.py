@@ -191,3 +191,27 @@ def test_0006_leaves_an_unanswered_goal_weight_null():
     user = new_apps.get_model("accounts", "User").objects.get(email="null@example.com")
 
     assert user.goal_weight_lb is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_0006_refuses_a_goal_weight_that_would_convert_out_of_bounds():
+    """The gap between the old bounds and the new ones, guarded.
+
+    The old column allowed 20 to 400 kg. The new one allows 85 to 500 lb, which
+    is 38.56 to 226.80 kg, so the two do not nest. 30 kg converts to 66.14 lb,
+    below the new floor.
+
+    Left alone the migration writes it anyway, because validators do not run on a
+    `RunPython` save. The row would exist and be unsavable through PATCH or the
+    admin, which is the failure this migration was hand-written to avoid.
+
+    It raises rather than clamping. Clamping silently changes a number a person
+    entered; raising makes a deploy stop and someone look.
+    """
+    old_apps = _migrate(BEFORE_POUNDS)
+    old_apps.get_model("accounts", "User").objects.create(
+        email="tiny@example.com", goal_weight_kg=Decimal("30.00")
+    )
+
+    with pytest.raises(RuntimeError, match="outside the new"):
+        _migrate(AFTER_POUNDS)

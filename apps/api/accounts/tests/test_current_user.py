@@ -110,7 +110,6 @@ def test_get_401s_with_an_expired_token(api_client, user):
 
 
 @pytest.mark.django_db
-@pytest.mark.django_db
 def test_patch_writes_sex_and_current_weight(authed_client, user):
     """The two answers MAC-53 started storing, on the success path.
 
@@ -172,6 +171,7 @@ def test_the_read_shape_reports_an_unanswered_sex_as_an_empty_string(authed_clie
     assert response.data["sex"] == ""
 
 
+@pytest.mark.django_db
 def test_patch_writes_the_settings_fields(authed_client, user):
     response = authed_client.patch(
         reverse("users:current"),
