@@ -67,14 +67,19 @@ corrected with this ticket.
 The ticket said doc 15's values are a starting point to justify, not copy. Two of
 these are well supported. The rest are judgement, and the comments say so.
 
-**Well supported.** Protein at 1.6 to 2.5 g/kg: the 1.6 to 2.2 band for muscle
-retention in a deficit is replicated across many trials, and the ceiling is
-widened because the evidence says no *added* benefit above 2.2, not that 2.4 is
-unwise. Fiber at 10 to 20 g per 1,000 kcal brackets the US Dietary Guidelines
-figure of 14.
+Every per-weight figure below is quoted in its **published unit**, which is per
+kilogram, and converted to per pound in the code. That is deliberate: the source
+number is the one a reader can look up, and burying it behind a conversion makes
+the constant uncheckable.
 
-**Judgement calls.** Calories at 22 to 40 kcal/kg, floored by 1,200 (female) or
-1,500 (male). The absolute range of 1,000 to 5,000, which is the owner's.
+**Well supported.** Protein at 1.6 to 2.5 g per kg: the 1.6 to 2.2 band for
+muscle retention in a deficit is replicated across many trials, and the ceiling
+is widened because the evidence says no *added* benefit above 2.2, not that 2.4
+is unwise. Fiber at 10 to 20 g per 1,000 kcal brackets the US Dietary Guidelines
+figure of 14, and needs no conversion because it is already per calorie.
+
+**Judgement calls.** Calories at 22 to 40 kcal per kg, floored by 1,200 (female)
+or 1,500 (male). The absolute range of 1,000 to 5,000, which is the owner's.
 
 Doc 15's fixed 1,500 to 3,200 is right for a mid-sized adult and wrong at both
 ends. It forbids a 110 lb woman a sensible target and warns a 220 lb man about a
@@ -203,7 +208,7 @@ proves nothing is worse than no assertion, because it looks like coverage.
 
 ## Open questions
 
-- **Is 2.5 g/kg the right protein ceiling?** Widened from the evidence band to
+- **Is 2.5 g per kg the right protein ceiling?** Widened from the evidence band to
   cut false warnings. Arguable either way.
 - **Should a calorie ceiling exist in the suggested range at all?** Nobody is
   harmed by a high target, and the absolute range already catches typos. Kept

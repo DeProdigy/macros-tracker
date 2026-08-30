@@ -82,8 +82,9 @@ class Sex(StrEnum):
 
 # Calories per pound of body weight, for the suggested range.
 #
-# **Judgement, not a citation.** 22 kcal/kg lands near an aggressive but ordinary
-# cut and 40 near a generous bulk. Doc 15's prototype used a fixed 1,500-3,200,
+# **Judgement, not a citation.** The source figures are 22 and 40 kcal per
+# *kilogram*, which `_per_pound` converts. 22 lands near an aggressive but
+# ordinary cut and 40 near a generous bulk. Doc 15's prototype used a fixed 1,500-3,200,
 # which is right for a mid-sized adult and wrong at both ends: it forbids a
 # 110 lb woman a sensible target and warns a 220 lb man about a reasonable one.
 SUGGESTED_CALORIES_PER_LB = (_per_pound("22"), _per_pound("40"))
@@ -98,8 +99,10 @@ SUGGESTED_CALORIE_FLOOR_BY_SEX = {
 
 # Protein per pound, for the suggested range.
 #
-# **The best-supported numbers in this module.** 1.6 to 2.2 g/kg for muscle
-# retention in a deficit is replicated across many trials. The ceiling is widened
+# **The best-supported numbers in this module**, and the reason the source unit
+# is kept visible. 1.6 to 2.2 g per *kilogram* for muscle retention in a deficit
+# is replicated across many trials, and that is the figure a reader can look up.
+# The ceiling is widened
 # to 2.5 deliberately: the evidence says there is no *added* benefit above ~2.2,
 # not that 2.4 is unwise, and warning a high-protein eater on every save trains
 # them to ignore the warning that matters.
@@ -123,8 +126,9 @@ SUGGESTED_FIBER_G_PER_1000_KCAL = (Decimal("10"), Decimal("20"))
 # too, and it is there to catch a typo rather than to police an athlete.
 ABSOLUTE_CALORIE_RANGE = (1000, 5000)
 
-# Wide on purpose. 0.5 g/kg is below the RDA and 3.5 is above any studied
-# benefit, so a value outside this is a mistyped number rather than a preference.
+# Wide on purpose. 0.5 g per *kilogram* is below the RDA and 3.5 is above any
+# studied benefit, so a value outside this is a mistyped number rather than a
+# preference. Converted per pound like the rest.
 ABSOLUTE_PROTEIN_G_PER_LB = (_per_pound("0.5"), _per_pound("3.5"))
 
 # Zero is allowed: a user may not want a fiber target at all, and refusing that
