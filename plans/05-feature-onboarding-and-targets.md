@@ -2,7 +2,7 @@
 linear_id: f8247a39-754e-4586-bf01-9ee129a98aa2
 linear_title: "05 — Feature: Onboarding & Targets"
 linear_url: https://linear.app/hintology/document/05-feature-onboarding-and-targets-e112a3975b9a
-linear_updated_at: 2026-08-29T05:13:21.049Z
+linear_updated_at: 2026-08-30T01:05:08.660Z
 generated: true
 ---
 
@@ -49,20 +49,26 @@ Everything Mifflin-St Jeor needs, nothing else.
 | -- | -- |
 | Age | int |
 | Biological sex | enum |
-| Height | int, cm |
-| Current weight | decimal, kg |
+| Height | int, inches |
+| Current weight | decimal, pounds |
 | Goal | enum — cut / maintain / gain |
 | Activity level | enum — sedentary → very active |
 
 One question per screen. Progress indicator. Back navigation preserves answers.
 
-**US units on screen, metric on the wire.** Ruled 29 Aug 2026. Height is entered as feet and inches, weight in pounds. The client converts once at its edge and sends cm and kg; the server never learns the user thinks in pounds.
+**US units end to end. Corrected 29 Aug 2026**, reversing a decision made the same day.
 
-Mifflin-St Jeor is defined in cm and kg, so storing anything else means converting on every calculation and carrying rounding error into a health number. Convert at the boundary, not in the formula.
+Height is entered in feet and inches, weight in pounds, and **those are the units the API takes and the units the server works in**. No conversion in the client.
+
+The first version of this section said the opposite: US units on screen, other units on the wire, with the client converting at its edge. The reasoning was that Mifflin-St Jeor is not defined in pounds and inches, so the formula should get what it wants.
+
+That was backwards. It put a conversion in every client for the convenience of one formula, and it meant the API spoke a unit no screen ever shows. Debugging a request then means converting in your head before you can tell whether a number is sensible.
+
+[MAC-51](https://linear.app/hintology/issue/MAC-51/post-apitargetsproposals-the-deterministic-proposal-no-ai) owns the one conversion the formula needs, inside the function that needs it. Nothing else in the stack converts, and no constant elsewhere is written in anything but pounds.
 
 Height stays **one** control despite feet-and-inches looking like two. Hold total inches as the value, step by one, and format the label as `5'11"`. A second control on that screen would break the one-question-per-screen rule the whole flow is built on.
 
-No units toggle. Nothing in any doc asks for one, and adding it later means a `units` field on `User` plus a preference screen. If a metric user complains, that is a real signal rather than a guess.
+No units toggle. Nothing in any doc asks for one, and adding it later means a `units` field on `User` plus a preference screen. If someone outside the US complains, that is a real signal rather than a guess.
 
 ### Moved to settings
 
@@ -87,7 +93,7 @@ If the model's numbers drift far from the baseline, log it — that's a signal w
 Public app, health-adjacent numbers. AI output is **never** trusted directly:
 
 * Calories clamped to a floor and ceiling by sex and body weight. Reject implausibly low values regardless of what the model says
-* Protein clamped to a sane g/kg range
+* Protein clamped to a sane range per pound of body weight
 * Fiber clamped to a reasonable daily range
 * Out-of-bounds responses fall back to the deterministic formula, and the event is logged
 * Response shape validated strictly — request JSON, parse it, reject malformed output rather than pattern-matching prose
