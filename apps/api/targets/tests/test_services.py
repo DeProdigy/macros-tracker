@@ -3,10 +3,9 @@
 No database. These are pure functions and the tests should stay that way, so a
 `django_db` mark appearing here later is a sign something leaked.
 
-Weights are in **pounds**, like the rest of the stack. The evidence behind the
-ratios is published per kilogram, so a few expected values look untidy. That is
-the conversion showing through, and rounding the constants to tidy them would
-quietly move numbers taken from research.
+Weights are in **pounds**, like the rest of the stack. Some expected values look
+untidy, and they are meant to: the ratios carry eight decimal places, and
+rounding them to produce round answers would move numbers taken from research.
 
 Boundaries get asserted on **both sides**, because an off-by-one in a clamp is
 invisible in ordinary use and is exactly the bug a range function has. A test
@@ -179,8 +178,8 @@ def test_a_fractional_floor_rounds_up_and_a_fractional_ceiling_rounds_down():
 
 
 def test_the_protein_range_is_per_pound_of_bodyweight():
-    """1.6 to 2.5 g/kg, the best-evidenced numbers in the module, expressed per
-    pound. 220 lb is 159.7 to 249.5 g."""
+    """The best-evidenced numbers in the module. 220 lb gives 159.7 to 249.5 g,
+    rounded to 160 and 249 by the floor-up ceiling-down rule."""
     band = suggested_protein_range(profile(weight_lb=HEAVY_LB))
 
     assert (band.floor, band.ceiling) == (160, 249)
@@ -308,8 +307,8 @@ def test_a_zero_fiber_target_is_allowed():
 
 
 def test_the_absolute_protein_range_scales_with_weight():
-    """0.5 to 3.5 g/kg, per pound. At 110 lb that is 25 to 174 g, wide enough
-    that anything outside is a mistyped number rather than a preference."""
+    """At 110 lb the absolute band is 25 to 174 g, wide enough that anything
+    outside it is a mistyped number rather than a preference."""
     light = profile(weight_lb=LIGHT_LB)
 
     reject_outside_absolute(targets(protein_g=25), light)

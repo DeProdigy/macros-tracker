@@ -2,7 +2,7 @@
 linear_id: f8247a39-754e-4586-bf01-9ee129a98aa2
 linear_title: "05 — Feature: Onboarding & Targets"
 linear_url: https://linear.app/hintology/document/05-feature-onboarding-and-targets-e112a3975b9a
-linear_updated_at: 2026-08-29T18:45:25.025Z
+linear_updated_at: 2026-08-30T01:05:08.660Z
 generated: true
 ---
 
@@ -60,17 +60,15 @@ One question per screen. Progress indicator. Back navigation preserves answers.
 
 Height is entered in feet and inches, weight in pounds, and **those are the units the API takes and the units the server works in**. No conversion in the client.
 
-The first version of this section said the opposite: US units on screen, metric on the wire, with the client converting at its edge. The reasoning was that Mifflin-St Jeor is defined in cm and kg, so the formula should get what it wants.
+The first version of this section said the opposite: US units on screen, other units on the wire, with the client converting at its edge. The reasoning was that Mifflin-St Jeor is not defined in pounds and inches, so the formula should get what it wants.
 
 That was backwards. It put a conversion in every client for the convenience of one formula, and it meant the API spoke a unit no screen ever shows. Debugging a request then means converting in your head before you can tell whether a number is sensible.
 
-The formula still needs metric. It converts once, where the formula lives. One conversion in one place beats one in every caller.
-
-Where published evidence is written per kilogram, such as protein grams per kg, the constant keeps the per-kg figure visible in the source and divides by the conversion factor there. A pre-computed `0.7257` cannot be checked against a paper without reversing it first.
+[MAC-51](https://linear.app/hintology/issue/MAC-51/post-apitargetsproposals-the-deterministic-proposal-no-ai) owns the one conversion the formula needs, inside the function that needs it. Nothing else in the stack converts, and no constant elsewhere is written in anything but pounds.
 
 Height stays **one** control despite feet-and-inches looking like two. Hold total inches as the value, step by one, and format the label as `5'11"`. A second control on that screen would break the one-question-per-screen rule the whole flow is built on.
 
-No units toggle. Nothing in any doc asks for one, and adding it later means a `units` field on `User` plus a preference screen. If a metric user complains, that is a real signal rather than a guess.
+No units toggle. Nothing in any doc asks for one, and adding it later means a `units` field on `User` plus a preference screen. If someone outside the US complains, that is a real signal rather than a guess.
 
 ### Moved to settings
 
@@ -95,7 +93,7 @@ If the model's numbers drift far from the baseline, log it — that's a signal w
 Public app, health-adjacent numbers. AI output is **never** trusted directly:
 
 * Calories clamped to a floor and ceiling by sex and body weight. Reject implausibly low values regardless of what the model says
-* Protein clamped to a sane g/kg range
+* Protein clamped to a sane range per pound of body weight
 * Fiber clamped to a reasonable daily range
 * Out-of-bounds responses fall back to the deterministic formula, and the event is logged
 * Response shape validated strictly — request JSON, parse it, reject malformed output rather than pattern-matching prose

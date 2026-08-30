@@ -43,55 +43,47 @@ may disagree with. "Is this a target at all?" is not.
 than one with a `strict=True` flag. Which caller clamps and which refuses is the
 most interesting line of the design, and a boolean argument buries it.
 
-## Pounds, not kilograms
+## Pounds, everywhere
 
 Corrected in review, reversing a decision taken the same day.
 
-The first version took kilograms, on the reasoning that Mifflin-St Jeor is
-defined in metric so the client should convert at its edge. Doc 05 said the same.
-Both were backwards. It put a conversion in every client for the convenience of
-one formula, and it meant the API spoke a unit no screen ever shows.
+The first version of this module took a different unit, on the reasoning that
+Mifflin-St Jeor is not defined in pounds so the client should convert at its
+edge. Doc 05 said the same, because I wrote that too. Both were backwards. It put
+a conversion in every client for the convenience of one formula, and it meant the
+API spoke a unit no screen ever shows.
 
-The formula still needs metric. MAC-51 converts once, where the formula lives.
-One conversion in one place beats one in every caller.
+MAC-51 owns the one conversion the formula needs, inside the function that needs
+it. Nothing here converts, and no constant here is written in anything else.
 
-**Nothing in the module converts.** The constants are literal per-pound decimals
-and the only kilogram left is the source figure quoted in a comment beside each
-one.
-
-An earlier draft computed them with a `_per_pound("1.6")` helper at import time.
-The argument for it was that 1.6 g/kg is the number a reader can look up and
-`0.72574779` is not. Review pushed back and was right: a comment carries the
-citation for free, and the helper made every reader detour through a function to
-read a constant. The one thing it bought, keeping the figure editable in its
-published unit, is worth less than the tax on every read.
+A second pass removed the last of it. The ratios were computed by a
+`_per_pound("1.6")` helper, and every constant comment quoted the source figure
+in its published unit. My argument was that the published number is the one a
+reader can look up. Review disagreed three times, and by the third it was clear
+the citation was costing more than it bought: a reader hitting a unit the module
+does not use has to stop and work out whether it matters. It never does. The
+constants are literals now and the comments describe what the bounds mean rather
+than where the arithmetic came from.
 
 Each literal carries **eight decimal places**, and that number is measured rather
 than chosen. Four places move a rounded bound by one at some body weights. Six is
-the first that does not. Eight is headroom, checked against the exact division
-for every whole pound from 60 to 600, and the 319 tests passing unchanged after
-the swap is the second proof.
-
-Doc 05, MAC-42, MAC-51, and MAC-41 all carried the old decision and were
-corrected with this ticket.
+the first that does not. Eight is headroom, checked against the exact value for
+every whole pound from 60 to 600, and the 319 tests passing unchanged through the
+swap is the second proof.
 
 ## The numbers, and which ones to trust
 
 The ticket said doc 15's values are a starting point to justify, not copy. Two of
 these are well supported. The rest are judgement, and the comments say so.
 
-Every per-weight figure below is quoted in its **published unit**, which is per
-kilogram. The constants themselves are per pound. Each comment names both, so the
-citable number stays findable without the code having to convert anything.
+**Well supported.** The protein band. Protein for muscle retention in a deficit
+is one of the most replicated findings in the field, and the floor sits at the
+bottom of that band. The ceiling is widened past it because the evidence says no
+*added* benefit higher up, not that higher is unwise. Fiber at 10 to 20 g per
+1,000 kcal brackets the US Dietary Guidelines figure of 14.
 
-**Well supported.** Protein at 1.6 to 2.5 g per kg: the 1.6 to 2.2 band for
-muscle retention in a deficit is replicated across many trials, and the ceiling
-is widened because the evidence says no *added* benefit above 2.2, not that 2.4
-is unwise. Fiber at 10 to 20 g per 1,000 kcal brackets the US Dietary Guidelines
-figure of 14, and needs no conversion because it is already per calorie.
-
-**Judgement calls.** Calories at 22 to 40 kcal per kg, floored by 1,200 (female)
-or 1,500 (male). The absolute range of 1,000 to 5,000, which is the owner's.
+**Judgement calls.** The calorie ratios, floored by 1,200 (female) or 1,500
+(male). The absolute range of 1,000 to 5,000, which is the owner's.
 
 Doc 15's fixed 1,500 to 3,200 is right for a mid-sized adult and wrong at both
 ends. It forbids a 110 lb woman a sensible target and warns a 220 lb man about a
@@ -220,7 +212,7 @@ proves nothing is worse than no assertion, because it looks like coverage.
 
 ## Open questions
 
-- **Is 2.5 g per kg the right protein ceiling?** Widened from the evidence band to
+- **Is the protein ceiling too generous?** Widened past the evidence band to
   cut false warnings. Arguable either way.
 - **Should a calorie ceiling exist in the suggested range at all?** Nobody is
   harmed by a high target, and the absolute range already catches typos. Kept
