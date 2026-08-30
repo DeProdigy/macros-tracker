@@ -32,6 +32,8 @@ import type {
   SessionDeleteRequest,
   SessionRefresh,
   SessionRefreshRequest,
+  TargetVersion,
+  TargetVersionCreateRequest,
   User,
 } from "./model";
 
@@ -620,6 +622,373 @@ export function usePing<TData = Awaited<ReturnType<typeof ping>>, TError = unkno
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getPingQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
+/**
+ * @summary Every target version, newest first
+ */
+export type listTargetsResponse200 = {
+  data: TargetVersion[];
+  status: 200;
+};
+
+export type listTargetsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listTargetsResponseSuccess = listTargetsResponse200 & {
+  headers: Headers;
+};
+export type listTargetsResponseError = listTargetsResponse401 & {
+  headers: Headers;
+};
+
+export type listTargetsResponse = listTargetsResponseSuccess | listTargetsResponseError;
+
+export const getListTargetsUrl = () => {
+  return `/api/targets/`;
+};
+
+export const listTargets = async (options?: RequestInit): Promise<listTargetsResponse> => {
+  return customFetch<listTargetsResponse>(getListTargetsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTargetsQueryKey = () => {
+  return [`/api/targets/`] as const;
+};
+
+export const getListTargetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTargets>>,
+  TError = void,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listTargets>>, TError, TData>>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTargetsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listTargets>>> = ({ signal }) =>
+    listTargets({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTargets>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListTargetsQueryResult = NonNullable<Awaited<ReturnType<typeof listTargets>>>;
+export type ListTargetsQueryError = void;
+
+export function useListTargets<TData = Awaited<ReturnType<typeof listTargets>>, TError = void>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof listTargets>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTargets>>,
+          TError,
+          Awaited<ReturnType<typeof listTargets>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useListTargets<TData = Awaited<ReturnType<typeof listTargets>>, TError = void>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listTargets>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTargets>>,
+          TError,
+          Awaited<ReturnType<typeof listTargets>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useListTargets<TData = Awaited<ReturnType<typeof listTargets>>, TError = void>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listTargets>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Every target version, newest first
+ */
+
+export function useListTargets<TData = Awaited<ReturnType<typeof listTargets>>, TError = void>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listTargets>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListTargetsQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
+/**
+ * @summary Set new targets
+ */
+export type createTargetResponse201 = {
+  data: TargetVersion;
+  status: 201;
+};
+
+export type createTargetResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type createTargetResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type createTargetResponseSuccess = createTargetResponse201 & {
+  headers: Headers;
+};
+export type createTargetResponseError = (createTargetResponse400 | createTargetResponse401) & {
+  headers: Headers;
+};
+
+export type createTargetResponse = createTargetResponseSuccess | createTargetResponseError;
+
+export const getCreateTargetUrl = () => {
+  return `/api/targets/`;
+};
+
+export const createTarget = async (
+  targetVersionCreateRequest: TargetVersionCreateRequest,
+  options?: RequestInit,
+): Promise<createTargetResponse> => {
+  return customFetch<createTargetResponse>(getCreateTargetUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(targetVersionCreateRequest),
+  });
+};
+
+export const getCreateTargetMutationOptions = <TError = void, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTarget>>,
+    TError,
+    { data: TargetVersionCreateRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTarget>>,
+  TError,
+  { data: TargetVersionCreateRequest },
+  TContext
+> => {
+  const mutationKey = ["createTarget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTarget>>,
+    { data: TargetVersionCreateRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createTarget(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateTargetMutationResult = NonNullable<Awaited<ReturnType<typeof createTarget>>>;
+export type CreateTargetMutationBody = TargetVersionCreateRequest;
+export type CreateTargetMutationError = void;
+
+/**
+ * @summary Set new targets
+ */
+export const useCreateTarget = <TError = void, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createTarget>>,
+      TError,
+      { data: TargetVersionCreateRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createTarget>>,
+  TError,
+  { data: TargetVersionCreateRequest },
+  TContext
+> => {
+  const mutationOptions = getCreateTargetMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+
+/**
+ * @summary The targets in effect now
+ */
+export type getCurrentTargetResponse200 = {
+  data: TargetVersion;
+  status: 200;
+};
+
+export type getCurrentTargetResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getCurrentTargetResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type getCurrentTargetResponseSuccess = getCurrentTargetResponse200 & {
+  headers: Headers;
+};
+export type getCurrentTargetResponseError = (
+  getCurrentTargetResponse401 | getCurrentTargetResponse404
+) & {
+  headers: Headers;
+};
+
+export type getCurrentTargetResponse =
+  getCurrentTargetResponseSuccess | getCurrentTargetResponseError;
+
+export const getGetCurrentTargetUrl = () => {
+  return `/api/targets/current/`;
+};
+
+export const getCurrentTarget = async (
+  options?: RequestInit,
+): Promise<getCurrentTargetResponse> => {
+  return customFetch<getCurrentTargetResponse>(getGetCurrentTargetUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCurrentTargetQueryKey = () => {
+  return [`/api/targets/current/`] as const;
+};
+
+export const getGetCurrentTargetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCurrentTarget>>,
+  TError = void,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentTarget>>, TError, TData>>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCurrentTargetQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCurrentTarget>>> = ({ signal }) =>
+    getCurrentTarget({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCurrentTarget>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetCurrentTargetQueryResult = NonNullable<Awaited<ReturnType<typeof getCurrentTarget>>>;
+export type GetCurrentTargetQueryError = void;
+
+export function useGetCurrentTarget<
+  TData = Awaited<ReturnType<typeof getCurrentTarget>>,
+  TError = void,
+>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentTarget>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCurrentTarget>>,
+          TError,
+          Awaited<ReturnType<typeof getCurrentTarget>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetCurrentTarget<
+  TData = Awaited<ReturnType<typeof getCurrentTarget>>,
+  TError = void,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentTarget>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCurrentTarget>>,
+          TError,
+          Awaited<ReturnType<typeof getCurrentTarget>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetCurrentTarget<
+  TData = Awaited<ReturnType<typeof getCurrentTarget>>,
+  TError = void,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentTarget>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary The targets in effect now
+ */
+
+export function useGetCurrentTarget<
+  TData = Awaited<ReturnType<typeof getCurrentTarget>>,
+  TError = void,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentTarget>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetCurrentTargetQueryOptions(options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
     queryKey: DataTag<QueryKey, TData, TError>;

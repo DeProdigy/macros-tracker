@@ -20,5 +20,8 @@ export * from "./sessionDeleteRequest";
 export * from "./sessionRefresh";
 export * from "./sessionRefreshRequest";
 export * from "./sexEnum";
+export * from "./sourceEnum";
+export * from "./targetVersion";
+export * from "./targetVersionCreateRequest";
 export * from "./user";
 export * from "./userSex";

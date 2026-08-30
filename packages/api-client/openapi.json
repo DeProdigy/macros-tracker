@@ -324,6 +324,129 @@
                 }
             }
         },
+        "/api/targets/": {
+            "get": {
+                "operationId": "listTargets",
+                "summary": "Every target version, newest first",
+                "tags": [
+                    "targets"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/TargetVersion"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "createTarget",
+                "summary": "Set new targets",
+                "tags": [
+                    "targets"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TargetVersionCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TargetVersionCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TargetVersionCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TargetVersion"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "401": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/targets/current/": {
+            "get": {
+                "operationId": "getCurrentTarget",
+                "summary": "The targets in effect now",
+                "tags": [
+                    "targets"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TargetVersion"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "description": "No response body"
+                    },
+                    "404": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/uploads/": {
             "post": {
                 "operationId": "presignUpload",
@@ -842,6 +965,104 @@
                 ],
                 "type": "string",
                 "description": "**Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `\"\"`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.\n\n* `female` - Female\n* `male` - Male"
+            },
+            "SourceEnum": {
+                "enum": [
+                    "onboarding_ai",
+                    "manual"
+                ],
+                "type": "string",
+                "description": "* `onboarding_ai` - Onboarding (AI proposal)\n* `manual` - Manual edit"
+            },
+            "TargetVersion": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "calories": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Daily calorie target, kcal."
+                    },
+                    "protein_g": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Daily protein target, in grams."
+                    },
+                    "fiber_g": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Daily fiber target, in grams."
+                    },
+                    "source": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SourceEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "ai_rationale": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "The model's plain-English explanation, shown under WHY THESE NUMBERS on screen 9f. Around 60 words, naming the deficit, the rate, and why protein is set from body weight. Empty for a manual edit."
+                    },
+                    "effective_from": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "ai_rationale",
+                    "calories",
+                    "created_at",
+                    "effective_from",
+                    "fiber_g",
+                    "id",
+                    "protein_g",
+                    "source"
+                ]
+            },
+            "TargetVersionCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "calories": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "description": "Daily calorie target, kcal."
+                    },
+                    "protein_g": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "description": "Daily protein target, in grams."
+                    },
+                    "fiber_g": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "description": "Daily fiber target, in grams."
+                    },
+                    "effective_from": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                },
+                "required": [
+                    "calories",
+                    "effective_from",
+                    "fiber_g",
+                    "protein_g"
+                ]
             },
             "User": {
                 "type": "object",

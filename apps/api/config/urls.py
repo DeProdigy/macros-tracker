@@ -40,6 +40,7 @@ urlpatterns = [
     path("api/users/", include("accounts.urls_users")),
     # Presigned object-storage URLs (MAC-19). Owns its own routes so the app
     # stays self-contained as more of them appear.
+    path("api/targets/", include("targets.urls")),
     path("api/uploads/", include("uploads.urls")),
     # --- OpenAPI schema ---
     # The committed packages/api-client/openapi.json is generated from the same

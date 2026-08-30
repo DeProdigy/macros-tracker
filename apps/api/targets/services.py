@@ -408,7 +408,7 @@ def clamp_to_suggested(targets: Targets, profile: Profile) -> ClampResult:
     )
 
 
-def reject_outside_absolute(targets: Targets, profile: Profile) -> None:
+def reject_outside_absolute(targets: Targets, profile: Profile | None) -> None:
     """Raise if any target is outside the range nothing may cross.
 
     Rejects rather than clamps, and that is the whole argument. Silently storing
@@ -418,12 +418,26 @@ def reject_outside_absolute(targets: Targets, profile: Profile) -> None:
     Runs on **every** write, whatever produced the numbers. A model that got past
     the suggested clamp still has to clear this, because the clamp reports rather
     than enforces.
+
+    **A `None` profile skips the protein bound and keeps the other two**, added
+    in MAC-40. `User.sex` and `User.current_weight_lb` are nullable, because doc
+    26 makes exiting onboarding early a supported end state, so a user can reach
+    Settings having answered neither. Refusing their write would block the one
+    person slice 1 exists for.
+
+    Calories and fiber are unaffected, and calories are the bound that matters
+    for harm. The cost is real and small: an unanswered user can set a nonsense
+    protein target, which is a wrong number rather than a dangerous one.
     """
-    checks = (
+    # Calories and fiber first, because neither needs a profile: their bounds are
+    # flat numbers. Protein's scales with body weight, so it is the only one a
+    # missing profile can skip.
+    checks = [
         ("calories", targets.calories, absolute_calorie_range()),
-        ("protein_g", targets.protein_g, absolute_protein_range(profile)),
         ("fiber_g", targets.fiber_g, absolute_fiber_range()),
-    )
+    ]
+    if profile is not None:
+        checks.append(("protein_g", targets.protein_g, absolute_protein_range(profile)))
 
     errors = {
         field: [f"Must be between {allowed.floor} and {allowed.ceiling}. Received {value}."]
