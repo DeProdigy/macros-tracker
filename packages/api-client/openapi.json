@@ -72,7 +72,9 @@
                                                 "name": "Alex Hint",
                                                 "timezone": "UTC",
                                                 "onboarding_completed": false,
-                                                "goal_weight_kg": null,
+                                                "sex": "",
+                                                "current_weight_lb": null,
+                                                "goal_weight_lb": null,
                                                 "goal_timeline_weeks": null,
                                                 "training_days_per_week": null,
                                                 "dietary_constraints": ""
@@ -431,7 +433,9 @@
                                             "name": "Alex Hint",
                                             "timezone": "Europe/London",
                                             "onboarding_completed": true,
-                                            "goal_weight_kg": "78.50",
+                                            "sex": "male",
+                                            "current_weight_lb": "192.00",
+                                            "goal_weight_lb": "173.00",
                                             "goal_timeline_weeks": 12,
                                             "training_days_per_week": 4,
                                             "dietary_constraints": ""
@@ -465,14 +469,17 @@
                             "examples": {
                                 "SetAGoal": {
                                     "value": {
-                                        "goal_weight_kg": "78.50",
+                                        "current_weight_lb": "192.00",
+                                        "goal_weight_lb": "173.00",
                                         "goal_timeline_weeks": 12
                                     },
                                     "summary": "Two fields, the rest untouched"
                                 },
                                 "ClearTheGoal": {
                                     "value": {
-                                        "goal_weight_kg": null,
+                                        "sex": "",
+                                        "current_weight_lb": null,
+                                        "goal_weight_lb": null,
                                         "goal_timeline_weeks": null
                                     },
                                     "summary": "Explicit nulls clear",
@@ -553,6 +560,11 @@
     },
     "components": {
         "schemas": {
+            "BlankEnum": {
+                "enum": [
+                    ""
+                ]
+            },
             "Health": {
                 "type": "object",
                 "description": "Response body for the deployment health check.\n\nDistinct from `PingSerializer` on purpose. Ping answers \"is the process\nup?\"; health answers \"can this process actually serve a request?\", which\nmeans proving the database is reachable. They report different things and a\nshared shape would blur that.",
@@ -604,12 +616,30 @@
                         "description": "IANA timezone name, e.g. `America/New_York`. The client refreshes this on launch (doc 02), so a user who flies somewhere gets their days bucketed locally. Never a numeric offset — offsets break across DST.",
                         "maxLength": 64
                     },
-                    "goal_weight_kg": {
+                    "sex": {
+                        "description": "Biological sex, `female` or `male`. Asked during onboarding and stored because editing targets later needs it. Biological rather than gender: it feeds a formula fitted to body composition.\n\n**Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `\"\"`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.\n\n* `female` - Female\n* `male` - Male",
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/SexEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            }
+                        ]
+                    },
+                    "current_weight_lb": {
                         "type": "string",
                         "format": "decimal",
-                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,2})?$",
+                        "pattern": "^-?\\d{0,4}(?:\\.\\d{0,2})?$",
                         "nullable": true,
-                        "description": "Target body weight in kilograms, 20–400. Null clears it back to unanswered."
+                        "description": "Current body weight in pounds, 85–500. Asked during onboarding and kept, because a target set in Settings weeks later has to be bounded against something. The 85 floor is not a sanity check: below it the suggested calorie range inverts. Null means not answered."
+                    },
+                    "goal_weight_lb": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,4}(?:\\.\\d{0,2})?$",
+                        "nullable": true,
+                        "description": "Target body weight in pounds, 85–500, the same band as the current weight because they measure the same thing. Null clears it back to unanswered."
                     },
                     "goal_timeline_weeks": {
                         "type": "integer",
@@ -805,6 +835,14 @@
                     "refresh"
                 ]
             },
+            "SexEnum": {
+                "enum": [
+                    "female",
+                    "male"
+                ],
+                "type": "string",
+                "description": "**Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `\"\"`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.\n\n* `female` - Female\n* `male` - Male"
+            },
             "User": {
                 "type": "object",
                 "description": "The signed-in user, as the client is allowed to see them.\n\nOne serializer for the whole read shape, used by `GET /api/users/me/` and\nembedded in the sign-in response. Two serializers describing the same row\nwould generate two client types that drift the first time a field is added\nto one of them.\n\nA ModelSerializer here, and a hand-written Serializer for the request shapes\nbelow. The difference is what the fields are: these mirror model columns and\nthe validators belong on the model, while a refresh token is not a column\nand never will be.\n\nEvery field is read-only. This is the *read* shape; the subset a client may\nwrite is `UserSettingsSerializer`, and keeping them apart is what stops a\nclient from setting `onboarding_completed` on itself.",
@@ -834,10 +872,28 @@
                         "readOnly": true,
                         "description": "Whether the client should route to onboarding or to Today."
                     },
-                    "goal_weight_kg": {
+                    "sex": {
+                        "readOnly": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/SexEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            }
+                        ]
+                    },
+                    "current_weight_lb": {
                         "type": "string",
                         "format": "decimal",
-                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,2})?$",
+                        "pattern": "^-?\\d{0,4}(?:\\.\\d{0,2})?$",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "goal_weight_lb": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,4}(?:\\.\\d{0,2})?$",
                         "readOnly": true,
                         "nullable": true
                     },
@@ -857,13 +913,15 @@
                     }
                 },
                 "required": [
+                    "current_weight_lb",
                     "dietary_constraints",
                     "email",
                     "goal_timeline_weeks",
-                    "goal_weight_kg",
+                    "goal_weight_lb",
                     "id",
                     "name",
                     "onboarding_completed",
+                    "sex",
                     "timezone",
                     "training_days_per_week"
                 ]

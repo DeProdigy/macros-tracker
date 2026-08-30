@@ -2,7 +2,7 @@
 linear_id: f8247a39-754e-4586-bf01-9ee129a98aa2
 linear_title: "05 — Feature: Onboarding & Targets"
 linear_url: https://linear.app/hintology/document/05-feature-onboarding-and-targets-e112a3975b9a
-linear_updated_at: 2026-08-30T01:05:08.660Z
+linear_updated_at: 2026-08-30T01:41:47.208Z
 generated: true
 ---
 
@@ -70,9 +70,23 @@ Height stays **one** control despite feet-and-inches looking like two. Hold tota
 
 No units toggle. Nothing in any doc asks for one, and adding it later means a `units` field on `User` plus a preference screen. If someone outside the US complains, that is a real signal rather than a guess.
 
+### Two of the six answers are stored
+
+Added 30 Aug 2026. `sex` and `current_weight_lb` land on `User`; age, height, goal, and activity do not.
+
+The four that are dropped feed Mifflin-St Jeor once and are never wanted again. The two that are kept are needed every time a target is written, including from Settings weeks later, because the server has to bound a protein target against a body weight.
+
+This was found the first time an endpoint tried to save a target and had nothing to check it against. The app had been asking for current weight, using it, and discarding it, while keeping the *goal* weight. Storing the target and forgetting the number it is measured against is backwards.
+
+Whoever computes a proposal writes both fields, so onboarding populates them as a side effect rather than needing a step of its own.
+
+The latest weight only, not a history. A weight log is a real feature and this is not it.
+
 ### Moved to settings
 
 Goal weight, timeline, training days per week, and dietary constraints. All improve target quality; none block computing them.
+
+Goal weight is stored as `goal_weight_lb`. It shipped as `goal_weight_kg` in [MAC-28](https://linear.app/hintology/issue/MAC-28/session-endpoints-refresh-sign-out-and-me), before the US units decision, and was renamed with a converting migration on 30 Aug 2026. Nothing computes from it yet: Mifflin-St Jeor does not read it and neither does the clamp. It is a stated intention the model can be given as context, and the rate-of-loss guidance in the rationale is where it earns its place.
 
 **Note:** dietary constraints feed the advice feature, which is weaker without them. Prompt for it when advice is first used, not at signup. That prompt is specified here but not yet drawn — see doc 25.
 

@@ -83,12 +83,17 @@ class UserAdmin(BaseUserAdmin):
         (
             "Settings",
             {
-                # The four fields doc 05 moved out of onboarding. Listed here
+                # Six profile answers, from two places. Four are the settings
+                # doc 05 moved *out* of onboarding. `sex` and `current_weight_lb`
+                # are the opposite case: MAC-53 keeps them *from* onboarding,
+                # because editing targets later needs both. Listed here
                 # because an admin fieldset is explicit: a field absent from
                 # this tuple is invisible in the admin no matter what the model
                 # says, and support cannot answer "what goal did they set?"
                 "fields": (
-                    "goal_weight_kg",
+                    "sex",
+                    "current_weight_lb",
+                    "goal_weight_lb",
                     "goal_timeline_weeks",
                     "training_days_per_week",
                     "dietary_constraints",

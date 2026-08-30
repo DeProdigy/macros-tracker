@@ -5,6 +5,7 @@
  * Typed contract consumed by apps/mobile via packages/api-client.
  * OpenAPI spec version: 0.1.0
  */
+import type { UserSex } from "./userSex";
 
 /**
  * The signed-in user, as the client is allowed to see them.
@@ -35,11 +36,17 @@ export interface User {
   readonly timezone: string;
   /** Whether the client should route to onboarding or to Today. */
   readonly onboarding_completed: boolean;
+  readonly sex: (typeof UserSex)[keyof typeof UserSex];
   /**
    * @nullable
-   * @pattern ^-?\d{0,3}(?:\.\d{0,2})?$
+   * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
    */
-  readonly goal_weight_kg: string | null;
+  readonly current_weight_lb: string | null;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
+   */
+  readonly goal_weight_lb: string | null;
   /** @nullable */
   readonly goal_timeline_weeks: number | null;
   /** @nullable */

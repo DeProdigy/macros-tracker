@@ -15,6 +15,8 @@ wrapping transaction the schema changes would be invisible to the connection
 doing the querying.
 """
 
+from decimal import Decimal
+
 import pytest
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
@@ -128,3 +130,88 @@ def test_the_migration_round_trips(at_0002):
     forward_apps = _migrate(AFTER)
     Identity = forward_apps.get_model("accounts", "Identity")
     assert Identity.objects.filter(subject=APPLE_SUB).count() == 1
+
+
+# --- 0006, the kilograms-to-pounds conversion -------------------------------
+#
+# The same argument this file already makes for 0003. Review pointed out that
+# the conversion this PR called its risky part was the one piece with no test:
+# swapping the `*` for a `/`, or deleting the RunPython line outright, left all
+# 322 tests passing.
+
+BEFORE_POUNDS = [("accounts", "0005_user_settings_fields")]
+AFTER_POUNDS = [("accounts", "0006_pounds_and_onboarding_answers")]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_0006_converts_a_stored_goal_weight_to_pounds():
+    """80 kg is 176.37 lb, and the row has to come out the other side holding it.
+
+    A rename alone would leave 80.00 sitting in a column now labelled pounds,
+    which is the silent version of this bug: no error, no missing row, just a
+    number that means something different than it says.
+    """
+    old_apps = _migrate(BEFORE_POUNDS)
+    User = old_apps.get_model("accounts", "User")
+    User.objects.create(email="goal@example.com", goal_weight_kg=Decimal("80.00"))
+
+    new_apps = _migrate(AFTER_POUNDS)
+    user = new_apps.get_model("accounts", "User").objects.get(email="goal@example.com")
+
+    assert user.goal_weight_lb == Decimal("176.37")
+
+
+@pytest.mark.django_db(transaction=True)
+def test_0006_reverses_back_to_kilograms():
+    """The reverse is a real inverse, not a `noop`.
+
+    A migration that cannot go back is one you find out about while trying to go
+    back, which is the worst moment to find out.
+    """
+    old_apps = _migrate(BEFORE_POUNDS)
+    old_apps.get_model("accounts", "User").objects.create(
+        email="reverse@example.com", goal_weight_kg=Decimal("80.00")
+    )
+    _migrate(AFTER_POUNDS)
+
+    back = _migrate(BEFORE_POUNDS)
+    user = back.get_model("accounts", "User").objects.get(email="reverse@example.com")
+
+    assert user.goal_weight_kg == Decimal("80.00")
+
+
+@pytest.mark.django_db(transaction=True)
+def test_0006_leaves_an_unanswered_goal_weight_null():
+    """Most users never answer this. `exclude(goal_weight_lb=None)` is what keeps
+    the conversion off them, and multiplying a null would raise rather than skip."""
+    old_apps = _migrate(BEFORE_POUNDS)
+    old_apps.get_model("accounts", "User").objects.create(email="null@example.com")
+
+    new_apps = _migrate(AFTER_POUNDS)
+    user = new_apps.get_model("accounts", "User").objects.get(email="null@example.com")
+
+    assert user.goal_weight_lb is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_0006_refuses_a_goal_weight_that_would_convert_out_of_bounds():
+    """The gap between the old bounds and the new ones, guarded.
+
+    The old column allowed 20 to 400 kg. The new one allows 85 to 500 lb, which
+    is 38.56 to 226.80 kg, so the two do not nest. 30 kg converts to 66.14 lb,
+    below the new floor.
+
+    Left alone the migration writes it anyway, because validators do not run on a
+    `RunPython` save. The row would exist and be unsavable through PATCH or the
+    admin, which is the failure this migration was hand-written to avoid.
+
+    It raises rather than clamping. Clamping silently changes a number a person
+    entered; raising makes a deploy stop and someone look.
+    """
+    old_apps = _migrate(BEFORE_POUNDS)
+    old_apps.get_model("accounts", "User").objects.create(
+        email="tiny@example.com", goal_weight_kg=Decimal("30.00")
+    )
+
+    with pytest.raises(RuntimeError, match="outside the new"):
+        _migrate(AFTER_POUNDS)

@@ -8,7 +8,7 @@ every permission relation into the mobile app's types.
 
 from rest_framework import serializers
 
-from accounts.models import User
+from accounts.models import Sex, User
 
 
 class SessionCreateSerializer(serializers.Serializer):
@@ -68,6 +68,20 @@ class UserSerializer(serializers.ModelSerializer):
     client from setting `onboarding_completed` on itself.
     """
 
+    # Declared rather than inferred, because the inferred one lies.
+    #
+    # `sex` is `blank=True, default=""`, so a user who has not answered reads
+    # back as `""`. drf-spectacular emits the blank member only for the
+    # *writable* serializer, so the `User` schema came out as `SexEnum` and
+    # required, and Orval turned that into `readonly sex: SexEnum`. The committed
+    # openapi.json disagreed with itself: the sign-in example showed `"sex": ""`,
+    # a value its own `User` schema forbade.
+    #
+    # What that breaks is quiet. A client switches on `user.sex` over `SexEnum`
+    # with no default, TypeScript believes the switch is exhaustive, and every
+    # user who skipped the question falls through it with nothing raised.
+    sex = serializers.ChoiceField(choices=Sex.choices, allow_blank=True, read_only=True)
+
     class Meta:
         model = User
         # Explicit, never `fields = "__all__"`. An `__all__` on the user model
@@ -79,7 +93,9 @@ class UserSerializer(serializers.ModelSerializer):
             "name",
             "timezone",
             "onboarding_completed",
-            "goal_weight_kg",
+            "sex",
+            "current_weight_lb",
+            "goal_weight_lb",
             "goal_timeline_weeks",
             "training_days_per_week",
             "dietary_constraints",
@@ -116,7 +132,9 @@ class UserSettingsSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "timezone",
-            "goal_weight_kg",
+            "sex",
+            "current_weight_lb",
+            "goal_weight_lb",
             "goal_timeline_weeks",
             "training_days_per_week",
             "dietary_constraints",
@@ -133,9 +151,46 @@ class UserSettingsSerializer(serializers.ModelSerializer):
                     "offset — offsets break across DST."
                 )
             },
-            "goal_weight_kg": {
+            # **`sex` clears with `""`, not with `null`**, and that is the one
+            # inconsistency on this serializer. Review asked for `allow_null`
+            # with a coercion, matching the numeric fields beside it.
+            #
+            # It does not survive the toolchain. `allow_null` on a blank-capable
+            # ChoiceField makes drf-spectacular emit `nullable: true` *and* a
+            # `NullEnum` member of the same `oneOf`, and orval cannot name that
+            # shape: `Duplicate schema names detected: 2x
+            # PatchedUserSettingsRequestSex`. The generated client stops building
+            # entirely, which is a worse failure than the one it fixes.
+            #
+            # So the difference is documented instead of absorbed. The help text
+            # says it, which means it reaches the OpenAPI schema and the
+            # generated client rather than living only here.
+            "sex": {
                 "help_text": (
-                    "Target body weight in kilograms, 20–400. Null clears it back to unanswered."
+                    "Biological sex, `female` or `male`. Asked during onboarding and "
+                    "stored because editing targets later needs it. Biological rather "
+                    "than gender: it feeds a formula fitted to body composition.\n\n"
+                    "**Clear it with an empty string, not with `null`.** Every "
+                    "other clearable field here takes `null`; this one is a "
+                    'blank-string column and takes `""`. A form that clears '
+                    "itself by sending `null` everywhere gets a 400 on this "
+                    "field alone."
+                ),
+            },
+            "current_weight_lb": {
+                "help_text": (
+                    "Current body weight in pounds, 85–500. Asked during onboarding "
+                    "and kept, because a target set in Settings weeks later has to be "
+                    "bounded against something. The 85 floor is not a sanity check: "
+                    "below it the suggested calorie range inverts. Null means not "
+                    "answered."
+                )
+            },
+            "goal_weight_lb": {
+                "help_text": (
+                    "Target body weight in pounds, 85–500, the same band as the current "
+                    "weight because they measure the same thing. Null clears it back "
+                    "to unanswered."
                 )
             },
             "goal_timeline_weeks": {
