@@ -2,7 +2,7 @@
 linear_id: b31889be-59e4-4e47-bd80-4d8a1a9e689c
 linear_title: "15 — Design: Onboarding and Targets (E3)"
 linear_url: https://linear.app/hintology/document/15-design-onboarding-and-targets-e3-85c87496432b
-linear_updated_at: 2026-08-29T05:14:09.895Z
+linear_updated_at: 2026-08-30T01:15:05.746Z
 generated: true
 ---
 
@@ -72,7 +72,7 @@ Three numbers as a grouped list, each 40px/900 with its macro's colour on the mo
 
 **Baseline line** — `BASELINE 2180 → SET 2150` with `WITHIN SERVER BOUNDS` in green. This is the guardrail made visible rather than implied; a model drifting far from the baseline becomes obvious to the user and loggable for you.
 
-`WHY THESE NUMBERS` — the model's rationale, in plain language, roughly 60 words. Names the deficit, the rate, why protein is set per kilo of bodyweight, and why fiber matters on a cut. This paragraph is the actual value the AI call adds; without it the whole call is a formula with extra steps.
+`WHY THESE NUMBERS` — the model's rationale, in plain language, roughly 60 words. Names the deficit, the rate, why protein is set from body weight, and why fiber matters on a cut. This paragraph is the actual value the AI call adds; without it the whole call is a formula with extra steps.
 
 **Disclaimer**, in an over-target-orange panel, in the flow rather than as a footnote:
 

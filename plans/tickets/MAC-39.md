@@ -43,47 +43,51 @@ may disagree with. "Is this a target at all?" is not.
 than one with a `strict=True` flag. Which caller clamps and which refuses is the
 most interesting line of the design, and a boolean argument buries it.
 
-## Pounds, everywhere
+## Pounds, everywhere, and one helper that must survive
 
-Corrected in review, reversing a decision taken the same day.
+Corrected across three rounds of review, and I overshot in the middle one.
 
-The first version of this module took a different unit, on the reasoning that
-Mifflin-St Jeor is not defined in pounds so the client should convert at its
-edge. Doc 05 said the same, because I wrote that too. Both were backwards. It put
-a conversion in every client for the convenience of one formula, and it meant the
-API spoke a unit no screen ever shows.
+The first version of this module ran in the units Mifflin-St Jeor happens to be
+defined in, with the client converting at its edge. Doc 05 said the same because
+I wrote that too. Backwards: it put a conversion in every client for the
+convenience of one formula, and left the API speaking a unit no screen shows.
+MAC-51 now owns that single conversion, inside the function that needs it.
 
-MAC-51 owns the one conversion the formula needs, inside the function that needs
-it. Nothing here converts, and no constant here is written in anything else.
+Then I went too far. Asked to stop converting, I replaced `_per_pound("1.6")`
+with `Decimal("0.72574779")` and stripped the source figures out of the comments
+with it. That produced comments pointing at nothing: "the floor sits at the
+bottom of that band" with no band left in the file to point at.
 
-A second pass removed the last of it. The ratios were computed by a
-`_per_pound("1.6")` helper, and every constant comment quoted the source figure
-in its published unit. My argument was that the published number is the one a
-reader can look up. Review disagreed three times, and by the third it was clear
-the citation was costing more than it bought: a reader hitting a unit the module
-does not use has to stop and work out whether it matters. It never does. The
-constants are literals now and the comments describe what the bounds mean rather
-than where the arithmetic came from.
+The file had argued against exactly this three commits earlier, in a docstring
+saying "a pre-computed `0.7257` tells a reader nothing". Then it shipped
+`0.72574779`.
 
-Each literal carries **eight decimal places**, and that number is measured rather
-than chosen. Four places move a rounded bound by one at some body weights. Six is
-the first that does not. Eight is headroom, checked against the exact value for
-every whole pound from 60 to 600, and the 319 tests passing unchanged through the
-swap is the second proof.
+**Two different things were being conflated.** Working in pounds is a runtime
+property, and it holds: nothing converts per request, and every bound is per
+pound by the time anything reads it. Keeping a published figure legible is a
+readability property, and `_per_pound` runs once at import to serve it. They
+never fought.
+
+So the helper is back, with a note in the docstring saying it has been deleted
+twice and why it should not be a third time. `1.6` can be looked up. `0.72574779`
+cannot be looked up anywhere.
 
 ## The numbers, and which ones to trust
 
 The ticket said doc 15's values are a starting point to justify, not copy. Two of
 these are well supported. The rest are judgement, and the comments say so.
 
-**Well supported.** The protein band. Protein for muscle retention in a deficit
-is one of the most replicated findings in the field, and the floor sits at the
-bottom of that band. The ceiling is widened past it because the evidence says no
-*added* benefit higher up, not that higher is unwise. Fiber at 10 to 20 g per
-1,000 kcal brackets the US Dietary Guidelines figure of 14.
+Each bound names the published figure it came from, so it can be checked without
+reversing arithmetic first.
 
-**Judgement calls.** The calorie ratios, floored by 1,200 (female) or 1,500
-(male). The absolute range of 1,000 to 5,000, which is the owner's.
+**Well supported.** Protein at 1.6 to 2.5 g/kg: the 1.6 to 2.2 band for muscle
+retention in a deficit is replicated across many trials, and the ceiling is
+widened because the evidence says no *added* benefit above 2.2, not that 2.4 is
+unwise. Fiber at 10 to 20 g per 1,000 kcal brackets the US Dietary Guidelines
+figure of 14.
+
+**Judgement calls.** Calories at 22 to 40 kcal/kg, floored by 1,200 (female) or
+1,500 (male). The absolute range of 1,000 to 5,000, which is the owner's.
 
 Doc 15's fixed 1,500 to 3,200 is right for a mid-sized adult and wrong at both
 ends. It forbids a 110 lb woman a sensible target and warns a 220 lb man about a
@@ -121,7 +125,7 @@ implementing and was pleased with myself in the PR description.
 **Review found the mirror image at the other end, and it was worse.**
 
 The floor takes a `max` against a fixed sex number. The ceiling takes a `min`
-against a per-pound number. Below about 83 lb for a man and 66 lb for a woman the
+against a per-pound number. Below 82.67 lb for a man and 66.14 lb for a woman the
 two cross, and the range inverts.
 
 An inverted range fails silently in both directions. `clamp` returns the floor
@@ -212,7 +216,7 @@ proves nothing is worse than no assertion, because it looks like coverage.
 
 ## Open questions
 
-- **Is the protein ceiling too generous?** Widened past the evidence band to
+- **Is 2.5 g/kg the right protein ceiling?** Widened from the 2.2 evidence band to
   cut false warnings. Arguable either way.
 - **Should a calorie ceiling exist in the suggested range at all?** Nobody is
   harmed by a high target, and the absolute range already catches typos. Kept

@@ -81,7 +81,7 @@ class TargetVersion(models.Model):
         help_text=(
             "The model's plain-English explanation, shown under WHY THESE NUMBERS "
             "on screen 9f. Around 60 words, naming the deficit, the rate, and why "
-            "protein is set per kilo of bodyweight. Empty for a manual edit."
+            "protein is set from body weight. Empty for a manual edit."
         ),
     )
 

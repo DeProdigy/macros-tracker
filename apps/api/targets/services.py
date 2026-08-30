@@ -4,14 +4,17 @@ Pure functions. No HTTP, no database, no model provider. Everything here is
 arithmetic and comparison, which is why it is the most thoroughly tested module
 in the epic and the thing the AI path falls back to when it misbehaves.
 
-**Everything here is pounds.** Weight comes in as pounds, the ratios are per
-pound, and nothing converts. This is a US app and the whole stack speaks pounds,
-from the onboarding stepper to the wire format to this module.
+**Everything here is pounds.** Weight comes in as pounds and every bound is per
+pound. This is a US app and the whole stack speaks pounds, from the onboarding
+stepper to the wire format to this module. Nothing converts at request time.
 
-Each ratio carries eight decimal places. That is measured, not chosen: four
-places move a rounded bound by one at some body weights, six is the first that
-does not, and eight is headroom. Checked against every whole pound from 60 to
-600.
+`_per_pound` is not a unit conversion in the runtime sense and **should not be
+deleted**. It has been removed twice already, once on the reasoning that the
+module should "just default to pounds". It does. The helper runs at import and
+exists so the published figure a bound came from stays readable: `1.6` can be
+looked up in a paper, and `0.72574779` cannot be looked up anywhere. Deleting it
+leaves comments pointing at numbers that are no longer in the file, which is what
+happened last time.
 
 **Two ranges, not one**, ruled 29 Aug 2026. One range forces a choice between
 two bad outcomes: clamp everything, and a person eating 1,400 kcal under medical
@@ -43,6 +46,26 @@ from enum import StrEnum
 
 from rest_framework.exceptions import ValidationError
 
+# Pounds in a kilogram. The one place this module names another unit, and it
+# names it to get rid of it: every bound below is per pound by the time anything
+# reads it.
+_POUNDS_PER_KG = Decimal("2.20462262")
+
+
+def _per_pound(published_per_kg: str) -> Decimal:
+    """Turn a published per-kilogram figure into the per-pound bound we use.
+
+    Runs once at import. Nothing converts per request.
+
+    The argument is the number to look up. Nutrition research publishes protein
+    intake per kilogram, so `1.6` is findable in a paper and `0.72574779` is
+    findable nowhere. Writing the literal would make every bound in this module
+    uncheckable, and the comments beside them would describe a figure the file no
+    longer contains.
+    """
+    return Decimal(published_per_kg) / _POUNDS_PER_KG
+
+
 # --- what the bounds are made of ---------------------------------------------
 #
 # Honesty about provenance, because these numbers will be questioned later and
@@ -63,12 +86,11 @@ class Sex(StrEnum):
 
 # Calories per pound of body weight, for the suggested range.
 #
-# **Judgement, not a citation.** The floor lands near an aggressive but ordinary
-# cut and the ceiling near a generous bulk. Doc 15's prototype used a fixed
-# 1,500-3,200, which is right for a mid-sized adult and wrong at both ends: it
-# forbids a 110 lb woman a sensible target and warns a 220 lb man about a
-# reasonable one.
-SUGGESTED_CALORIES_PER_LB = (Decimal("9.97903215"), Decimal("18.14369482"))
+# **Judgement, not a citation.** 22 kcal/kg lands near an aggressive but ordinary
+# cut and 40 near a generous bulk. Doc 15's prototype used a fixed 1,500-3,200,
+# which is right for a mid-sized adult and wrong at both ends: it forbids a
+# 110 lb woman a sensible target and warns a 220 lb man about a reasonable one.
+SUGGESTED_CALORIES_PER_LB = (_per_pound("22"), _per_pound("40"))
 
 # A floor under the per-pound figure, because the ratio gets very low for a small
 # person. **Rules of thumb**, widely repeated in consumer nutrition guidance
@@ -80,13 +102,12 @@ SUGGESTED_CALORIE_FLOOR_BY_SEX = {
 
 # Protein per pound, for the suggested range.
 #
-# **The best-supported numbers in this module.** Protein for muscle retention in
-# a deficit is one of the most replicated findings in the field, and the floor
-# here sits at the bottom of that band. The ceiling is widened past it
-# deliberately: the evidence says there is no *added* benefit higher up, not that
-# higher is unwise, and warning a high-protein eater on every save trains them to
-# ignore the warning that matters.
-SUGGESTED_PROTEIN_G_PER_LB = (Decimal("0.72574779"), Decimal("1.13398093"))
+# **The best-supported numbers in this module.** 1.6 to 2.2 g/kg for muscle
+# retention in a deficit is replicated across many trials. The ceiling is widened
+# to 2.5 deliberately: the evidence says there is no *added* benefit above 2.2,
+# not that 2.4 is unwise, and warning a high-protein eater on every save trains
+# them to ignore the warning that matters.
+SUGGESTED_PROTEIN_G_PER_LB = (_per_pound("1.6"), _per_pound("2.5"))
 
 # Fiber per 1,000 kcal, for the suggested range.
 #
@@ -106,10 +127,9 @@ SUGGESTED_FIBER_G_PER_1000_KCAL = (Decimal("10"), Decimal("20"))
 # too, and it is there to catch a typo rather than to police an athlete.
 ABSOLUTE_CALORIE_RANGE = (1000, 5000)
 
-# Wide on purpose. The floor sits below the recommended daily intake and the
-# ceiling above any studied benefit, so a value outside this is a mistyped number
-# rather than a preference.
-ABSOLUTE_PROTEIN_G_PER_LB = (Decimal("0.22679619"), Decimal("1.58757330"))
+# Wide on purpose. 0.5 g/kg is below the RDA and 3.5 is above any studied
+# benefit, so a value outside this is a mistyped number rather than a preference.
+ABSOLUTE_PROTEIN_G_PER_LB = (_per_pound("0.5"), _per_pound("3.5"))
 
 # Zero is allowed: a user may not want a fiber target at all, and refusing that
 # would be the app having an opinion where it has no standing. 100 g is roughly
@@ -117,7 +137,7 @@ ABSOLUTE_PROTEIN_G_PER_LB = (Decimal("0.22679619"), Decimal("1.58757330"))
 ABSOLUTE_FIBER_RANGE = (0, 100)
 
 # Below this the fixed sex floor passes the per-pound ceiling and a `Range`
-# inverts. 83 lb is where it happens for a man and 66 lb for a woman, so this
+# inverts. That happens at 82.67 lb for a man and 66.14 lb for a woman, so 85
 # sits above both with room. See `Profile` for what enforces it.
 MINIMUM_SUPPORTED_WEIGHT_LB = Decimal("85")
 
@@ -135,7 +155,7 @@ class Profile:
 
     **A weight at or above `MINIMUM_SUPPORTED_WEIGHT_LB` is a precondition**, not
     a suggestion. The sex floors are fixed and the calorie ceiling scales with
-    weight, so below about 83 lb for a man the two cross and the range inverts.
+    weight, so below 82.67 lb for a man the two cross and the range inverts.
 
     MAC-40 validates the weight on the way in, so a user gets a 400 rather than
     reaching here. `Range.__post_init__` is the backstop for a caller that
@@ -260,7 +280,7 @@ def suggested_calorie_range(profile: Profile) -> Range:
     stops the app suggesting more than its own write path allows.
 
     At the bottom, the fixed sex floor passes the per-pound ceiling at about
-    83 lb for a man and 66 lb for a woman, and the range inverts. That one is not
+    82.67 lb for a man and 66.14 lb for a woman, and the range inverts. That one is not
     repaired here. `Profile` states the precondition, MAC-40 enforces it, and
     `Range.__post_init__` raises if both are bypassed.
     """
