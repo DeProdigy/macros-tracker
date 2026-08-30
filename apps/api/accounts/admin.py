@@ -88,7 +88,9 @@ class UserAdmin(BaseUserAdmin):
                 # this tuple is invisible in the admin no matter what the model
                 # says, and support cannot answer "what goal did they set?"
                 "fields": (
-                    "goal_weight_kg",
+                    "sex",
+                    "current_weight_lb",
+                    "goal_weight_lb",
                     "goal_timeline_weeks",
                     "training_days_per_week",
                     "dietary_constraints",

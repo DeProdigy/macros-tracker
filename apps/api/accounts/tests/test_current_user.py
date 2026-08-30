@@ -74,7 +74,9 @@ def test_get_never_exposes_password_or_permission_fields(authed_client):
         "name",
         "timezone",
         "onboarding_completed",
-        "goal_weight_kg",
+        "sex",
+        "current_weight_lb",
+        "goal_weight_lb",
         "goal_timeline_weeks",
         "training_days_per_week",
         "dietary_constraints",
@@ -112,7 +114,7 @@ def test_patch_writes_the_settings_fields(authed_client, user):
     response = authed_client.patch(
         reverse("users:current"),
         {
-            "goal_weight_kg": "78.50",
+            "goal_weight_lb": "173.00",
             "goal_timeline_weeks": 12,
             "training_days_per_week": 4,
             "dietary_constraints": "no dairy",
@@ -121,7 +123,7 @@ def test_patch_writes_the_settings_fields(authed_client, user):
 
     assert response.status_code == status.HTTP_200_OK
     user.refresh_from_db()
-    assert user.goal_weight_kg == Decimal("78.50")
+    assert user.goal_weight_lb == Decimal("173.00")
     assert user.goal_timeline_weeks == 12
     assert user.training_days_per_week == 4
     assert user.dietary_constraints == "no dairy"
@@ -138,25 +140,25 @@ def test_patch_returns_the_full_user(authed_client):
 
 @pytest.mark.django_db
 def test_patch_leaves_omitted_fields_alone(authed_client, user):
-    user.goal_weight_kg = Decimal("80.00")
+    user.goal_weight_lb = Decimal("176.00")
     user.save()
 
     authed_client.patch(reverse("users:current"), {"training_days_per_week": 5})
 
     user.refresh_from_db()
-    assert user.goal_weight_kg == Decimal("80.00")
+    assert user.goal_weight_lb == Decimal("176.00")
 
 
 @pytest.mark.django_db
 def test_patch_clears_a_field_with_an_explicit_null(authed_client, user):
     """The other half of the previous test, and the reason this is not PUT."""
-    user.goal_weight_kg = Decimal("80.00")
+    user.goal_weight_lb = Decimal("176.00")
     user.save()
 
-    authed_client.patch(reverse("users:current"), {"goal_weight_kg": None})
+    authed_client.patch(reverse("users:current"), {"goal_weight_lb": None})
 
     user.refresh_from_db()
-    assert user.goal_weight_kg is None
+    assert user.goal_weight_lb is None
 
 
 @pytest.mark.django_db
@@ -210,8 +212,8 @@ def test_patch_cannot_rewrite_the_email(authed_client, user):
 @pytest.mark.parametrize(
     "payload",
     [
-        {"goal_weight_kg": "5.00"},
-        {"goal_weight_kg": "900.00"},
+        {"goal_weight_lb": "5.00"},
+        {"goal_weight_lb": "2000.00"},
         {"goal_timeline_weeks": 0},
         {"goal_timeline_weeks": 500},
         {"training_days_per_week": 8},

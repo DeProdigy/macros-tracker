@@ -94,6 +94,26 @@ class UserManager(BaseUserManager["User"]):
         return self.create_user(email, password, **extra_fields)
 
 
+class Sex(models.TextChoices):
+    """Biological sex, as Mifflin-St Jeor and the calorie floors need it.
+
+    Biological rather than gender, and the distinction matters here: the formula
+    is fitted to body composition, not to identity. Doc 15 labels the question
+    accordingly.
+
+    **Mirrored by `targets.services.Sex`**, which is a plain `StrEnum` because
+    that module is pure functions with no Django in it. The values must match,
+    and `targets/tests/test_units.py` asserts they do rather than leaving it to
+    whoever edits one of them next.
+
+    This is the canonical one. `accounts` owns the column, and `targets`
+    importing it would invert the app dependency doc 02 sets out.
+    """
+
+    FEMALE = "female", "Female"
+    MALE = "male", "Male"
+
+
 class User(AbstractBaseUser, PermissionsMixin):
     """Custom user model, keyed on email.
 
@@ -140,6 +160,44 @@ class User(AbstractBaseUser, PermissionsMixin):
     timezone = models.CharField(max_length=64, default="UTC")
     onboarding_completed = models.BooleanField(default=False)
 
+    # --- onboarding answers worth keeping (doc 05) ---
+    # Two of the six questions, stored because the answers outlive the flow that
+    # asked them.
+    #
+    # The other four are transient: age, height, goal and activity feed
+    # Mifflin-St Jeor once and are never needed again. These two are different.
+    # Editing targets in Settings weeks later needs both, and without them the
+    # server has no way to bound a protein target it is being asked to store.
+    # Before this, the app asked for weight and then threw it away, while
+    # keeping the *goal* weight. Storing the target and forgetting the number it
+    # is measured against is backwards.
+    #
+    # "Not answered" is a real state: doc 26 makes exiting onboarding early a
+    # supported end, so a user can reach Settings without ever being asked.
+    #
+    # blank + default="" rather than null, matching `name` and
+    # `dietary_constraints` above and ruff's DJ001. A nullable CharField gives
+    # two ways to spell "empty" and every reader then has to handle both. The
+    # numeric fields below are genuinely nullable, because 0 lb is a value rather
+    # than an absence.
+    sex = models.CharField(max_length=16, choices=Sex.choices, blank=True, default="")
+
+    # 85 lb is not a general sanity bound, it is `targets.services`'s stated
+    # precondition: below it the suggested calorie floor passes the ceiling and
+    # the range inverts. Enforcing it here is what makes a bad weight a 400
+    # rather than a 500 from the range guard. 1000 catches a typo.
+    #
+    # Duplicated from MINIMUM_SUPPORTED_WEIGHT_LB rather than imported, because
+    # `accounts` importing `targets` inverts the app dependency doc 02 sets out.
+    # `test_units.py` asserts the two agree, which is the guard against drift.
+    current_weight_lb = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("85")), MaxValueValidator(Decimal("1000"))],
+    )
+
     # --- settings (doc 05) ---
     # The four questions doc 05 moved *out* of onboarding. They improve target
     # quality and none of them blocks computing targets, so onboarding never
@@ -154,12 +212,18 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Units are in the field names, following protein_g/fiber_g in doc 02. A
     # bare `goal_weight` is the column that eventually receives pounds from one
     # call site and kilos from another.
-    goal_weight_kg = models.DecimalField(
-        max_digits=5,
+    #
+    # **Pounds, corrected 30 Aug 2026.** This shipped as `goal_weight_kg` in
+    # MAC-28, before the US units decision. Every screen that will ever write it
+    # shows pounds, so the column was one call site away from receiving them
+    # under a name that said otherwise. That is the exact failure the suffix
+    # exists to prevent, so the suffix was right and the unit was wrong.
+    goal_weight_lb = models.DecimalField(
+        max_digits=6,
         decimal_places=2,
         null=True,
         blank=True,
-        validators=[MinValueValidator(Decimal("20")), MaxValueValidator(Decimal("400"))],
+        validators=[MinValueValidator(Decimal("44")), MaxValueValidator(Decimal("880"))],
     )
     # Weeks, not a target date. A date goes stale on its own and then reads as
     # a missed deadline; a duration stays meaningful whenever it is read.

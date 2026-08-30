@@ -79,7 +79,9 @@ class UserSerializer(serializers.ModelSerializer):
             "name",
             "timezone",
             "onboarding_completed",
-            "goal_weight_kg",
+            "sex",
+            "current_weight_lb",
+            "goal_weight_lb",
             "goal_timeline_weeks",
             "training_days_per_week",
             "dietary_constraints",
@@ -116,7 +118,9 @@ class UserSettingsSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "timezone",
-            "goal_weight_kg",
+            "sex",
+            "current_weight_lb",
+            "goal_weight_lb",
             "goal_timeline_weeks",
             "training_days_per_week",
             "dietary_constraints",
@@ -133,9 +137,26 @@ class UserSettingsSerializer(serializers.ModelSerializer):
                     "offset — offsets break across DST."
                 )
             },
-            "goal_weight_kg": {
+            "sex": {
                 "help_text": (
-                    "Target body weight in kilograms, 20–400. Null clears it back to unanswered."
+                    "Biological sex, `female` or `male`. Asked during onboarding and "
+                    "stored because editing targets later needs it. Biological rather "
+                    "than gender: it feeds a formula fitted to body composition. Empty "
+                    "string means not answered."
+                )
+            },
+            "current_weight_lb": {
+                "help_text": (
+                    "Current body weight in pounds, 85–1000. Asked during onboarding "
+                    "and kept, because a target set in Settings weeks later has to be "
+                    "bounded against something. The 85 floor is not a sanity check: "
+                    "below it the suggested calorie range inverts. Null means not "
+                    "answered."
+                )
+            },
+            "goal_weight_lb": {
+                "help_text": (
+                    "Target body weight in pounds, 44–880. Null clears it back to unanswered."
                 )
             },
             "goal_timeline_weeks": {

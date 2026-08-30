@@ -2,7 +2,7 @@
 linear_id: 794ca722-e849-40c9-9d7c-804cdee285e3
 linear_title: "02 — Data Model"
 linear_url: https://linear.app/hintology/document/02-data-model-2b01a7aaa301
-linear_updated_at: 2026-08-29T15:42:25.255Z
+linear_updated_at: 2026-08-30T01:41:34.414Z
 generated: true
 ---
 
@@ -164,7 +164,7 @@ TargetVersion
 
 This is the standard slowly-changing-dimension pattern — worth internalizing, since "why did last month's numbers change?" is a bug class it eliminates entirely.
 
-**Three amendments, made 29 Aug 2026 after** [MAC-38](https://linear.app/hintology/issue/MAC-38/targets-app-foundations-the-targetversion-model) **shipped the model.** This section described the table before the code existed, and it drifted from the code in three places.
+**Three amendments, made 29 Aug 2026 after **[MAC-38](https://linear.app/hintology/issue/MAC-38/targets-app-foundations-the-targetversion-model) **shipped the model.** This section described the table before the code existed, and it drifted from the code in three places.
 
 The index is new here, not new in the code. [MAC-38](https://linear.app/hintology/issue/MAC-38/targets-app-foundations-the-targetversion-model) shipped `(user, -created_at)` in the initial migration. The FK indexes `user` alone, which still leaves a sort, and both readers of this table filter by user and order by recency: the current-targets lookup and the history screen's card list.
 
@@ -213,6 +213,9 @@ User (custom, AbstractBaseUser)
   timezone               CharField                     # IANA name, e.g. "America/New_York"
   onboarding_completed   BooleanField                  # server-derived: has a TargetVersion
   onboarding_skipped_at  DateTimeField, nullable       # user chose "Not now" on 9d
+  sex                    CharField, blank              # "female" | "male", from onboarding
+  current_weight_lb      DecimalField, nullable        # pounds, 85-1000
+  goal_weight_lb         DecimalField, nullable        # pounds, 44-880
   created_at
   deleted_at             DateTimeField, nullable       # soft delete
 
@@ -246,6 +249,20 @@ The launch gate routes to Today when either is set.
 One field would have been tidier and worse. Overloading the boolean to mean "completed or skipped" makes the name lie, and it throws away the ability to tell the two apart, which the re-prompt row on Today needs. Deriving it purely from "has targets" is worse still: a user who takes the *Not now* exit doc 26 designed would land back in onboarding on every cold start, and the exit stops being an exit.
 
 The general shape is worth keeping: **a flag meaning "the user resolved this" is not the same as one meaning "the data exists", and choosing the second because it is derivable is how a supported choice becomes a nag.**
+
+**Two of the six onboarding answers are stored, and four are not.** Added 30 Aug 2026.
+
+Age, height, goal, and activity feed Mifflin-St Jeor once and are never needed again. `sex` and `current_weight_lb` are different: editing targets in Settings weeks later needs both, and without them the server cannot bound a protein target it is being asked to store.
+
+Before this the app asked for current weight and threw it away while keeping the *goal* weight. Storing the target and forgetting the number it is measured against is backwards, and it was the first thing to break when the targets endpoints needed a weight.
+
+This stores the **latest** weight, not a history. A weight log is a real feature and it is not this. When it arrives, `current_weight_lb` becomes a denormalized copy of the newest row and needs the same argument the daily totals get.
+
+**Everything is pounds. **`goal_weight_kg` shipped in [MAC-28](https://linear.app/hintology/issue/MAC-28/session-endpoints-refresh-sign-out-and-me) before the US units decision and was renamed with a converting migration. The unit suffix was always right; only the unit was wrong. A bare `goal_weight` is still the column that eventually receives pounds from one call site and something else from another.
+
+`sex` is `blank` with a `""` default rather than nullable, matching `name` and `dietary_constraints`. The two weights are genuinely nullable, because 0 lb is a value rather than an absence.
+
+`accounts.models.Sex` is the canonical enum, and `targets.services.Sex` mirrors it as a plain `StrEnum` because that module holds pure functions with no Django in it. `targets` cannot import `accounts` without inverting the app order above, so the values are written twice and `targets/tests/test_units.py` asserts they agree. The same test pins the 85 lb weight floor against `MINIMUM_SUPPORTED_WEIGHT_LB`, which is a precondition rather than a sanity bound: below it the suggested calorie range inverts.
 
 `is_private_email` **is three-valued on purpose.** NULL means Apple did not tell us, which is not the same as `False`. Defaulting to `False` would assert a deliverable address we were never told about, and the field exists precisely to say whether mail to it can be relied on. It is refreshed on every sign-in, because a user can switch between a relay and their real address.
 

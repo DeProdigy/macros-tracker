@@ -5,6 +5,7 @@
  * Typed contract consumed by apps/mobile via packages/api-client.
  * OpenAPI spec version: 0.1.0
  */
+import type { PatchedUserSettingsRequestSex } from "./patchedUserSettingsRequestSex";
 
 /**
  * What a client may write to its own user.
@@ -25,12 +26,23 @@ export interface PatchedUserSettingsRequest {
    * @maxLength 64
    */
   timezone?: string;
+  /** Biological sex, `female` or `male`. Asked during onboarding and stored because editing targets later needs it. Biological rather than gender: it feeds a formula fitted to body composition. Empty string means not answered.
+
+* `female` - Female
+* `male` - Male */
+  sex?: (typeof PatchedUserSettingsRequestSex)[keyof typeof PatchedUserSettingsRequestSex];
   /**
-   * Target body weight in kilograms, 20–400. Null clears it back to unanswered.
+   * Current body weight in pounds, 85–1000. Asked during onboarding and kept, because a target set in Settings weeks later has to be bounded against something. The 85 floor is not a sanity check: below it the suggested calorie range inverts. Null means not answered.
    * @nullable
-   * @pattern ^-?\d{0,3}(?:\.\d{0,2})?$
+   * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
    */
-  goal_weight_kg?: string | null;
+  current_weight_lb?: string | null;
+  /**
+   * Target body weight in pounds, 44–880. Null clears it back to unanswered.
+   * @nullable
+   * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
+   */
+  goal_weight_lb?: string | null;
   /**
    * Weeks the user wants to reach the goal weight in, 1–104. A duration rather than a date, so it does not go stale. Null clears.
    * @minimum 1

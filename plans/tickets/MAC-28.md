@@ -28,6 +28,12 @@ stored. The route cannot exist without the columns, so migration 0005 adds them.
 
 Choices made here, none of which the plan docs settle:
 
+> **Corrected 30 Aug 2026 (MAC-53).** `goal_weight_kg` is now `goal_weight_lb`,
+> renamed with a converting migration. This section is left as written because it
+> is a record of what was decided then, and the reasoning below is still right:
+> the unit belongs in the field name. Only the unit was wrong, and it was wrong
+> because the US units decision came later.
+
 * **Units in the field name.** `goal_weight_kg`, following `protein_g` and
   `fiber_g` in doc 02. A bare `goal_weight` is the column that eventually
   receives pounds from one call site and kilos from another
