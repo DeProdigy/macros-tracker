@@ -26,6 +26,11 @@ export interface PatchedUserSettingsRequest {
    * @maxLength 64
    */
   timezone?: string;
+  /**
+   * Set this when the user leaves onboarding without targets. Send the current time in ISO 8601, within a day of now. Null clears it. Setting it stops the launch gate sending them back to onboarding on every cold start.
+   * @nullable
+   */
+  onboarding_skipped_at?: string | null;
   /** Biological sex, `female` or `male`. Asked during onboarding and stored because editing targets later needs it. Biological rather than gender: it feeds a formula fitted to body composition.
 
 **Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `""`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.

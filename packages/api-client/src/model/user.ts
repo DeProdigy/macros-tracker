@@ -34,8 +34,13 @@ export interface User {
   /** Display name, or empty when Apple never supplied one. */
   readonly name: string;
   readonly timezone: string;
-  /** Whether the client should route to onboarding or to Today. */
+  /** Server-derived, set when the user's first target version is created. Never writable. **Do not route on this field alone**: a user who left onboarding without setting targets has `onboarding_skipped_at` instead, and routing them back to onboarding on every launch turns a supported exit into a nag. Route to Today when either field is set. */
   readonly onboarding_completed: boolean;
+  /**
+   * When the user chose to leave onboarding without setting targets, or null if they never did. Client-written through `PATCH /api/users/me/`, because a skip is a choice the server cannot derive. Read it together with `onboarding_completed`.
+   * @nullable
+   */
+  readonly onboarding_skipped_at: string | null;
   readonly sex: (typeof UserSex)[keyof typeof UserSex];
   /**
    * @nullable

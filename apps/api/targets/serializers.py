@@ -112,7 +112,12 @@ class TargetVersionCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        return TargetVersion.objects.create(
+        # Through `services.create_version`, not `TargetVersion.objects.create`.
+        # That function also completes onboarding on a user's first target, in
+        # the same transaction, and it is the only place that happens. MAC-47
+        # exists because the flag had no writer at all, so a second creation
+        # path here would recreate the bug it fixed.
+        return services.create_version(
             user=self.context["request"].user,
             source=TargetVersion.Source.MANUAL,
             **validated_data,

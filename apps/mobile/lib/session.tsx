@@ -47,6 +47,15 @@ export type SessionState =
 export type Session = SessionState & {
   /** Adopts the user the sign-in call returned. Tokens are already in the Keychain by then. */
   signIn: (user: User) => void;
+  /**
+   * Replace the cached user after a write that changed it.
+   *
+   * Separate from `signIn`, which takes the same argument and does nearly the
+   * same thing. Calling `signIn` from a settings screen would read as signing
+   * someone in, and a name that lies about what it does costs more than the
+   * five lines it saves.
+   */
+  updateUser: (user: User) => void;
   /** Blacklists the refresh token, clears the Keychain, empties the cache. */
   signOut: () => Promise<void>;
   /** Soft-deletes the account, then does everything sign-out does. */
@@ -205,6 +214,17 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = useCallback((user: User) => setState({ status: "signedIn", user }), []);
 
+  const updateUser = useCallback(
+    (user: User) =>
+      // Only while signed in. A PATCH response can land after the global 401
+      // handler has signed the user out, and writing state unconditionally
+      // would put the app back into a session the server already rejected.
+      setState((current) =>
+        current.status === "signedIn" ? { status: "signedIn", user } : current,
+      ),
+    [],
+  );
+
   const signOut = useCallback(async () => {
     const refreshToken = await getRefreshToken();
 
@@ -232,8 +252,8 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
   }, [endSession]);
 
   const value = useMemo<Session>(
-    () => ({ ...state, signIn, signOut, deleteAccount }),
-    [state, signIn, signOut, deleteAccount],
+    () => ({ ...state, signIn, updateUser, signOut, deleteAccount }),
+    [state, signIn, updateUser, signOut, deleteAccount],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -123,6 +123,7 @@ class SessionCreateView(APIView):
                         "name": "Alex Hint",
                         "timezone": "UTC",
                         "onboarding_completed": False,
+                        "onboarding_skipped_at": None,
                         "sex": "",
                         "current_weight_lb": None,
                         "goal_weight_lb": None,
@@ -382,9 +383,14 @@ class CurrentUserView(APIView):
         summary="Read the signed-in user",
         description=(
             "Returns the user the bearer token resolves to. This is how the "
-            "client learns who it is signed in as after a cold start, and "
-            "`onboarding_completed` is what it routes on: false sends the user "
-            "to onboarding, true to Today.\n\n"
+            "client learns who it is signed in as after a cold start.\n\n"
+            "**Route on both onboarding fields, never on one.** Send the user "
+            "to Today when `onboarding_completed` is true *or* "
+            "`onboarding_skipped_at` is set, and to onboarding otherwise. The "
+            "first is server-derived and means they own targets. The second is "
+            "the user's own choice to leave without any. Reading only the first "
+            "puts a skipper back in onboarding on every cold start, which turns "
+            "a supported exit into a nag.\n\n"
             "401 when the token is missing, malformed, or expired — which the "
             "client should treat as 'refresh, then retry once'."
         ),
@@ -407,6 +413,7 @@ class CurrentUserView(APIView):
                     "name": "Alex Hint",
                     "timezone": "Europe/London",
                     "onboarding_completed": True,
+                    "onboarding_skipped_at": None,
                     "sex": "male",
                     "current_weight_lb": "192.00",
                     "goal_weight_lb": "173.00",
@@ -433,11 +440,16 @@ class CurrentUserView(APIView):
             "clears it back to unanswered. That distinction is the reason this "
             "is `PATCH` and not `PUT`: a full replace cannot tell the two "
             "apart.\n\n"
-            "Only these fields are writable. `email` and `name` come from Apple "
-            "at sign-in, and `onboarding_completed` is set by completing "
-            "onboarding, so none of them are accepted here — sending them is "
-            "ignored, not an error. The response is the full user, so the "
-            "client can replace its cached copy with one round trip."
+            "`onboarding_skipped_at` is writable and `onboarding_completed` is "
+            "not, which is deliberate rather than an oversight. The server sets "
+            "`onboarding_completed` when the user's first target version is "
+            "created, so a client asserting it would be a client lying about "
+            "its own data. A skip is a choice only the client knows about, so "
+            "the client records it.\n\n"
+            "Nothing else is writable. `email` and `name` come from Apple at "
+            "sign-in, so sending them is ignored rather than an error. The "
+            "response is the full user, so the client can replace its cached "
+            "copy with one round trip."
         ),
         tags=["users"],
         request=UserSettingsSerializer,

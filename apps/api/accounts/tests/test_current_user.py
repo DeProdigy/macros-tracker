@@ -18,6 +18,7 @@ from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
@@ -74,6 +75,7 @@ def test_get_never_exposes_password_or_permission_fields(authed_client):
         "name",
         "timezone",
         "onboarding_completed",
+        "onboarding_skipped_at",
         "sex",
         "current_weight_lb",
         "goal_weight_lb",
@@ -317,3 +319,89 @@ def test_put_is_not_routed(authed_client):
     response = authed_client.put(reverse("users:current"), {"training_days_per_week": 3})
 
     assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+
+# --- MAC-47: the skip half of the onboarding pair ----------------------------
+
+
+@pytest.mark.django_db
+def test_a_client_can_record_that_it_skipped_onboarding(authed_client, user):
+    now = timezone.now()
+
+    response = authed_client.patch(
+        reverse("users:current"), {"onboarding_skipped_at": now.isoformat()}, format="json"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    user.refresh_from_db()
+    assert user.onboarding_skipped_at is not None
+
+
+@pytest.mark.django_db
+def test_the_skip_survives_a_refetch(authed_client, user):
+    """The launch gate reads this response, so the read shape has to carry it.
+
+    Without the field on `UserSerializer` the write lands and the gate still
+    posts the user back to onboarding, which is the original bug with an extra
+    column.
+    """
+    authed_client.patch(
+        reverse("users:current"),
+        {"onboarding_skipped_at": timezone.now().isoformat()},
+        format="json",
+    )
+
+    response = authed_client.get(reverse("users:current"))
+
+    assert response.data["onboarding_skipped_at"] is not None
+
+
+@pytest.mark.django_db
+def test_null_clears_the_skip(authed_client, user):
+    User.objects.filter(pk=user.pk).update(onboarding_skipped_at=timezone.now())
+
+    authed_client.patch(reverse("users:current"), {"onboarding_skipped_at": None}, format="json")
+
+    user.refresh_from_db()
+    assert user.onboarding_skipped_at is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("offset", [timedelta(days=400), timedelta(days=-400)])
+def test_a_timestamp_far_from_the_server_clock_is_refused(authed_client, user, offset):
+    """The client sends the time, so the client's clock gets checked.
+
+    A phone that is a few hours out, or one that queued the write offline, is a
+    real user and passes. A year out is a bug or a client inventing history, and
+    the field exists to answer how long ago the skip happened.
+    """
+    response = authed_client.patch(
+        reverse("users:current"),
+        {"onboarding_skipped_at": (timezone.now() + offset).isoformat()},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "onboarding_skipped_at" in response.data
+
+
+@pytest.mark.django_db
+def test_the_two_onboarding_fields_have_opposite_writability(authed_client, user):
+    """The asymmetry, pinned in one place so it reads as a decision.
+
+    `onboarding_completed` is a fact the server derives, so a client asserting
+    it is a client lying. A skip is a choice only the client knows about.
+    """
+    response = authed_client.patch(
+        reverse("users:current"),
+        {
+            "onboarding_completed": True,
+            "onboarding_skipped_at": timezone.now().isoformat(),
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    user.refresh_from_db()
+    assert user.onboarding_completed is False
+    assert user.onboarding_skipped_at is not None

@@ -5,13 +5,16 @@
  *
  *   token in secure store?
  *     no  → Welcome
- *     yes → valid? → onboarding complete?
- *                      no  → onboarding
- *                      yes → Today
+ *     yes → valid? → needs onboarding?
+ *                      yes → onboarding
+ *                      no  → Today
  *
  * Three outcomes, not two. A user with entries and no targets is a coherent
  * state now that doc 26 made the onboarding stack exitable, so "signed in" and
  * "ready for Today" are different questions.
+ *
+ * `needsOnboarding` owns the third question, and it reads two fields rather
+ * than one. See `lib/onboarding.ts` for why a skip has to count.
  *
  * `SessionProvider` did the asking. This route only reads the answer and
  * redirects, which is what routing-from-state buys: nothing here has to know
@@ -23,6 +26,7 @@ import { Redirect } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 
+import { needsOnboarding } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
 
 export default function LaunchGate() {
@@ -47,7 +51,10 @@ export default function LaunchGate() {
     return <Redirect href="/login" />;
   }
 
-  if (!session.user.onboarding_completed) {
+  // Through the helper, never inline. The rule reads two fields, and the same
+  // rule runs in `(auth)/login.tsx`. Two inline copies is how one of them gets
+  // updated and the other does not.
+  if (needsOnboarding(session.user)) {
     return <Redirect href="/onboarding" />;
   }
 

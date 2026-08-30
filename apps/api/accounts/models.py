@@ -179,7 +179,29 @@ class User(AbstractBaseUser, PermissionsMixin):
     # IANA timezone name (e.g. "America/New_York"), never a numeric offset —
     # offsets break across DST.
     timezone = models.CharField(max_length=64, default="UTC")
+    # Two fields, because "finished the flow" and "walked out of it" are
+    # different facts and only one of them is derivable.
+    #
+    # `onboarding_completed` is a fact about the data: the server sets it when
+    # the user's first TargetVersion is created, and no client can write it.
+    # `UserSettingsSerializer` omits it, and a test pins that. A client that
+    # could assert it could skip a flow by claiming to have finished it.
     onboarding_completed = models.BooleanField(default=False)
+
+    # `onboarding_skipped_at` is a user *choice*, and the server has nothing to
+    # derive it from. So the client writes it through `PATCH /api/users/me/`,
+    # and that asymmetry with the field above is deliberate rather than an
+    # oversight. The worst a malicious client gets is skipping a screen it could
+    # already skip by tapping the button on it.
+    #
+    # Doc 26 makes leaving onboarding early a supported end state. Without this
+    # column the exit lasts exactly one launch: the gate reads
+    # `onboarding_completed`, finds it False, and posts the user back to
+    # onboarding on every cold start. A supported choice turns into a nag.
+    #
+    # A nullable timestamp rather than a second boolean. "When" costs nothing to
+    # store, and E5's re-prompt row on Today wants to know how long ago.
+    onboarding_skipped_at = models.DateTimeField(null=True, blank=True)
 
     # --- onboarding answers worth keeping (doc 05) ---
     # Two of the six questions, stored because the answers outlive the flow that

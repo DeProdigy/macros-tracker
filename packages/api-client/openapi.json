@@ -72,6 +72,7 @@
                                                 "name": "Alex Hint",
                                                 "timezone": "UTC",
                                                 "onboarding_completed": false,
+                                                "onboarding_skipped_at": null,
                                                 "sex": "",
                                                 "current_weight_lb": null,
                                                 "goal_weight_lb": null,
@@ -531,7 +532,7 @@
         "/api/users/me/": {
             "get": {
                 "operationId": "getCurrentUser",
-                "description": "Returns the user the bearer token resolves to. This is how the client learns who it is signed in as after a cold start, and `onboarding_completed` is what it routes on: false sends the user to onboarding, true to Today.\n\n401 when the token is missing, malformed, or expired — which the client should treat as 'refresh, then retry once'.",
+                "description": "Returns the user the bearer token resolves to. This is how the client learns who it is signed in as after a cold start.\n\n**Route on both onboarding fields, never on one.** Send the user to Today when `onboarding_completed` is true *or* `onboarding_skipped_at` is set, and to onboarding otherwise. The first is server-derived and means they own targets. The second is the user's own choice to leave without any. Reading only the first puts a skipper back in onboarding on every cold start, which turns a supported exit into a nag.\n\n401 when the token is missing, malformed, or expired — which the client should treat as 'refresh, then retry once'.",
                 "summary": "Read the signed-in user",
                 "tags": [
                     "users"
@@ -559,6 +560,7 @@
                                             "name": "Alex Hint",
                                             "timezone": "Europe/London",
                                             "onboarding_completed": true,
+                                            "onboarding_skipped_at": null,
                                             "sex": "male",
                                             "current_weight_lb": "192.00",
                                             "goal_weight_lb": "173.00",
@@ -581,7 +583,7 @@
             },
             "patch": {
                 "operationId": "updateCurrentUser",
-                "description": "Partial update of the settings doc 05 moved out of onboarding: goal weight, timeline, training days, and dietary constraints — plus the timezone the client refreshes on launch.\n\n**Partial.** An omitted field is left untouched; an explicit null clears it back to unanswered. That distinction is the reason this is `PATCH` and not `PUT`: a full replace cannot tell the two apart.\n\nOnly these fields are writable. `email` and `name` come from Apple at sign-in, and `onboarding_completed` is set by completing onboarding, so none of them are accepted here — sending them is ignored, not an error. The response is the full user, so the client can replace its cached copy with one round trip.",
+                "description": "Partial update of the settings doc 05 moved out of onboarding: goal weight, timeline, training days, and dietary constraints — plus the timezone the client refreshes on launch.\n\n**Partial.** An omitted field is left untouched; an explicit null clears it back to unanswered. That distinction is the reason this is `PATCH` and not `PUT`: a full replace cannot tell the two apart.\n\n`onboarding_skipped_at` is writable and `onboarding_completed` is not, which is deliberate rather than an oversight. The server sets `onboarding_completed` when the user's first target version is created, so a client asserting it would be a client lying about its own data. A skip is a choice only the client knows about, so the client records it.\n\nNothing else is writable. `email` and `name` come from Apple at sign-in, so sending them is ignored rather than an error. The response is the full user, so the client can replace its cached copy with one round trip.",
                 "summary": "Update the signed-in user's settings",
                 "tags": [
                     "users"
@@ -741,6 +743,12 @@
                         "minLength": 1,
                         "description": "IANA timezone name, e.g. `America/New_York`. The client refreshes this on launch (doc 02), so a user who flies somewhere gets their days bucketed locally. Never a numeric offset — offsets break across DST.",
                         "maxLength": 64
+                    },
+                    "onboarding_skipped_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true,
+                        "description": "Set this when the user leaves onboarding without targets. Send the current time in ISO 8601, within a day of now. Null clears it. Setting it stops the launch gate sending them back to onboarding on every cold start."
                     },
                     "sex": {
                         "description": "Biological sex, `female` or `male`. Asked during onboarding and stored because editing targets later needs it. Biological rather than gender: it feeds a formula fitted to body composition.\n\n**Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `\"\"`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.\n\n* `female` - Female\n* `male` - Male",
@@ -1094,7 +1102,14 @@
                     "onboarding_completed": {
                         "type": "boolean",
                         "readOnly": true,
-                        "description": "Whether the client should route to onboarding or to Today."
+                        "description": "Server-derived, set when the user's first target version is created. Never writable. **Do not route on this field alone**: a user who left onboarding without setting targets has `onboarding_skipped_at` instead, and routing them back to onboarding on every launch turns a supported exit into a nag. Route to Today when either field is set."
+                    },
+                    "onboarding_skipped_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "When the user chose to leave onboarding without setting targets, or null if they never did. Client-written through `PATCH /api/users/me/`, because a skip is a choice the server cannot derive. Read it together with `onboarding_completed`."
                     },
                     "sex": {
                         "readOnly": true,
@@ -1145,6 +1160,7 @@
                     "id",
                     "name",
                     "onboarding_completed",
+                    "onboarding_skipped_at",
                     "sex",
                     "timezone",
                     "training_days_per_week"
