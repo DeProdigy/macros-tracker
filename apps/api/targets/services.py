@@ -14,10 +14,17 @@ unit no screen ever shows.
 The formula still needs kilograms. MAC-51 converts once, where the formula lives.
 One conversion in one place beats one in every caller.
 
-The evidence behind these numbers is published per kilogram, so each constant is
-written as the per-kg figure divided by `POUNDS_PER_KG` rather than as a
-pre-computed decimal. That keeps the citable number visible in the source instead
-of hiding it behind a conversion a reader would have to reverse to check.
+Nothing in here converts. The constants are already per pound, and the only
+kilogram in the module is the source figure quoted in a comment beside each one,
+because that is the number a reader can look up. An earlier draft computed them
+with a `_per_pound()` helper at import time. It kept the citable figure editable,
+and it made a reader detour through a function to read a constant. A comment does
+the same job for free.
+
+Each pound value carries eight decimal places. That is not precision theatre:
+four places move a rounded bound by one at some body weights, and six is the
+first that does not. Eight is headroom, checked against the exact division for
+every whole pound from 60 to 600.
 
 **Two ranges, not one**, ruled 29 Aug 2026. One range forces a choice between
 two bad outcomes: clamp everything, and a person eating 1,400 kcal under medical
@@ -49,19 +56,6 @@ from enum import StrEnum
 
 from rest_framework.exceptions import ValidationError
 
-POUNDS_PER_KG = Decimal("2.20462262")
-
-
-def _per_pound(per_kg: str) -> Decimal:
-    """A published per-kilogram figure, expressed per pound.
-
-    Written this way so the citable number stays in the source. A pre-computed
-    `0.7257` tells a reader nothing and cannot be checked without reversing the
-    conversion first.
-    """
-    return Decimal(per_kg) / POUNDS_PER_KG
-
-
 # --- what the bounds are made of ---------------------------------------------
 #
 # Honesty about provenance, because these numbers will be questioned later and
@@ -82,12 +76,12 @@ class Sex(StrEnum):
 
 # Calories per pound of body weight, for the suggested range.
 #
-# **Judgement, not a citation.** The source figures are 22 and 40 kcal per
-# *kilogram*, which `_per_pound` converts. 22 lands near an aggressive but
-# ordinary cut and 40 near a generous bulk. Doc 15's prototype used a fixed 1,500-3,200,
-# which is right for a mid-sized adult and wrong at both ends: it forbids a
-# 110 lb woman a sensible target and warns a 220 lb man about a reasonable one.
-SUGGESTED_CALORIES_PER_LB = (_per_pound("22"), _per_pound("40"))
+# **Judgement, not a citation.** Published as 22 and 40 kcal per kilogram, which
+# is where these two came from. 22 lands near an aggressive but ordinary cut and
+# 40 near a generous bulk. Doc 15's prototype used a fixed 1,500-3,200, which is
+# right for a mid-sized adult and wrong at both ends: it forbids a 110 lb woman a
+# sensible target and warns a 220 lb man about a reasonable one.
+SUGGESTED_CALORIES_PER_LB = (Decimal("9.97903215"), Decimal("18.14369482"))
 
 # A floor under the per-pound figure, because the ratio gets very low for a small
 # person. **Rules of thumb**, widely repeated in consumer nutrition guidance
@@ -97,16 +91,16 @@ SUGGESTED_CALORIE_FLOOR_BY_SEX = {
     Sex.MALE: 1500,
 }
 
-# Protein per pound, for the suggested range.
+# Protein per pound, for the suggested range. Published as 1.6 to 2.5 g per
+# kilogram.
 #
-# **The best-supported numbers in this module**, and the reason the source unit
-# is kept visible. 1.6 to 2.2 g per *kilogram* for muscle retention in a deficit
-# is replicated across many trials, and that is the figure a reader can look up.
-# The ceiling is widened
-# to 2.5 deliberately: the evidence says there is no *added* benefit above ~2.2,
-# not that 2.4 is unwise, and warning a high-protein eater on every save trains
-# them to ignore the warning that matters.
-SUGGESTED_PROTEIN_G_PER_LB = (_per_pound("1.6"), _per_pound("2.5"))
+# **The best-supported numbers in this module.** 1.6 to 2.2 g/kg for muscle
+# retention in a deficit is replicated across many trials, and that is the figure
+# to look up. The ceiling is widened to 2.5 deliberately: the evidence says there
+# is no *added* benefit above ~2.2, not that 2.4 is unwise, and warning a
+# high-protein eater on every save trains them to ignore the warning that
+# matters.
+SUGGESTED_PROTEIN_G_PER_LB = (Decimal("0.72574779"), Decimal("1.13398093"))
 
 # Fiber per 1,000 kcal, for the suggested range.
 #
@@ -126,10 +120,10 @@ SUGGESTED_FIBER_G_PER_1000_KCAL = (Decimal("10"), Decimal("20"))
 # too, and it is there to catch a typo rather than to police an athlete.
 ABSOLUTE_CALORIE_RANGE = (1000, 5000)
 
-# Wide on purpose. 0.5 g per *kilogram* is below the RDA and 3.5 is above any
-# studied benefit, so a value outside this is a mistyped number rather than a
-# preference. Converted per pound like the rest.
-ABSOLUTE_PROTEIN_G_PER_LB = (_per_pound("0.5"), _per_pound("3.5"))
+# Wide on purpose. Published as 0.5 to 3.5 g per kilogram: 0.5 is below the RDA
+# and 3.5 is above any studied benefit, so a value outside this is a mistyped
+# number rather than a preference.
+ABSOLUTE_PROTEIN_G_PER_LB = (Decimal("0.22679619"), Decimal("1.58757330"))
 
 # Zero is allowed: a user may not want a fiber target at all, and refusing that
 # would be the app having an opinion where it has no standing. 100 g is roughly

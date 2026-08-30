@@ -55,9 +55,22 @@ one formula, and it meant the API spoke a unit no screen ever shows.
 The formula still needs metric. MAC-51 converts once, where the formula lives.
 One conversion in one place beats one in every caller.
 
-The published evidence is per kilogram, so each constant is written as the per-kg
-figure divided by `POUNDS_PER_KG` rather than as a pre-computed decimal. A bare
-`0.7257` cannot be checked against a paper without reversing it first.
+**Nothing in the module converts.** The constants are literal per-pound decimals
+and the only kilogram left is the source figure quoted in a comment beside each
+one.
+
+An earlier draft computed them with a `_per_pound("1.6")` helper at import time.
+The argument for it was that 1.6 g/kg is the number a reader can look up and
+`0.72574779` is not. Review pushed back and was right: a comment carries the
+citation for free, and the helper made every reader detour through a function to
+read a constant. The one thing it bought, keeping the figure editable in its
+published unit, is worth less than the tax on every read.
+
+Each literal carries **eight decimal places**, and that number is measured rather
+than chosen. Four places move a rounded bound by one at some body weights. Six is
+the first that does not. Eight is headroom, checked against the exact division
+for every whole pound from 60 to 600, and the 319 tests passing unchanged after
+the swap is the second proof.
 
 Doc 05, MAC-42, MAC-51, and MAC-41 all carried the old decision and were
 corrected with this ticket.
@@ -68,9 +81,8 @@ The ticket said doc 15's values are a starting point to justify, not copy. Two o
 these are well supported. The rest are judgement, and the comments say so.
 
 Every per-weight figure below is quoted in its **published unit**, which is per
-kilogram, and converted to per pound in the code. That is deliberate: the source
-number is the one a reader can look up, and burying it behind a conversion makes
-the constant uncheckable.
+kilogram. The constants themselves are per pound. Each comment names both, so the
+citable number stays findable without the code having to convert anything.
 
 **Well supported.** Protein at 1.6 to 2.5 g per kg: the 1.6 to 2.2 band for
 muscle retention in a deficit is replicated across many trials, and the ceiling
