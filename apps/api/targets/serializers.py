@@ -84,6 +84,23 @@ class TargetVersionCreateSerializer(serializers.ModelSerializer):
 
         Only model output gets clamped, and no model output reaches this
         endpoint.
+
+        **`user.current_weight_lb` is optional and may be absent**, because doc
+        26 makes exiting onboarding early a supported end state: a user can reach
+        Settings having answered nothing. `reject_outside_absolute` then drops
+        the protein bound and keeps the calorie and fiber ones, which need no
+        weight.
+
+        Refusing the write instead would block the exact person slice 1 exists
+        for, whose only route to having targets at all is this endpoint. The cost
+        is that they can set a nonsense protein number, which is wrong rather
+        than dangerous. Calories are the bound that matters for harm and it
+        survives.
+
+        An earlier version gated this on sex *and* weight. The absolute tier
+        never reads sex, so that dropped the guard for anyone who answered one
+        question and not the other, with the number it needed sitting right
+        there.
         """
         user: User = self.context["request"].user
         targets = services.Targets(
@@ -91,7 +108,7 @@ class TargetVersionCreateSerializer(serializers.ModelSerializer):
             protein_g=attrs["protein_g"],
             fiber_g=attrs["fiber_g"],
         )
-        services.reject_outside_absolute(targets, _profile_for(user))
+        services.reject_outside_absolute(targets, user.current_weight_lb)
         return attrs
 
     def create(self, validated_data):
@@ -100,21 +117,3 @@ class TargetVersionCreateSerializer(serializers.ModelSerializer):
             source=TargetVersion.Source.MANUAL,
             **validated_data,
         )
-
-
-def _profile_for(user: User) -> services.Profile | None:
-    """The user's sex and weight, or None when they never answered.
-
-    Both are nullable because doc 26 makes exiting onboarding early a supported
-    end state, so a user can reach Settings having answered nothing.
-
-    Returning None rather than refusing the write is the call MAC-53 left open.
-    Refusing would block the exact person slice 1 exists for: someone who skipped
-    onboarding and is now setting targets by hand, which is the only route they
-    have. `reject_outside_absolute` drops the protein bound in that case and
-    keeps the calorie and fiber ones, which need no profile. Calories are the
-    bound that matters for harm, and it survives.
-    """
-    if user.sex and user.current_weight_lb is not None:
-        return services.Profile(sex=services.Sex(user.sex), weight_lb=user.current_weight_lb)
-    return None

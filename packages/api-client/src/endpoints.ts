@@ -633,6 +633,16 @@ export function usePing<TData = Awaited<ReturnType<typeof ping>>, TError = unkno
 }
 
 /**
+ * The collection. Read it, or add to it.
+
+**There is deliberately no `history/` route.** Targets are append-only, so
+this collection *is* the history, and MAC-44's history screen reads it. Two
+URLs for one list is the mistake the 20 Aug 2026 route audit removed, and it
+survives only because "history" is what the screen is called.
+
+**No `PATCH` and no `PUT` either.** Editing writes a new version through this
+same `POST`, differing only in `source`. That is the append-only model
+showing through the URL design rather than hiding behind it.
  * @summary Every target version, newest first
  */
 export type listTargetsResponse200 = {
@@ -753,6 +763,16 @@ export function useListTargets<TData = Awaited<ReturnType<typeof listTargets>>, 
 }
 
 /**
+ * The collection. Read it, or add to it.
+
+**There is deliberately no `history/` route.** Targets are append-only, so
+this collection *is* the history, and MAC-44's history screen reads it. Two
+URLs for one list is the mistake the 20 Aug 2026 route audit removed, and it
+survives only because "history" is what the screen is called.
+
+**No `PATCH` and no `PUT` either.** Editing writes a new version through this
+same `POST`, differing only in `source`. That is the append-only model
+showing through the URL design rather than hiding behind it.
  * @summary Set new targets
  */
 export type createTargetResponse201 = {
@@ -858,6 +878,16 @@ export const useCreateTarget = <TError = void, TContext = unknown>(
 };
 
 /**
+ * The version in effect now.
+
+A named singleton, which the route conventions allow: the client cannot
+address this row by id, and "the version in effect now" is state the server
+genuinely owns. Unlike `today`, which doc 07 rejected for the same test.
+
+**404 when the user has no versions**, not an empty 200. A user without
+targets is a supported state rather than an error, but the resource genuinely
+does not exist, and a 200 with an empty body makes every caller null-check
+something that claims to be a target.
  * @summary The targets in effect now
  */
 export type getCurrentTargetResponse200 = {

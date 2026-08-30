@@ -327,6 +327,7 @@
         "/api/targets/": {
             "get": {
                 "operationId": "listTargets",
+                "description": "The collection. Read it, or add to it.\n\n**There is deliberately no `history/` route.** Targets are append-only, so\nthis collection *is* the history, and MAC-44's history screen reads it. Two\nURLs for one list is the mistake the 20 Aug 2026 route audit removed, and it\nsurvives only because \"history\" is what the screen is called.\n\n**No `PATCH` and no `PUT` either.** Editing writes a new version through this\nsame `POST`, differing only in `source`. That is the append-only model\nshowing through the URL design rather than hiding behind it.",
                 "summary": "Every target version, newest first",
                 "tags": [
                     "targets"
@@ -360,6 +361,7 @@
             },
             "post": {
                 "operationId": "createTarget",
+                "description": "The collection. Read it, or add to it.\n\n**There is deliberately no `history/` route.** Targets are append-only, so\nthis collection *is* the history, and MAC-44's history screen reads it. Two\nURLs for one list is the mistake the 20 Aug 2026 route audit removed, and it\nsurvives only because \"history\" is what the screen is called.\n\n**No `PATCH` and no `PUT` either.** Editing writes a new version through this\nsame `POST`, differing only in `source`. That is the append-only model\nshowing through the URL design rather than hiding behind it.",
                 "summary": "Set new targets",
                 "tags": [
                     "targets"
@@ -415,6 +417,7 @@
         "/api/targets/current/": {
             "get": {
                 "operationId": "getCurrentTarget",
+                "description": "The version in effect now.\n\nA named singleton, which the route conventions allow: the client cannot\naddress this row by id, and \"the version in effect now\" is state the server\ngenuinely owns. Unlike `today`, which doc 07 rejected for the same test.\n\n**404 when the user has no versions**, not an empty 200. A user without\ntargets is a supported state rather than an error, but the resource genuinely\ndoes not exist, and a 200 with an empty body makes every caller null-check\nsomething that claims to be a target.",
                 "summary": "The targets in effect now",
                 "tags": [
                     "targets"

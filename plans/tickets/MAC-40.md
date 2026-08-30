@@ -33,25 +33,42 @@ GET  /api/targets/current/   the version in effect now          200 or 404
 No `history/`. Targets are append-only, so the collection is the history. No
 `PATCH` and no `PUT`: editing writes a new version through the same `POST`.
 
-`current/` is routed above any future `<int:pk>/`, and the mutation table below
-shows what happens when it is not.
+`current/` is routed above any future *untyped* or `<str:pk>/` detail route,
+which would swallow the literal `current` as an id. An `<int:pk>/` route cannot,
+because that converter matches digits only. Review caught the overstatement, and
+the mutation below uses `<str:pk>/` for exactly that reason. Giving the detail
+route `<int:pk>/` when it arrives removes the hazard entirely.
 
 ## The question MAC-53 left open, answered
 
-`User.sex` and `User.current_weight_lb` are nullable, because doc 26 makes
-exiting onboarding early a supported end state. So a user can reach Settings
-having answered neither, and `reject_outside_absolute` needs both.
+`User.current_weight_lb` is optional, because doc 26 makes exiting onboarding
+early a supported end state. So a user can reach Settings having answered
+nothing, and the protein bound needs a weight.
 
-**A missing profile skips the protein bound and keeps the other two.**
+**A missing weight skips the protein bound and keeps the other two.**
 
 Refusing the write was the alternative, and it blocks the exact person slice 1
 exists for: someone who skipped onboarding and is setting targets by hand,
 which is their only route to having any. Refusing would make the skip a trap.
 
 The cost is real and small. Calories and fiber take flat bounds and need no
-profile, so both survive. Only protein's scales with weight. An unanswered user
-can set a nonsense protein target, which is a wrong number rather than a
-dangerous one, and calories are the bound that matters for harm.
+weight, so both survive. Only protein's scales. A user with no stored weight can
+set a nonsense protein target, which is a wrong number rather than a dangerous
+one, and calories are the bound that matters for harm.
+
+**The first version gated on sex *and* weight, and review caught that it was
+wider than the argument above.** None of the three absolute bounds reads sex.
+`absolute_protein_range` reads `weight_lb` and nothing else, so requiring a whole
+`Profile` dropped the guard for a user who answered the weight question and
+skipped the sex one, with the number it needed sitting right there.
+
+`reject_outside_absolute` now takes `Decimal | None` rather than
+`Profile | None`, and `absolute_protein_range` takes a weight too.
+`clamp_to_suggested` keeps the full `Profile`, because the suggested calorie
+floor genuinely does read sex.
+
+Changing the signature once, here, was cheaper than changing it again when MAC-51
+adds the second caller. It was already changing in this ticket.
 
 ## "Not in the future" cannot be checked exactly
 
@@ -95,11 +112,12 @@ something to check. Hooks generate as `useListTargets`, `useCreateTarget` and
 `useGetCurrentTarget`, from explicit `operation_id`s.
 
 One shipped signature changed: `reject_outside_absolute` now takes
-`Profile | None`. Its only caller is this ticket.
+`Decimal | None`, a weight, and `absolute_protein_range` with it. The only caller
+is this ticket.
 
 ## Verification
 
-Five mutations, each caught:
+Six mutations, each caught:
 
 | Mutation | Result |
 | ---------------------------------------------- | --------------------- |
@@ -107,9 +125,10 @@ Five mutations, each caught:
 | The absolute clamp is not applied on create | 3 tests fail |
 | The date skew widens from 1 day to 30 | 1 test fails |
 | `current/` is routed below a `<str:pk>/` route | 3 tests fail |
-| A missing profile refuses instead of skipping | 2 tests fail |
+| A missing weight refuses instead of skipping | 2 tests fail |
+| The protein gate requires sex as well as weight | 1 test fails |
 
-Gates: ruff, ruff format, mypy on 57 files, 353 tests, prettier, `pnpm lint`,
+Gates: ruff, ruff format, mypy on 57 files, 356 tests, prettier, `pnpm lint`,
 `pnpm check-types`, `pnpm test`, client regenerated.
 
 ## A process change, since it caused three findings last round
@@ -118,9 +137,18 @@ On MAC-53, three of five review findings were comments I wrote in the same commi
 that made them false. That is a pattern rather than three slips.
 
 This ticket was written in a different order: code first, green, then the
-comments against what the code actually does. The comment about `current/` route
-ordering, for instance, was written after the mutation proved what happens when
-it is wrong.
+comments against what the code actually does.
+
+**It half worked.** The comments describe real behaviour this time, and review
+still found two wrong: `<int:pk>` cannot collide with `current/`, and `User.sex`
+is blank-with-default rather than nullable. Both were claims about code outside
+the diff, which the new order does not help with.
+
+It also created a failure the old order would not have. drf-spectacular puts view
+docstrings into the OpenAPI description, so writing them after `pnpm generate:api`
+made the committed client stale and the drift job caught it. The comments here
+are part of the API contract, so "comments last" has to mean "regenerate last"
+too.
 
 ## Deliberately unhandled
 

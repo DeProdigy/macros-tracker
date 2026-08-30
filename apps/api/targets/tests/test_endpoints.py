@@ -154,6 +154,26 @@ def test_calories_are_still_bounded_without_a_weight(weightless, client_for):
 
 
 @pytest.mark.django_db
+def test_protein_is_still_bounded_when_only_the_sex_answer_is_missing(client_for, db):
+    """The hole review found in the first version.
+
+    `reject_outside_absolute` takes a weight, not a profile, because none of the
+    three bounds reads sex. Gating on both dropped the protein guard for a user
+    who answered the weight question and skipped the sex one, with the number it
+    needed sitting right there.
+    """
+    sexless = User.objects.create_user(
+        email="nosex@example.com", current_weight_lb=Decimal("155.00")
+    )
+
+    response = client_for(sexless).post(
+        reverse("targets:list-create"), payload(protein_g=900), format="json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
 def test_protein_is_unbounded_without_a_weight(weightless, client_for):
     response = client_for(weightless).post(
         reverse("targets:list-create"), payload(protein_g=900), format="json"
@@ -228,5 +248,15 @@ def test_current_never_reaches_another_users_row(user, weightless, client_for):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("route", ["targets:list-create", "targets:current"])
-def test_every_route_needs_authentication(route):
+def test_every_route_needs_authentication_to_read(route):
     assert APIClient().get(reverse(route)).status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+def test_creating_targets_needs_authentication():
+    """The write is where a missing permission actually costs something, and the
+    read-only version of this test did not cover it."""
+    response = APIClient().post(reverse("targets:list-create"), payload(), format="json")
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert TargetVersion.objects.count() == 0

@@ -259,16 +259,29 @@ def test_fiber_is_judged_against_the_clamped_calories_not_the_requested_ones():
 # --- the absolute range, which refuses rather than clamps ----------------------
 
 
+def test_a_missing_weight_skips_the_protein_bound_and_keeps_the_others():
+    """MAC-40's answer to a user who reached Settings without answering anything.
+
+    Refusing their write would block the one person slice 1 exists for, whose
+    only route to having targets is that screen. Calories and fiber take flat
+    bounds and survive; only protein's scales with weight.
+    """
+    reject_outside_absolute(targets(protein_g=900), None)
+
+    with pytest.raises(ValidationError):
+        reject_outside_absolute(targets(calories=400), None)
+
+
 def test_a_target_set_inside_the_absolute_range_passes_silently():
     # Not raising is the assertion. `assert ... is None` would look like a check
     # and be one, of a function annotated `-> None`. mypy caught that.
-    reject_outside_absolute(targets(), profile())
+    reject_outside_absolute(targets(), Decimal(MID_LB))
 
 
 @pytest.mark.parametrize("calories", [1000, 5000])
 def test_the_absolute_calorie_boundary_accepts_its_own_ends(calories):
     """Inclusive on both ends. Exactly 1,000 is allowed, not one over."""
-    reject_outside_absolute(targets(calories=calories), profile())
+    reject_outside_absolute(targets(calories=calories), Decimal(MID_LB))
 
 
 @pytest.mark.parametrize("calories", [999, 5001])
@@ -276,14 +289,14 @@ def test_one_step_outside_either_end_is_refused(calories):
     """The other half. An off-by-one in a bound is invisible in ordinary use, so
     both sides of both ends get a test."""
     with pytest.raises(ValidationError):
-        reject_outside_absolute(targets(calories=calories), profile())
+        reject_outside_absolute(targets(calories=calories), Decimal(MID_LB))
 
 
 def test_rejecting_names_the_field_and_the_bounds():
     """The message has to say what was wrong and what would be right. "Invalid"
     sends the caller back to guess."""
     with pytest.raises(ValidationError) as raised:
-        reject_outside_absolute(targets(calories=400), profile())
+        reject_outside_absolute(targets(calories=400), Decimal(MID_LB))
 
     message = str(raised.value.detail)
     assert "calories" in message
@@ -295,7 +308,7 @@ def test_every_failing_field_is_reported_at_once():
     """Not the first one. A caller who fixes one, resubmits, and is told about
     the next has been made to guess twice."""
     with pytest.raises(ValidationError) as raised:
-        reject_outside_absolute(targets(calories=400, protein_g=900, fiber_g=500), profile())
+        reject_outside_absolute(targets(calories=400, protein_g=900, fiber_g=500), Decimal(MID_LB))
 
     assert set(raised.value.detail) == {"calories", "protein_g", "fiber_g"}
 
@@ -303,17 +316,15 @@ def test_every_failing_field_is_reported_at_once():
 def test_a_zero_fiber_target_is_allowed():
     """A user may not want a fiber target, and refusing that would be the app
     having an opinion where it has no standing."""
-    reject_outside_absolute(targets(fiber_g=0), profile())
+    reject_outside_absolute(targets(fiber_g=0), Decimal(MID_LB))
 
 
 def test_the_absolute_protein_range_scales_with_weight():
     """At 110 lb the absolute band is 25 to 174 g, wide enough that anything
     outside it is a mistyped number rather than a preference."""
-    light = profile(weight_lb=LIGHT_LB)
-
-    reject_outside_absolute(targets(protein_g=25), light)
+    reject_outside_absolute(targets(protein_g=25), Decimal(LIGHT_LB))
     with pytest.raises(ValidationError):
-        reject_outside_absolute(targets(protein_g=24), light)
+        reject_outside_absolute(targets(protein_g=24), Decimal(LIGHT_LB))
 
 
 # --- the two tiers do different things ----------------------------------------
@@ -331,7 +342,7 @@ def test_a_value_outside_suggested_but_inside_absolute_is_clamped_yet_accepted()
     person = profile()
 
     assert clamp_to_suggested(low, person).targets.calories == 1547
-    reject_outside_absolute(low, person)
+    reject_outside_absolute(low, person.weight_lb)
 
 
 def test_the_constants_are_a_module_level_pair_not_settings():

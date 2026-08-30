@@ -325,7 +325,7 @@ def suggested_calorie_range(profile: Profile) -> Range:
 
 def suggested_protein_range(profile: Profile) -> Range:
     per_lb_floor, per_lb_ceiling = SUGGESTED_PROTEIN_G_PER_LB
-    absolute = absolute_protein_range(profile)
+    absolute = absolute_protein_range(profile.weight_lb)
 
     return Range(
         floor=max(_floor_of(per_lb_floor * profile.weight_lb), absolute.floor),
@@ -363,11 +363,19 @@ def absolute_calorie_range() -> Range:
     return Range(floor=floor, ceiling=ceiling)
 
 
-def absolute_protein_range(profile: Profile) -> Range:
+def absolute_protein_range(weight_lb: Decimal) -> Range:
+    """Takes a weight rather than a `Profile`, because that is all it reads.
+
+    Review caught the wider version. Asking for a `Profile` made the caller
+    supply a sex this function never touches, and `reject_outside_absolute` then
+    dropped the bound for anyone missing either answer. A user who gave their
+    weight and skipped the sex question lost a guard whose input was sitting
+    right there.
+    """
     per_lb_floor, per_lb_ceiling = ABSOLUTE_PROTEIN_G_PER_LB
     return Range(
-        floor=_floor_of(per_lb_floor * profile.weight_lb),
-        ceiling=_ceiling_of(per_lb_ceiling * profile.weight_lb),
+        floor=_floor_of(per_lb_floor * weight_lb),
+        ceiling=_ceiling_of(per_lb_ceiling * weight_lb),
     )
 
 
@@ -408,7 +416,7 @@ def clamp_to_suggested(targets: Targets, profile: Profile) -> ClampResult:
     )
 
 
-def reject_outside_absolute(targets: Targets, profile: Profile | None) -> None:
+def reject_outside_absolute(targets: Targets, weight_lb: Decimal | None) -> None:
     """Raise if any target is outside the range nothing may cross.
 
     Rejects rather than clamps, and that is the whole argument. Silently storing
@@ -419,15 +427,19 @@ def reject_outside_absolute(targets: Targets, profile: Profile | None) -> None:
     the suggested clamp still has to clear this, because the clamp reports rather
     than enforces.
 
-    **A `None` profile skips the protein bound and keeps the other two**, added
-    in MAC-40. `User.sex` and `User.current_weight_lb` are nullable, because doc
-    26 makes exiting onboarding early a supported end state, so a user can reach
-    Settings having answered neither. Refusing their write would block the one
-    person slice 1 exists for.
+    **Takes a weight rather than a `Profile`**, because none of these three
+    bounds reads sex. Calories and fiber take flat numbers, and protein scales
+    with body weight alone.
+
+    **A `None` weight skips the protein bound and keeps the other two**, added in
+    MAC-40. `User.current_weight_lb` is optional, because doc 26 makes exiting
+    onboarding early a supported end state and a user can reach Settings having
+    answered nothing. Refusing their write would block the one person slice 1
+    exists for.
 
     Calories and fiber are unaffected, and calories are the bound that matters
-    for harm. The cost is real and small: an unanswered user can set a nonsense
-    protein target, which is a wrong number rather than a dangerous one.
+    for harm. The cost is real and small: a user with no stored weight can set a
+    nonsense protein target, which is a wrong number rather than a dangerous one.
     """
     # Calories and fiber first, because neither needs a profile: their bounds are
     # flat numbers. Protein's scales with body weight, so it is the only one a
@@ -436,8 +448,8 @@ def reject_outside_absolute(targets: Targets, profile: Profile | None) -> None:
         ("calories", targets.calories, absolute_calorie_range()),
         ("fiber_g", targets.fiber_g, absolute_fiber_range()),
     ]
-    if profile is not None:
-        checks.append(("protein_g", targets.protein_g, absolute_protein_range(profile)))
+    if weight_lb is not None:
+        checks.append(("protein_g", targets.protein_g, absolute_protein_range(weight_lb)))
 
     errors = {
         field: [f"Must be between {allowed.floor} and {allowed.ceiling}. Received {value}."]
