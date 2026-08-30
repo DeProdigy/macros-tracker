@@ -1,7 +1,29 @@
 # MAC-47: nothing ever set onboarding_completed
 
-Approved 30 Aug 2026. Linear:
+Approved 30 Aug 2026, then rescoped the same day. Linear:
 [MAC-47](https://linear.app/hintology/issue/MAC-47/nothing-ever-sets-onboarding-completed-so-the-launch-gate-loops).
+
+## Rescoped mid-PR: onboarding is a hard gate
+
+This ticket shipped an `onboarding_skipped_at` column to make the skip work
+properly. The owner read it and asked why the skip existed at all.
+
+I checked the docs before answering, and they backed the skip: doc 05 said "the
+first meal comes before the questions" and "onboarding can be skipped or
+abandoned", doc 26 drew a *Not now* exit. Those docs were stale rather than
+right. The owner ruled the questions come first, the first meal comes after, and
+there is no skip.
+
+**What still ships is the actual bug.** Nothing ever wrote `onboarding_completed`.
+That is worse under a hard gate, not better.
+
+**What is deleted:** the column, its migration, both serializer halves, the
+clock-skew validator, and the placeholder's *Not now*.
+
+**What was added instead:** the route guard. See below.
+
+The sections after this one describe the two-field design and are kept as
+history. They are wrong about the product now.
 
 ## Slice and exception
 
@@ -215,3 +237,95 @@ Gates: ruff, ruff format, mypy on 58 files, 370 python tests,
 - **Should Settings show anything to a user who skipped?** MAC-44 puts targets
   in Settings and this ticket makes the skip stick. Whether the row nudges a
   skipper, and how loudly, is a design question doc 26 does not answer
+
+
+---
+
+# The rescope, 30 Aug 2026
+
+Everything above describes the two-field design. This is what actually shipped.
+
+## One field, and it is server-derived
+
+`onboarding_completed` turns true when the user's first `TargetVersion` is
+written. No client can set it. There is no second field, because there is no
+second way to leave.
+
+`services.create_version` is unchanged and so is every argument for it. The
+conditional UPDATE, the single transaction, the one-door rule, and the SQL
+assertion that pins the WHERE clause all survive the reversal untouched. Only
+the skip half went.
+
+## The hole the audit found
+
+The task said to cross-reference the code and make sure onboarding is really a
+blocker. It was not.
+
+`apps/mobile/app/(app)/_layout.tsx` guarded authentication and not onboarding.
+The launch gate at `/` checked it, and **a deep link straight to `/today` never
+runs the launch gate.** So a user with no targets walked in.
+
+That was tolerable while the skip existed, because leaving was allowed anyway. It
+is not tolerable now. **A gate with a way round it is not a gate.**
+
+The check went into the route guard rather than into each screen, by the same
+argument that file already made for auth: a per-screen check is the one that gets
+forgotten exactly once, by a screen written months from now that never thought
+about onboarding.
+
+`needsOnboarding` now has three callers and reads one field. A one-line helper
+looks like over-abstraction until you notice the rule changed twice in a day.
+
+**The server side is still open, and it is worth naming.** The mobile guard stops
+a person, not a request. Doc 02 now says `DailyLog.target_version` is NOT NULL,
+so whatever builds entry creation in E4 must refuse a user with no current
+version, or a bad request becomes a 500 instead of a 400.
+
+## What a sequencing decision reached
+
+The reversal deleted more than a screen, which is the interesting part.
+
+- `onboarding_skipped_at`, the column and everything around it
+- `9d`, the bridge screen, and MAC-46 with it
+- the nullable `DailyLog.target_version`, its backfill, and MAC-45
+- the "macros without progress" render state on the dashboard, doc 07
+- the dismissible re-prompt row on Today, parked for E5
+- doc 06's warning about the camera prompt arriving four seconds after install,
+  which the new order fixes for free
+
+Each of those was defensible on its own. None of them was needed. **A decision
+about what order two screens come in set a column's nullability, a dashboard
+render state, and two tickets**, and a reversal that only changed the routing
+would have left all of it standing.
+
+## The cost, accepted rather than worked around
+
+The placeholder is now a dead end. Until MAC-50 lands, a new user cannot reach
+the app at all.
+
+I considered leaving a temporary escape on the placeholder that wrote nothing.
+Rejected: a hidden bypass on a gate is worse than a dead end, and the dead end is
+honest about the state of the work. MAC-50 is raised to Urgent and rescoped to be
+reachable from onboarding, which makes it the way *through* the gate.
+
+## Docs and tickets updated
+
+Docs 02, 05, 06, 07, 21, 26 and the Decision Log, edited in Linear and mirrored
+with `pnpm sync:plans`. MAC-45 and MAC-46 cancelled. MAC-42, MAC-47 and MAC-50
+rescoped.
+
+## Verification after the rescope
+
+Five mutations, each caught:
+
+| Mutation | Result |
+| ------------------------------------------ | ------------------- |
+| The route guard drops the onboarding check | 1 mobile test fails |
+| `needsOnboarding` always returns false | 4 mobile tests fail |
+| `create_version` does not flip the flag | 6 tests fail |
+| The flip is unconditional | 1 test fails |
+| The two writes are not in one transaction | 1 test fails |
+
+Gates: ruff, ruff format, mypy on 58 files, 364 python tests,
+`makemigrations --check` clean, prettier, `pnpm lint`, `pnpm check-types`,
+90 jest tests.

@@ -2,7 +2,7 @@
 linear_id: 794ca722-e849-40c9-9d7c-804cdee285e3
 linear_title: "02 — Data Model"
 linear_url: https://linear.app/hintology/document/02-data-model-2b01a7aaa301
-linear_updated_at: 2026-08-30T02:21:11.067Z
+linear_updated_at: 2026-08-30T18:25:02.886Z
 generated: true
 ---
 
@@ -24,7 +24,7 @@ DailyLog
   id
   user            FK → User
   date            DateField          # the user's local calendar date
-  target_version  FK → TargetVersion, NULLABLE
+  target_version  FK → TargetVersion, NOT NULL
   created_at
   UNIQUE (user, date)
 
@@ -62,11 +62,17 @@ This is what makes per-item correction possible ("the rice estimate is wrong, th
 
 **Line items in the model do not mean line items in the primary UI.** The Review screen leads with entry totals; items are a secondary list the user only touches when something is wrong.
 
-### Why `target_version` is nullable
+### Why `target_version` is NOT NULL
 
-A user can log their first meal *before* completing onboarding — that's the intended activation flow. Such a day has no targets to point at.
+**Changed 30 Aug 2026**, with the onboarding sequencing. It was nullable, and the reason was the reversed order: a user could log their first meal before completing onboarding, so a day could exist with no targets to point at. That flow required a backfill on first target creation and a "macros without progress" render on the dashboard.
 
-On `DailyLog` creation, attach the user's current `TargetVersion` if one exists; otherwise leave null. When targets are first created, backfill any null rows for that user. A day with a null target version renders macros without progress.
+Onboarding is now a hard gate that comes first. No entry can exist before targets do, so the null case is unreachable and the column says so.
+
+On `DailyLog` creation, attach the user's current `TargetVersion`. There is always one.
+
+**The gate has to be enforced server-side, not only in the client.** The mobile app guards every signed-in route, and that stops a person, not a request. Whatever creates a `DailyLog` must refuse when the user has no current `TargetVersion`, or the NOT NULL becomes a 500 instead of a 400. That belongs to the E4 ticket that builds entry creation.
+
+The cost of the change is that loosening this later needs a migration, where the nullable version needed none. That is the right way round: a nullable FK nothing can produce is a permanent invitation to write the branch that handles it.
 
 ### Meal type
 
@@ -212,7 +218,6 @@ User (custom, AbstractBaseUser)
   name                   CharField, blank              # display only, UNVERIFIED
   timezone               CharField                     # IANA name, e.g. "America/New_York"
   onboarding_completed   BooleanField                  # server-derived: has a TargetVersion
-  onboarding_skipped_at  DateTimeField, nullable       # user chose "Not now" on 9d
   sex                    CharField, blank              # "female" | "male", from onboarding
   current_weight_lb      DecimalField, nullable        # pounds, 85-500
   goal_weight_lb         DecimalField, nullable        # pounds, 85-500
@@ -240,15 +245,15 @@ The unique constraint is on the pair, never on `subject` **alone.** A subject is
 
 Superusers have no `Identity` **at all.** They have a password and log in at `/admin/`. That is the sentence that makes the split easy to reason about: authentication is not something every row must have.
 
-**Two onboarding fields, and why not one.** The field `onboarding_completed` is **server-derived**: it turns true when the user's first `TargetVersion` is written, and no client can set it. `PATCH /api/users/me/` refuses it, and a test asserts that refusal, because a shared read/write serializer would let any client skip onboarding by sending one field.
+**One onboarding field, and it is server-derived. **`onboarding_completed` turns true when the user's first `TargetVersion` is written, and no client can set it. `PATCH /api/users/me/` refuses it, and a test asserts that refusal, because a shared read/write serializer would let any client walk past onboarding by sending one field.
 
-`onboarding_skipped_at` records a **user choice** and *is* client-writable through that same endpoint. The asymmetry is deliberate. A derived fact asserted by a client is a client lying. A choice has nothing to derive it from, and the worst a bad actor achieves by writing it is skipping a screen they could skip by tapping the button.
+Nothing wrote it until 30 Aug 2026. It was read by two mobile routes and written nowhere, so a user set targets, closed the app, and reopened it in onboarding, forever. The bug was invisible in every ticket taken alone: it only appears if you ask who writes the field. `targets.services.create_version` is now the one door that makes a `TargetVersion`, and it flips the flag in the same transaction.
 
-The launch gate routes to Today when either is set.
+**A second field,** `onboarding_skipped_at`**, was designed and then removed the same day.** It recorded a user choosing *Not now*, and it was client-writable through the settings endpoint while `onboarding_completed` was not. The asymmetry was sound reasoning on a premise that then changed: onboarding became a hard gate, so there is no choice left to record.
 
-One field would have been tidier and worse. Overloading the boolean to mean "completed or skipped" makes the name lie, and it throws away the ability to tell the two apart, which the re-prompt row on Today needs. Deriving it purely from "has targets" is worse still: a user who takes the *Not now* exit doc 26 designed would land back in onboarding on every cold start, and the exit stops being an exit.
+The reasoning is kept here because it applies elsewhere. **A flag meaning "the user resolved this" is not the same as one meaning "the data exists", and choosing the second because it is derivable is how a supported choice becomes a nag.** That shape is real. It just needs a supported choice to exist, and onboarding no longer has one.
 
-The general shape is worth keeping: **a flag meaning "the user resolved this" is not the same as one meaning "the data exists", and choosing the second because it is derivable is how a supported choice becomes a nag.**
+With the gate hard, "has targets" and "resolved onboarding" are the same fact, and one derived field is the honest model.
 
 **Two of the six onboarding answers are stored, and four are not.** Added 30 Aug 2026.
 

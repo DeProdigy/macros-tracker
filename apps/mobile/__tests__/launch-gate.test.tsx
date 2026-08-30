@@ -72,7 +72,7 @@ describe("LaunchGate", () => {
     mockUseSession.mockReturnValue(
       sessionOf({
         status: "signedIn",
-        user: { onboarding_completed: false, onboarding_skipped_at: null } as User,
+        user: { onboarding_completed: false } as User,
       }),
     );
 
@@ -86,27 +86,7 @@ describe("LaunchGate", () => {
     mockUseSession.mockReturnValue(
       sessionOf({
         status: "signedIn",
-        user: { onboarding_completed: true, onboarding_skipped_at: null } as User,
-      }),
-    );
-
-    render(<LaunchGate />);
-
-    expect(screen.getByText("redirect:/today")).toBeTruthy();
-    await waitFor(() => expect(mockHideAsync).toHaveBeenCalled());
-  });
-
-  it("sends a user who skipped onboarding to Today", async () => {
-    // The bug MAC-47 fixes, at the screen that had it. Before the gate read
-    // both fields this user landed back on onboarding on every launch, with
-    // their skip already recorded on the server.
-    mockUseSession.mockReturnValue(
-      sessionOf({
-        status: "signedIn",
-        user: {
-          onboarding_completed: false,
-          onboarding_skipped_at: "2026-08-30T12:00:00Z",
-        } as User,
+        user: { onboarding_completed: true } as User,
       }),
     );
 

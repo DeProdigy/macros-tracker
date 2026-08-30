@@ -1,33 +1,30 @@
 /**
- * One question, asked from two places: does this user still need onboarding?
+ * One question, asked from three places: may this user be in the app yet?
  *
- * The launch gate and the post-sign-in redirect both ask it. Before MAC-47 they
- * both read `user.onboarding_completed` inline, and the answer was wrong in the
- * same way in both files.
+ * The launch gate, the post-sign-in redirect, and the guard on every signed-in
+ * route all ask it. Before MAC-47 the first two asked it inline and the third
+ * did not ask at all.
  *
- * A two-part condition duplicated across two screens is a bug waiting for the
- * day someone changes one of them. Neither call site can drift from the other
- * now, because there is only one copy of the rule.
+ * One field today, so the function looks thin. It is still worth having. Three
+ * inline copies is a bug waiting for the day someone changes one of them, and
+ * this rule has already changed once: it briefly read two fields, while
+ * onboarding was skippable.
  */
 
 import type { User } from "@macros/api-client";
 
 /**
- * True when the user has neither finished onboarding nor chosen to leave it.
+ * True while the user has no targets, which is the only state that keeps them
+ * out of the app.
  *
- * **Two fields, because they record different things.**
+ * **Onboarding is a hard gate.** Ruled 30 Aug 2026, reversing the 20 Aug
+ * sequencing that put the first meal before the questions. There is no skip and
+ * no *Not now*, so this is a fact about the user's data rather than a record of
+ * anything they chose.
  *
  * `onboarding_completed` is server-derived. It turns true when the user's first
- * target version is created, and no client can write it.
- *
- * `onboarding_skipped_at` is the user's own choice, written by the client. Doc
- * 26 makes leaving onboarding early a supported end state, and without reading
- * this half the gate sends a skipper back to onboarding on every cold start.
- * The exit stops being an exit.
- *
- * Both can be set at once and that is fine. Skip on day one, set targets from
- * Settings in week two, and the pair still records what happened while this
- * function keeps returning false.
+ * target version is written, and `PATCH /api/users/me/` refuses to set it. A
+ * client that could assert it could walk past the gate by claiming to have
+ * finished.
  */
-export const needsOnboarding = (user: User): boolean =>
-  !user.onboarding_completed && !user.onboarding_skipped_at;
+export const needsOnboarding = (user: User): boolean => !user.onboarding_completed;

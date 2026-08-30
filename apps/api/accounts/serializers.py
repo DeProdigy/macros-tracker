@@ -6,21 +6,9 @@ OpenAPI schema is precise enough to generate useful client types from. An
 every permission relation into the mobile app's types.
 """
 
-from datetime import datetime, timedelta
-
-from django.utils import timezone
 from rest_framework import serializers
 
 from accounts.models import Sex, User
-
-# How far from the server's clock a client-sent `onboarding_skipped_at` may sit.
-#
-# Same constant and same reasoning as `targets/serializers.py`'s
-# `MAX_CLIENT_DATE_SKEW`. A phone with a wrong clock, or one that queued the
-# write offline, is a real user. A timestamp a year out is a bug or a client
-# inventing history, and the field exists to answer "how long ago did they
-# skip?" for E5's re-prompt row.
-MAX_CLIENT_CLOCK_SKEW = timedelta(days=1)
 
 
 class SessionCreateSerializer(serializers.Serializer):
@@ -105,7 +93,6 @@ class UserSerializer(serializers.ModelSerializer):
             "name",
             "timezone",
             "onboarding_completed",
-            "onboarding_skipped_at",
             "sex",
             "current_weight_lb",
             "goal_weight_lb",
@@ -124,20 +111,11 @@ class UserSerializer(serializers.ModelSerializer):
             "name": {"help_text": "Display name, or empty when Apple never supplied one."},
             "onboarding_completed": {
                 "help_text": (
+                    "Whether the client should route to onboarding or to Today. "
                     "Server-derived, set when the user's first target version is "
-                    "created. Never writable. **Do not route on this field alone**: "
-                    "a user who left onboarding without setting targets has "
-                    "`onboarding_skipped_at` instead, and routing them back to "
-                    "onboarding on every launch turns a supported exit into a nag. "
-                    "Route to Today when either field is set."
-                )
-            },
-            "onboarding_skipped_at": {
-                "help_text": (
-                    "When the user chose to leave onboarding without setting "
-                    "targets, or null if they never did. Client-written through "
-                    "`PATCH /api/users/me/`, because a skip is a choice the server "
-                    "cannot derive. Read it together with `onboarding_completed`."
+                    "created, and never writable. False means the user has no "
+                    "targets and onboarding is the only screen they may reach: "
+                    "there is no skip."
                 )
             },
         }
@@ -160,7 +138,6 @@ class UserSettingsSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "timezone",
-            "onboarding_skipped_at",
             "sex",
             "current_weight_lb",
             "goal_weight_lb",
@@ -178,19 +155,6 @@ class UserSettingsSerializer(serializers.ModelSerializer):
                     "refreshes this on launch (doc 02), so a user who flies "
                     "somewhere gets their days bucketed locally. Never a numeric "
                     "offset — offsets break across DST."
-                )
-            },
-            # The one client-writable onboarding field, and the asymmetry with
-            # `onboarding_completed` is deliberate. That one is a fact about the
-            # data, so a client asserting it is a client lying. This one is a
-            # choice only the client knows about. The worst a malicious client
-            # gets from it is skipping a screen that has a skip button on it.
-            "onboarding_skipped_at": {
-                "help_text": (
-                    "Set this when the user leaves onboarding without targets. Send "
-                    "the current time in ISO 8601, within a day of now. Null clears "
-                    "it. Setting it stops the launch gate sending them back to "
-                    "onboarding on every cold start."
                 )
             },
             # **`sex` clears with `""`, not with `null`**, and that is the one
@@ -259,32 +223,6 @@ class UserSettingsSerializer(serializers.ModelSerializer):
                 ),
             },
         }
-
-    def validate_onboarding_skipped_at(self, value: datetime | None) -> datetime | None:
-        """Refuse a timestamp far from the server's clock.
-
-        The client sends this rather than the server stamping it, which is the
-        choice worth explaining. The alternative was accepting any value and
-        overwriting it with `timezone.now()`, and that makes a writable field
-        quietly ignore what it was sent. A reader of the schema would have no way
-        to know.
-
-        So the client's clock is trusted, and checked. Same pattern and same
-        window as `effective_from` on a target version, one ticket old.
-
-        Null passes untouched. Clearing the field is how a client says "they came
-        back and went through the flow after all".
-        """
-        if value is None:
-            return None
-
-        if abs(value - timezone.now()) > MAX_CLIENT_CLOCK_SKEW:
-            raise serializers.ValidationError(
-                "Must be within a day of the current time. Send the time of the "
-                "skip, not a historical or future date.",
-                code="clock_skew",
-            )
-        return value
 
     def validate_dietary_constraints(self, value: str | None) -> str:
         """Accept null and store empty.

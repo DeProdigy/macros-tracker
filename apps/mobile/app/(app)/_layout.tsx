@@ -10,6 +10,7 @@
 
 import { Redirect, Stack } from "expo-router";
 
+import { needsOnboarding } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
 
 export default function AppLayout() {
@@ -23,6 +24,15 @@ export default function AppLayout() {
 
   if (session.status === "signedOut") {
     return <Redirect href="/login" />;
+  }
+
+  // The same argument as the auth check above, for the gate that has no
+  // targets yet. The launch gate at `/` sends a user here, and a deep link
+  // straight to `/today` never passes through it, so before this the gate was
+  // advice rather than a rule. Onboarding is a hard gate as of 30 Aug 2026, and
+  // a gate with a way round it is not one.
+  if (needsOnboarding(session.user)) {
+    return <Redirect href="/onboarding" />;
   }
 
   return <Stack screenOptions={{ headerShown: false }} />;
