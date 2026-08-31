@@ -13,8 +13,8 @@ import {
   type TargetProposal,
   type TargetProposalRequestRequest,
 } from "@macros/api-client";
-import { Redirect } from "expo-router";
-import { useState } from "react";
+import { Redirect, useRouter } from "expo-router";
+import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -28,6 +28,7 @@ import {
 import { needsOnboarding } from "@/lib/onboarding";
 import { usePalette, type Palette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
+import { saveTargetVersion, TargetSavedButRefreshFailed } from "@/lib/target-save";
 
 type Answers = {
   age: string;
@@ -111,17 +112,23 @@ const requestFrom = (answers: Answers): TargetProposalRequestRequest => ({
 
 export default function Onboarding() {
   const session = useSession();
+  const router = useRouter();
   const palette = usePalette();
   const [answers, setAnswers] = useState(EMPTY_ANSWERS);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [proposal, setProposal] = useState<TargetProposal | null>(null);
+  const [savingTargets, setSavingTargets] = useState(false);
+  const [saveFailure, setSaveFailure] = useState<string | null>(null);
+  const [targetWasSaved, setTargetWasSaved] = useState(false);
+  const saveInFlight = useRef(false);
+  const [completed, setCompleted] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   if (session.status === "loading") return null;
   if (session.status === "signedOut") return <Redirect href="/login" />;
-  if (!needsOnboarding(session.user)) return <Redirect href="/today" />;
+  if (!needsOnboarding(session.user) && !completed) return <Redirect href="/today" />;
 
   const update = <K extends keyof Answers>(key: K, value: Answers[K]) => {
     setAnswers((current) => ({ ...current, [key]: value }));
@@ -153,6 +160,39 @@ export default function Onboarding() {
     }
   };
 
+  const acceptProposal = async () => {
+    // State disables the visible controls. The ref closes the smaller window
+    // before React commits that state, when a fast second tap could otherwise
+    // create a second append-only row.
+    if (!proposal || saveInFlight.current) return;
+    saveInFlight.current = true;
+    setSavingTargets(true);
+    setSaveFailure(null);
+    try {
+      const user = await saveTargetVersion(proposal.targets);
+      setCompleted(true);
+      session.updateUser(user);
+      router.replace("/first-food");
+    } catch (caught) {
+      if (caught instanceof TargetSavedButRefreshFailed) {
+        // The write succeeded. Keep every save path locked because retrying
+        // would create a second TargetVersion for the same user action.
+        setTargetWasSaved(true);
+        setSaveFailure(
+          "Your targets are saved. The app could not refresh your account, so reopen it to continue.",
+        );
+      } else if (caught instanceof ApiError && caught.status === 400) {
+        saveInFlight.current = false;
+        setSaveFailure("Those targets were refused. Adjust them and try again.");
+      } else {
+        saveInFlight.current = false;
+        setSaveFailure("Your targets weren't saved. Nothing changed, so try again in a minute.");
+      }
+    } finally {
+      setSavingTargets(false);
+    }
+  };
+
   if (proposal) {
     return (
       <ScrollView
@@ -181,8 +221,44 @@ export default function Onboarding() {
         ) : null}
         <Text style={[styles.sectionLabel, { color: palette.dimText }]}>WHY THESE NUMBERS</Text>
         <Text style={[styles.body, { color: palette.secondaryText }]}>{proposal.rationale}</Text>
+        {saveFailure ? (
+          <Text accessibilityRole="alert" style={[styles.error, { color: palette.error }]}>
+            {saveFailure}
+          </Text>
+        ) : null}
         <Pressable
           accessibilityRole="button"
+          disabled={savingTargets || targetWasSaved}
+          onPress={() => void acceptProposal()}
+          style={[styles.nextButton, { backgroundColor: palette.accent }]}
+        >
+          {savingTargets ? (
+            <ActivityIndicator color="#001111" />
+          ) : (
+            <Text style={styles.nextLabel}>ACCEPT AND CONTINUE</Text>
+          )}
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={savingTargets || targetWasSaved}
+          onPress={() =>
+            router.push({
+              pathname: "/targets",
+              params: {
+                source: "onboarding",
+                calories: String(proposal.targets.calories),
+                protein_g: String(proposal.targets.protein_g),
+                fiber_g: String(proposal.targets.fiber_g),
+              },
+            })
+          }
+          style={[styles.secondaryButton, { borderColor: palette.hairline }]}
+        >
+          <Text style={[styles.secondaryLabel, { color: palette.text }]}>ADJUST FIRST</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={savingTargets || targetWasSaved}
           onPress={() => {
             setProposal(null);
             setStep(LAST_QUESTION_INDEX);
@@ -191,9 +267,6 @@ export default function Onboarding() {
         >
           <Text style={[styles.secondaryLabel, { color: palette.text }]}>BACK TO ANSWERS</Text>
         </Pressable>
-        <Text style={[styles.body, { color: palette.dimText }]}>
-          Accepting or adjusting these targets is the next build slice.
-        </Text>
       </ScrollView>
     );
   }
@@ -232,6 +305,7 @@ export default function Onboarding() {
         {step > 0 ? (
           <Pressable
             accessibilityRole="button"
+            disabled={submitting}
             onPress={() => {
               setStep((current) => current - 1);
               setError(null);
@@ -246,7 +320,7 @@ export default function Onboarding() {
             disabled={signingOut}
             onPress={() => {
               setSigningOut(true);
-              void session.signOut();
+              void session.signOut().catch(() => setSigningOut(false));
             }}
             style={styles.signOut}
           >
