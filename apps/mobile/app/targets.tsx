@@ -6,15 +6,13 @@
 
 import { ApiError, getCurrentTarget, type TargetVersion } from "@macros/api-client";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { needsOnboarding } from "@/lib/onboarding";
 import { usePalette, type Palette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
 import { saveTargetVersion, TargetSavedButRefreshFailed } from "@/lib/target-save";
-
-export { localIsoDate } from "@/lib/target-save";
 
 /**
  * The flat half of the absolute range, mirrored from `targets/services.py`.
@@ -134,12 +132,25 @@ export default function AdjustTargets() {
   const hasProposalValues =
     proposalValues !== null &&
     Object.values(proposalValues).every((value) => Number.isFinite(value));
+  const normalizedProposalValues = useMemo(
+    () =>
+      hasProposalValues && proposalValues
+        ? {
+            calories: clamp(Math.round(proposalValues.calories), CALORIE_LIMITS),
+            protein_g: clamp(Math.round(proposalValues.protein_g)),
+            fiber_g: clamp(Math.round(proposalValues.fiber_g), FIBER_LIMITS),
+          }
+        : null,
+    [hasProposalValues, params.calories, params.fiber_g, params.protein_g],
+  );
 
   const [values, setValues] = useState<Values>(STARTING_POINT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const [targetWasSaved, setTargetWasSaved] = useState(false);
+  const saveInFlight = useRef(false);
 
   // Seed from the current version when there is one.
   useEffect(() => {
@@ -162,8 +173,8 @@ export default function AdjustTargets() {
       return;
     }
 
-    if (hasProposalValues && proposalValues) {
-      setValues(proposalValues);
+    if (normalizedProposalValues) {
+      setValues(normalizedProposalValues);
       setLoading(false);
       return;
     }
@@ -203,7 +214,7 @@ export default function AdjustTargets() {
     return () => {
       cancelled = true;
     };
-  }, [hasProposalValues, params.calories, params.fiber_g, params.protein_g, session.status]);
+  }, [normalizedProposalValues, session.status]);
 
   if (session.status === "loading") {
     return null;
@@ -224,6 +235,8 @@ export default function AdjustTargets() {
   };
 
   const save = async () => {
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
     // Read before the write, while the session still holds the pre-save user.
     // The refetch below flips `onboarding_completed`, so afterwards there is no
     // way to tell which entry point this was.
@@ -241,6 +254,7 @@ export default function AdjustTargets() {
       setSaving(false);
 
       if (error instanceof TargetSavedButRefreshFailed) {
+        setTargetWasSaved(true);
         setFailure(
           "Your targets are saved. The app could not refresh your account, so reopen it to continue.",
         );
@@ -248,6 +262,7 @@ export default function AdjustTargets() {
       }
 
       if (error instanceof ApiError && error.status === 400) {
+        saveInFlight.current = false;
         const { fields, other } = errorsFrom(error.body);
         setFieldErrors(fields);
         setFailure(
@@ -259,16 +274,21 @@ export default function AdjustTargets() {
         return;
       }
 
+      saveInFlight.current = false;
       setFailure("Your targets weren't saved. Nothing changed, so try again in a minute.");
       return;
     }
 
     setSaving(false);
     if (wasOnboarding) return;
+    saveInFlight.current = false;
 
-    // Return to Settings when it opened the editor. A direct Settings deep
-    // link has no history, so Today is the safe fallback.
-    if (!wasOnboarding && router.canGoBack()) {
+    // Account state, not browser history, distinguishes the two entry points.
+    // Onboarding pushes this screen too, so canGoBack() is true there. Using
+    // history alone once sent a completed user back to the editor, where a
+    // second tap created another append-only version. That path returns above.
+    // A Settings edit can safely follow its real history instead.
+    if (router.canGoBack()) {
       router.back();
       return;
     }
@@ -319,26 +339,25 @@ export default function AdjustTargets() {
         palette={palette}
       />
 
-      {/* Doc 15 puts the append-only model in the copy, because it is the thing
-          people form wrong assumptions about. Saving does not overwrite, and the
-          button says so before the tap rather than a support page saying it
-          after. */}
       <Text style={[styles.note, { color: palette.secondaryText }]}>
-        Saving writes a new version. Days you have already logged keep the targets that were live at
-        the time, so last week&apos;s progress never gets rewritten.
+        {hasProposalValues
+          ? "These become your first daily targets. You can change them later in Settings."
+          : "Saving writes a new version. Days you have already logged keep the targets that were live at the time, so last week's progress never gets rewritten."}
       </Text>
 
       {failure ? <Text style={[styles.failure, { color: palette.error }]}>{failure}</Text> : null}
 
       <Pressable
         accessibilityRole="button"
-        disabled={saving}
+        disabled={saving || targetWasSaved}
         onPress={() => {
           void save();
         }}
         style={[styles.button, { backgroundColor: palette.accent }]}
       >
-        <Text style={styles.buttonLabel}>{saving ? "Saving…" : "SAVE NEW VERSION"}</Text>
+        <Text style={styles.buttonLabel}>
+          {saving ? "Saving…" : hasProposalValues ? "SAVE AND CONTINUE" : "SAVE NEW VERSION"}
+        </Text>
       </Pressable>
     </ScrollView>
   );

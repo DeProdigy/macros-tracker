@@ -14,7 +14,7 @@ import {
   type TargetProposalRequestRequest,
 } from "@macros/api-client";
 import { Redirect, useRouter } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -121,6 +121,8 @@ export default function Onboarding() {
   const [proposal, setProposal] = useState<TargetProposal | null>(null);
   const [savingTargets, setSavingTargets] = useState(false);
   const [saveFailure, setSaveFailure] = useState<string | null>(null);
+  const [targetWasSaved, setTargetWasSaved] = useState(false);
+  const saveInFlight = useRef(false);
   const [completed, setCompleted] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -159,7 +161,11 @@ export default function Onboarding() {
   };
 
   const acceptProposal = async () => {
-    if (!proposal) return;
+    // State disables the visible controls. The ref closes the smaller window
+    // before React commits that state, when a fast second tap could otherwise
+    // create a second append-only row.
+    if (!proposal || saveInFlight.current) return;
+    saveInFlight.current = true;
     setSavingTargets(true);
     setSaveFailure(null);
     try {
@@ -169,12 +175,17 @@ export default function Onboarding() {
       router.replace("/first-food");
     } catch (caught) {
       if (caught instanceof TargetSavedButRefreshFailed) {
+        // The write succeeded. Keep every save path locked because retrying
+        // would create a second TargetVersion for the same user action.
+        setTargetWasSaved(true);
         setSaveFailure(
           "Your targets are saved. The app could not refresh your account, so reopen it to continue.",
         );
       } else if (caught instanceof ApiError && caught.status === 400) {
+        saveInFlight.current = false;
         setSaveFailure("Those targets were refused. Adjust them and try again.");
       } else {
+        saveInFlight.current = false;
         setSaveFailure("Your targets weren't saved. Nothing changed, so try again in a minute.");
       }
     } finally {
@@ -217,7 +228,7 @@ export default function Onboarding() {
         ) : null}
         <Pressable
           accessibilityRole="button"
-          disabled={savingTargets}
+          disabled={savingTargets || targetWasSaved}
           onPress={() => void acceptProposal()}
           style={[styles.nextButton, { backgroundColor: palette.accent }]}
         >
@@ -229,7 +240,7 @@ export default function Onboarding() {
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          disabled={savingTargets}
+          disabled={savingTargets || targetWasSaved}
           onPress={() =>
             router.push({
               pathname: "/targets",
@@ -247,6 +258,7 @@ export default function Onboarding() {
         </Pressable>
         <Pressable
           accessibilityRole="button"
+          disabled={savingTargets || targetWasSaved}
           onPress={() => {
             setProposal(null);
             setStep(LAST_QUESTION_INDEX);
@@ -293,6 +305,7 @@ export default function Onboarding() {
         {step > 0 ? (
           <Pressable
             accessibilityRole="button"
+            disabled={submitting}
             onPress={() => {
               setStep((current) => current - 1);
               setError(null);
@@ -307,7 +320,7 @@ export default function Onboarding() {
             disabled={signingOut}
             onPress={() => {
               setSigningOut(true);
-              void session.signOut();
+              void session.signOut().catch(() => setSigningOut(false));
             }}
             style={styles.signOut}
           >

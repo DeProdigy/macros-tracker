@@ -186,6 +186,45 @@ describe("mandatory onboarding", () => {
     expect(mockReplace).toHaveBeenCalledWith("/first-food");
   });
 
+  it("locks every result action after the target saved but session refresh failed", async () => {
+    mockMe.mockRejectedValue(new Error("timeout"));
+    render(<Onboarding />);
+    answerAllQuestions();
+    fireEvent.press(screen.getByText("BUILD MY TARGETS"));
+    await screen.findByText("ACCEPT AND CONTINUE");
+
+    fireEvent.press(screen.getByText("ACCEPT AND CONTINUE"));
+    expect(await screen.findByText(/targets are saved/)).toBeTruthy();
+
+    const accept = screen.getByRole("button", { name: "ACCEPT AND CONTINUE" });
+    expect(accept).toBeDisabled();
+    expect(screen.getByRole("button", { name: "ADJUST FIRST" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "BACK TO ANSWERS" })).toBeDisabled();
+    fireEvent.press(accept);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("prevents a second accept before React can render the disabled state", async () => {
+    let finishCreate: (value: unknown) => void = () => {};
+    mockCreate.mockReturnValue(
+      new Promise((resolve) => {
+        finishCreate = resolve;
+      }) as never,
+    );
+    render(<Onboarding />);
+    answerAllQuestions();
+    fireEvent.press(screen.getByText("BUILD MY TARGETS"));
+    await screen.findByText("ACCEPT AND CONTINUE");
+
+    const accept = screen.getByText("ACCEPT AND CONTINUE");
+    fireEvent.press(accept);
+    fireEvent.press(accept);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+
+    finishCreate({ status: 201, data: {} });
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/first-food"));
+  });
+
   it("keeps every answer when the request fails and allows retry", async () => {
     mockProposal.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({
       status: 200,
@@ -211,6 +250,17 @@ describe("mandatory onboarding", () => {
     expect(await screen.findByLabelText("CALORIES 2150 KCAL")).toBeTruthy();
   });
 
+  it("does not let Back change answers while the proposal request is in flight", async () => {
+    mockProposal.mockReturnValue(new Promise(() => {}) as never);
+    render(<Onboarding />);
+    answerAllQuestions();
+
+    fireEvent.press(screen.getByText("BUILD MY TARGETS"));
+
+    expect(screen.getByRole("button", { name: "BACK" })).toBeDisabled();
+    expect(screen.getByText("How active is your day?")).toBeTruthy();
+  });
+
   it("distinguishes a server refusal from a network failure", async () => {
     mockProposal.mockRejectedValue(new ApiError(400, {}));
     render(<Onboarding />);
@@ -223,6 +273,13 @@ describe("mandatory onboarding", () => {
     render(<Onboarding />);
     fireEvent.press(screen.getByText("SIGN OUT"));
     await waitFor(() => expect(mockSignOut).toHaveBeenCalled());
+  });
+
+  it("restores the sign-out action when local sign-out fails", async () => {
+    mockSignOut.mockRejectedValue(new Error("storage locked"));
+    render(<Onboarding />);
+    fireEvent.press(screen.getByText("SIGN OUT"));
+    expect(await screen.findByText("SIGN OUT")).toBeTruthy();
   });
 
   it("redirects a user who already completed onboarding", () => {
