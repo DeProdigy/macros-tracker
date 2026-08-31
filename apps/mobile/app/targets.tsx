@@ -68,6 +68,23 @@ const STARTING_POINT = { calories: 2000, protein_g: 140, fiber_g: 30 };
 
 const STEPS = { calories: 10, protein_g: 5, fiber_g: 1 };
 
+/**
+ * Today, in the phone's own timezone, as `YYYY-MM-DD`.
+ *
+ * Built by hand rather than with `toLocaleDateString("en-CA")`. That trick gets
+ * an ISO-shaped string out of the engine's locale data, which works on Hermes
+ * and makes the format a property of ICU rather than of this file. Review
+ * caught it. If the shape ever changed the server would reject
+ * `effective_from`, and this screen would show a refusal it could not explain.
+ *
+ * `toISOString()` is the other wrong answer: it converts to UTC first, so
+ * someone in Auckland setting targets at 09:00 files them under yesterday.
+ */
+export const localIsoDate = (now: Date): string => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+};
+
 type Field = keyof typeof STARTING_POINT;
 type Values = Record<Field, number>;
 type FieldErrors = Partial<Record<Field, string>>;
@@ -92,19 +109,42 @@ const LIMITS: Partial<Record<Field, { min: number; max: number }>> = {
  * this reads it defensively. An unrecognised body falls through to the generic
  * message rather than rendering `undefined` at someone.
  */
-const fieldErrorsFrom = (body: unknown): FieldErrors => {
+const firstMessage = (value: unknown): string | undefined =>
+  Array.isArray(value) && typeof value[0] === "string" ? value[0] : undefined;
+
+const errorsFrom = (body: unknown): { fields: FieldErrors; other: string | null } => {
   if (typeof body !== "object" || body === null) {
-    return {};
+    return { fields: {}, other: null };
   }
 
-  const errors: FieldErrors = {};
-  for (const field of Object.keys(STARTING_POINT) as Field[]) {
-    const messages = (body as Record<string, unknown>)[field];
-    if (Array.isArray(messages) && typeof messages[0] === "string") {
-      errors[field] = messages[0];
+  const fields: FieldErrors = {};
+  const rest: string[] = [];
+  const stepperFields = new Set<string>(Object.keys(STARTING_POINT));
+
+  for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+    const message = firstMessage(value);
+    if (!message) {
+      continue;
+    }
+
+    if (stepperFields.has(key)) {
+      fields[key as Field] = message;
+    } else {
+      // Everything the steppers cannot fix, shown at the top of the screen.
+      //
+      // Review found the case that matters: `validate_effective_from` refuses a
+      // date more than a day past the server's clock, and DRF returns it in
+      // this same body under `effective_from`. Reading only the three stepper
+      // keys turned that into "the reason did not come through", when the
+      // reason had come through and no control on this screen could act on it.
+      //
+      // Collected by exclusion rather than by naming `effective_from`, so
+      // `non_field_errors` and anything a later serializer adds land here too.
+      rest.push(message);
     }
   }
-  return errors;
+
+  return { fields, other: rest.length > 0 ? rest.join(" ") : null };
 };
 
 export default function AdjustTargets() {
@@ -118,11 +158,18 @@ export default function AdjustTargets() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
 
-  // Seed from the current version when there is one. A 404 is the ordinary
-  // first-run answer rather than a failure, so it falls through to the starting
-  // point without telling the user anything went wrong.
+  // Seed from the current version when there is one.
   useEffect(() => {
     let cancelled = false;
+
+    // The signed-out redirect below is in the render, and returning a
+    // `Redirect` does not cancel an effect that is already queued. Without this
+    // an unauthenticated deep link fires one request that `customFetch` then
+    // tries to refresh a token for. Harmless, invisible, and easy to stop.
+    if (session.status !== "signedIn") {
+      setLoading(false);
+      return;
+    }
 
     const seed = async () => {
       try {
@@ -135,8 +182,21 @@ export default function AdjustTargets() {
             fiber_g: current.fiber_g,
           });
         }
-      } catch {
-        // Keeps the starting point.
+      } catch (error) {
+        // A 404 is the ordinary first-run answer, not a failure. It falls
+        // through to the starting point in silence.
+        //
+        // Anything else is different, and review caught that this used to
+        // swallow both. A user whose targets are 2,400 opens this screen on a
+        // dropped connection, sees 2,000, and saves a version they did not
+        // mean. Append-only means nothing is lost, and it still puts a number
+        // in their history that they never chose.
+        if (!cancelled && !(error instanceof ApiError && error.status === 404)) {
+          setFailure(
+            "Your current targets did not load, so these are the default starting values. " +
+              "Check them before saving.",
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -146,7 +206,7 @@ export default function AdjustTargets() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [session.status]);
 
   if (session.status === "loading") {
     return null;
@@ -171,37 +231,68 @@ export default function AdjustTargets() {
     setFieldErrors({});
     setFailure(null);
 
+    // Two try blocks, not one, and the split is the point.
+    //
+    // Review found that a single block tells the user something false. By the
+    // time the refetch runs, `createTarget` has returned 201: the row exists
+    // and the server has already flipped `onboarding_completed`, both in one
+    // transaction. A timeout on the refetch would have shown "Your targets
+    // weren't saved. Nothing changed", and both halves of that are wrong.
+    //
+    // The user then taps save again. `create_version` has no idempotency, so a
+    // second row lands for the same date and MAC-44's history shows two
+    // versions for one edit.
     try {
-      await createTarget({
-        ...values,
-        // The user's local date, not the server's. Someone in Auckland setting
-        // targets at 09:00 gets today, not yesterday.
-        effective_from: new Date().toLocaleDateString("en-CA"),
-      });
-
-      // The server flips `onboarding_completed` on a user's first target, and
-      // the route guard reads the session rather than the network. Without this
-      // refetch the user saves targets and stays on this screen.
-      const me = await getCurrentUser();
-      if (me.status === 200) {
-        session.updateUser(me.data);
-      }
-
-      router.replace("/today");
+      await createTarget({ ...values, effective_from: localIsoDate(new Date()) });
     } catch (error) {
       setSaving(false);
 
       if (error instanceof ApiError && error.status === 400) {
-        const errors = fieldErrorsFrom(error.body);
-        setFieldErrors(errors);
-        if (Object.keys(errors).length === 0) {
-          setFailure("That target was refused and the reason did not come through.");
-        }
+        const { fields, other } = errorsFrom(error.body);
+        setFieldErrors(fields);
+        setFailure(
+          other ??
+            (Object.keys(fields).length === 0
+              ? "That target was refused and the reason did not come through."
+              : null),
+        );
         return;
       }
 
       setFailure("Your targets weren't saved. Nothing changed, so try again in a minute.");
+      return;
     }
+
+    // Saved. Everything below is about catching the app up.
+    //
+    // The server flips `onboarding_completed` on a first target, and the route
+    // guard reads the session rather than the network. Without this refetch a
+    // new user saves targets and bounces straight back here.
+    try {
+      const me = await getCurrentUser();
+      if (me.status === 200) {
+        session.updateUser(me.data);
+      }
+    } catch {
+      setSaving(false);
+      setFailure(
+        "Your targets are saved. The app could not refresh your account, so reopen it to continue.",
+      );
+      return;
+    }
+
+    // Back to Settings for someone who came from Settings, and on to Today for
+    // a user finishing onboarding, who has no Settings to go back to.
+    //
+    // The plan left "the screen does not know where it came from" as an open
+    // question. This answers it for the destination, which is the half that
+    // was landing an editing user somewhere they did not ask to be.
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/today");
   };
 
   if (loading) {

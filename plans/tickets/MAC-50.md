@@ -160,3 +160,98 @@ tests, `pnpm generate:api` clean.
   one component and doc 15 says to keep it that way. Reached from onboarding it
   is the last step of a flow; from Settings it is an edit. Neither says so on
   screen today
+
+
+---
+
+# Review round two
+
+Six findings. All six were right, and one was a bug that told the user a lie.
+
+## The save claimed nothing was saved
+
+One `try` block wrapped the create and the refetch. By the time the refetch
+runs, `createTarget` has returned 201: the row exists and `complete_onboarding`
+has already flipped the flag, both inside one transaction.
+
+So a timeout on `getCurrentUser` showed **"Your targets weren't saved. Nothing
+changed, so try again in a minute."** Both halves of that sentence were false.
+
+The user then taps save again. `create_version` has no idempotency, so a second
+row lands for the same `effective_from`, and MAC-44's history screen shows two
+versions for one edit.
+
+Two blocks now. The refetch failure says the targets are saved and the app needs
+a relaunch to catch up. The old tests all stubbed `getCurrentUser` as resolving,
+so nothing failed while this was wrong, which is the reason it survived to
+review.
+
+## A refusal the steppers could not fix
+
+`fieldErrorsFrom` read three keys. The server can reject a fourth:
+`validate_effective_from` refuses a date more than a day past its own clock, and
+DRF returns it in the same body shape.
+
+A device with a fast clock got "the reason did not come through", when the reason
+had come through and no control on the screen could act on it.
+
+`errorsFrom` now splits the body by exclusion rather than naming
+`effective_from`. Anything that is not a stepper field becomes the top-level
+failure, so `non_field_errors` and whatever a later serializer adds land there
+too.
+
+## The seed swallowed every failure
+
+A 404 from `current/` is the ordinary first-run answer. Everything else is not,
+and the same `catch` handled both.
+
+A user whose targets are 2,400 opens this screen on a dropped connection, sees
+2,000, and saves. Append-only means nothing is lost, and it still puts a number
+in their history they never chose. The screen now says the current targets did
+not load and to check the values before saving.
+
+## Saving from Settings landed on Today
+
+`router.replace("/today")` unconditionally. Someone who taps *Adjust targets* in
+Settings and saves expects Settings back.
+
+`router.canGoBack()` splits the two entry points in three lines, and it answers
+the open question this plan already raised about the screen not knowing where it
+came from. For the destination, at least.
+
+## The date came from ICU
+
+`toLocaleDateString("en-CA")` gets an ISO-shaped string out of the engine's
+locale data. It works on Hermes, and the format is a property of ICU rather than
+of this file. If it ever returned another shape the server would reject
+`effective_from` and, before the fix above, the screen would have shown no reason
+at all.
+
+Built by hand now. `toISOString()` is the other wrong answer: it converts to UTC
+first, so an Auckland morning files under yesterday.
+
+**The first mutation for this survived**, because CI runs in UTC where local and
+UTC agree. The replacement asserts against a stub whose local getters say 31 Aug
+while its UTC form says 30 Aug, which is what an Auckland morning looks like.
+
+## The effect ran while signed out
+
+Returning a `Redirect` from the render does not cancel a queued effect, so a
+deep link while signed out fired one unauthenticated request that `customFetch`
+then tried to refresh a token for. Harmless and invisible. An early return stops
+it.
+
+## Verification after round two
+
+Five mutations, each caught:
+
+| Mutation | Result |
+| ---------------------------------------------- | ------------ |
+| One try block, so a refetch failure claims nothing saved | 1 test fails |
+| A non-404 seed failure is swallowed | 1 test fails |
+| Only stepper fields are read from a 400 | 1 test fails |
+| Always replace to Today | 1 test fails |
+| The date is built with `toISOString` | 2 tests fail |
+
+Gates: prettier, `pnpm lint`, `pnpm check-types`, 107 jest tests, 364 python
+tests.

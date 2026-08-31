@@ -14,14 +14,16 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { ApiError, createTarget, getCurrentTarget, getCurrentUser } from "@macros/api-client";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
-import AdjustTargets from "../app/targets";
+import AdjustTargets, { localIsoDate } from "../app/targets";
 import { useSession } from "../lib/session";
 
 const mockReplace = jest.fn();
+const mockBack = jest.fn();
+const mockCanGoBack = jest.fn<() => boolean>();
 
 jest.mock("expo-router", () => ({
   Redirect: jest.fn(),
-  useRouter: () => ({ replace: mockReplace }),
+  useRouter: () => ({ replace: mockReplace, back: mockBack, canGoBack: mockCanGoBack }),
 }));
 
 jest.mock("@macros/api-client", () => {
@@ -64,7 +66,8 @@ beforeEach(() => {
     user: {},
     updateUser: mockUpdateUser,
   } as unknown as ReturnType<typeof useSession>);
-  mockCurrent.mockRejectedValue(new Error("404"));
+  mockCanGoBack.mockReturnValue(false);
+  mockCurrent.mockRejectedValue(new ApiError(404, null));
   mockCreate.mockResolvedValue({ status: 201, data: {} } as never);
   mockMe.mockResolvedValue({ status: 200, data: onboardedUser } as never);
 });
@@ -154,5 +157,97 @@ describe("the manual target editor", () => {
 
     await waitFor(() => expect(screen.getByText(/weren't saved/)).toBeTruthy());
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+});
+
+describe("failures the first version hid", () => {
+  it("says so when the current targets could not be loaded", async () => {
+    // Not a 404. A user whose targets are 2,400 opens this on a dropped
+    // connection, sees 2,000, and saves a number they never chose.
+    mockCurrent.mockRejectedValue(new ApiError(500, null));
+
+    await renderScreen();
+
+    expect(screen.getByText(/did not load/)).toBeTruthy();
+    expect(screen.getByText("2000 kcal")).toBeTruthy();
+  });
+
+  it("does not claim nothing was saved when only the refetch failed", async () => {
+    // The 201 already happened. The row exists and onboarding is already
+    // complete, so "Nothing changed" would send the user back to save a
+    // duplicate version for the same date.
+    mockMe.mockRejectedValue(new Error("timeout"));
+
+    await renderScreen();
+    fireEvent.press(screen.getByText("SAVE NEW VERSION"));
+
+    await waitFor(() => expect(screen.getByText(/are saved/)).toBeTruthy());
+    expect(screen.queryByText(/weren't saved/)).toBeNull();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("shows a refusal the steppers cannot fix", async () => {
+    // `validate_effective_from` rejects a device clock more than a day out, in
+    // the same body shape. Reading only the three stepper keys turned a real
+    // reason into "the reason did not come through".
+    mockCreate.mockRejectedValue(
+      new ApiError(400, { effective_from: ["Must be within a day of the current date."] }),
+    );
+
+    await renderScreen();
+    fireEvent.press(screen.getByText("SAVE NEW VERSION"));
+
+    await waitFor(() => expect(screen.getByText(/within a day/)).toBeTruthy());
+  });
+
+  it("returns to Settings when that is where the user came from", async () => {
+    // From onboarding there is no Settings to go back to, so that path still
+    // replaces to Today. From Settings, landing on Today is a surprise.
+    mockCanGoBack.mockReturnValue(true);
+
+    await renderScreen();
+    fireEvent.press(screen.getByText("SAVE NEW VERSION"));
+
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("sends a user finishing onboarding to Today", async () => {
+    await renderScreen();
+    fireEvent.press(screen.getByText("SAVE NEW VERSION"));
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/today"));
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+});
+
+describe("localIsoDate", () => {
+  it("reads the phone's local date, not UTC", () => {
+    // Asserted against a stub rather than a real `Date`, because CI runs in UTC
+    // where local and UTC agree and the bug is invisible. The stub's local
+    // getters say 31 Aug while its UTC form says 30 Aug, which is exactly what
+    // an Auckland morning looks like.
+    //
+    // `toISOString().slice(0, 10)` is the wrong answer this guards against. It
+    // converts to UTC first, so someone setting targets at 09:00 in Auckland
+    // files them under yesterday.
+    const aucklandMorning = {
+      getFullYear: () => 2026,
+      getMonth: () => 7,
+      getDate: () => 31,
+      toISOString: () => "2026-08-30T21:00:00.000Z",
+    } as unknown as Date;
+
+    expect(localIsoDate(aucklandMorning)).toBe("2026-08-31");
+  });
+
+  it("pads a single-digit month and day", () => {
+    const newYearsDay = {
+      getFullYear: () => 2027,
+      getMonth: () => 0,
+      getDate: () => 1,
+    } as unknown as Date;
+
+    expect(localIsoDate(newYearsDay)).toBe("2027-01-01");
   });
 });
