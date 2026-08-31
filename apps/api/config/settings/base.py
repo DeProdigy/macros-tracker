@@ -239,6 +239,11 @@ REST_FRAMEWORK = {
         # every signed-in client must reach. Sized to stop a client stuck in a
         # retry loop, which would otherwise run thousands a minute.
         "refresh": "20/min",
+        # Arithmetic, no network and no writes, so this is a loop guard rather
+        # than a cost guard. A real user answers six questions once and may
+        # recompute a few times from Settings; 30/min is far above that and far
+        # below what a client retrying on every keystroke would produce.
+        "target-proposal": "30/min",
     },
     # How many hops in front of this container append to X-Forwarded-For.
     # `BaseThrottle.get_ident` reads it as `addrs[-min(n, len(addrs))]`, so it
@@ -331,5 +336,15 @@ SPECTACULAR_SETTINGS = {
     # Naming them explicitly keeps the collision from ever arising.
     "ENUM_NAME_OVERRIDES": {
         "HealthStatusEnum": "config.serializers.HEALTH_STATUS_CHOICES",
+        # `sex` appears on two request shapes: the user settings PATCH and the
+        # target proposal. The values are identical, and doc 02 says
+        # `accounts.models.Sex` is canonical, so both point at one component
+        # rather than getting `SexEnum` and `SexD67Enum`.
+        #
+        # The generated hash suffix is the reason this matters. It is derived
+        # from the choice set, so an unrelated edit can change it and churn the
+        # committed client, which is the same argument the comment above makes
+        # for naming enums at all.
+        "SexEnum": "accounts.models.Sex",
     },
 }

@@ -450,6 +450,98 @@
                 }
             }
         },
+        "/api/targets/proposals/": {
+            "post": {
+                "operationId": "createTargetProposal",
+                "description": "Takes the six onboarding answers and returns proposed daily calorie, protein, and fiber targets with a plain-English explanation.\n\n**Nothing is created or stored.** The response is computed. A user accepts it by posting the three numbers to `/api/targets/`, which is where a target version comes from. That is why this returns 200 rather than 201.\n\n**Deterministic.** Mifflin-St Jeor for resting burn, an activity multiplier, then a percentage adjustment for the goal. The same answers always give the same numbers, no model provider is involved, and the call costs nothing.\n\n**Units are pounds and inches**, matching every screen. The server converts once, where the formula needs metric.\n\n`baseline` is what the formula produced and `targets` is what survived the guardrails. They are equal unless `clamped` is true, and screen 9f shows the pair only when it is.",
+                "summary": "Work out targets from the six onboarding answers",
+                "tags": [
+                    "targets"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TargetProposalRequestRequest"
+                            },
+                            "examples": {
+                                "A35YearOldManCutting": {
+                                    "value": {
+                                        "age": 35,
+                                        "sex": "male",
+                                        "height_in": 71,
+                                        "weight_lb": "155.00",
+                                        "goal": "cut",
+                                        "activity": "moderate"
+                                    },
+                                    "summary": "Six answers in"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TargetProposalRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TargetProposalRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TargetProposal"
+                                },
+                                "examples": {
+                                    "TheProposal": {
+                                        "value": {
+                                            "targets": {
+                                                "calories": 2059,
+                                                "protein_g": 155,
+                                                "fiber_g": 29
+                                            },
+                                            "baseline": {
+                                                "calories": 2059,
+                                                "protein_g": 155,
+                                                "fiber_g": 29
+                                            },
+                                            "clamped": false,
+                                            "rationale": "2,059 calories a day. That is 20% below the 2,573 you burn, which puts you on track for about 1.0 lb a week. Protein at 155 g is 1.0 g per pound of body weight, the amount the research supports for holding on to muscle while you lose fat. Fiber at 29 g follows the US guideline of 14 g per 1,000 calories, which digestion and appetite both depend on."
+                                        },
+                                        "summary": "Inside the guardrails, so baseline and targets agree",
+                                        "description": "`clamped` is false, so screen 9f shows the three numbers and no baseline line."
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "401": {
+                        "description": "No response body"
+                    },
+                    "429": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/uploads/": {
             "post": {
                 "operationId": "presignUpload",
@@ -686,10 +778,29 @@
     },
     "components": {
         "schemas": {
+            "ActivityEnum": {
+                "enum": [
+                    "sedentary",
+                    "light",
+                    "moderate",
+                    "very_active"
+                ],
+                "type": "string",
+                "description": "* `sedentary` - sedentary\n* `light` - light\n* `moderate` - moderate\n* `very_active` - very_active"
+            },
             "BlankEnum": {
                 "enum": [
                     ""
                 ]
+            },
+            "GoalEnum": {
+                "enum": [
+                    "cut",
+                    "maintain",
+                    "gain"
+                ],
+                "type": "string",
+                "description": "* `cut` - cut\n* `maintain` - maintain\n* `gain` - gain"
             },
             "Health": {
                 "type": "object",
@@ -971,11 +1082,114 @@
             },
             "SourceEnum": {
                 "enum": [
-                    "onboarding_ai",
+                    "onboarding",
                     "manual"
                 ],
                 "type": "string",
-                "description": "* `onboarding_ai` - Onboarding (AI proposal)\n* `manual` - Manual edit"
+                "description": "* `onboarding` - Onboarding\n* `manual` - Manual edit"
+            },
+            "TargetProposal": {
+                "type": "object",
+                "description": "What the formula produced, what it was held to, and why.\n\n`baseline` is kept beside `targets` so doc 15's result screen can show\n`BASELINE 2180 -> SET 2150`. The two are equal for almost everyone, and the\nscreen shows the line only when they differ.\n\nNothing is persisted. The user accepts a proposal by posting it to\n`/api/targets/`, which is where a `TargetVersion` gets created.",
+                "properties": {
+                    "targets": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Targets"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "baseline": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Targets"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "What the formula produced before the guardrails saw it. Equal to `targets` unless `clamped` is true."
+                    },
+                    "clamped": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Whether a guardrail moved any of the three numbers. Show the baseline beside the target when true, and nothing when false."
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Around 60 words explaining the numbers, for WHY THESE NUMBERS on screen 9f. Written from a template rather than by a model, so every figure in it is one of the numbers returned beside it."
+                    }
+                },
+                "required": [
+                    "baseline",
+                    "clamped",
+                    "rationale",
+                    "targets"
+                ]
+            },
+            "TargetProposalRequestRequest": {
+                "type": "object",
+                "description": "The six onboarding answers.\n\n**Pounds and inches**, the units every screen shows. `services` converts to\nmetric once, inside Mifflin-St Jeor, because that formula is the only thing\nin this stack that wants it.\n\nA plain `Serializer`, not a `ModelSerializer`. None of these six is a column:\nfour are transient inputs to a calculation, and the two that are stored\n(`sex`, `current_weight_lb`) belong to `accounts` and are written through a\ndifferent endpoint. A `ModelSerializer` here would imply a model that does\nnot exist.",
+                "properties": {
+                    "age": {
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 13,
+                        "description": "Age in years, 13-100. Mifflin-St Jeor reads it directly. The bounds are data sanity rather than a policy on who may use the app."
+                    },
+                    "sex": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TargetProposalRequestSexEnum"
+                            }
+                        ],
+                        "description": "Biological sex, `female` or `male`. Biological rather than gender: it is the constant term in a formula fitted to body composition. Stored on the user by `PATCH /api/users/me/`, because editing targets later needs it.\n\n* `female` - female\n* `male` - male"
+                    },
+                    "height_in": {
+                        "type": "integer",
+                        "maximum": 96,
+                        "minimum": 36,
+                        "description": "Height in inches, 36-96. One number, not feet plus inches: the client shows `5'11\"` and sends 71."
+                    },
+                    "weight_lb": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,4}(?:\\.\\d{0,2})?$",
+                        "description": "Body weight in pounds, 85-500. **A hard precondition, not a sanity check.** Outside this band the suggested calorie floor and ceiling cross and the range inverts."
+                    },
+                    "goal": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/GoalEnum"
+                            }
+                        ],
+                        "description": "`cut`, `maintain`, or `gain`. Moves calories by a percentage of maintenance rather than a fixed number, and picks the protein figure.\n\n* `cut` - cut\n* `maintain` - maintain\n* `gain` - gain"
+                    },
+                    "activity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ActivityEnum"
+                            }
+                        ],
+                        "description": "Movement outside deliberate training: `sedentary`, `light`, `moderate`, or `very_active`. A desk job is sedentary even for someone who trains hard, which is the most common way people overstate their burn.\n\n* `sedentary` - sedentary\n* `light` - light\n* `moderate` - moderate\n* `very_active` - very_active"
+                    }
+                },
+                "required": [
+                    "activity",
+                    "age",
+                    "goal",
+                    "height_in",
+                    "sex",
+                    "weight_lb"
+                ]
+            },
+            "TargetProposalRequestSexEnum": {
+                "enum": [
+                    "female",
+                    "male"
+                ],
+                "type": "string",
+                "description": "* `female` - female\n* `male` - male"
             },
             "TargetVersion": {
                 "type": "object",
@@ -1007,10 +1221,10 @@
                         ],
                         "readOnly": true
                     },
-                    "ai_rationale": {
+                    "rationale": {
                         "type": "string",
                         "readOnly": true,
-                        "description": "The model's plain-English explanation, shown under WHY THESE NUMBERS on screen 9f. Around 60 words, naming the deficit, the rate, and why protein is set from body weight. Empty for a manual edit."
+                        "description": "Plain-English explanation of the numbers, shown under WHY THESE NUMBERS on screen 9f. Around 60 words, naming the deficit, the rate, and why protein is set from body weight. Empty for a manual edit."
                     },
                     "effective_from": {
                         "type": "string",
@@ -1024,13 +1238,13 @@
                     }
                 },
                 "required": [
-                    "ai_rationale",
                     "calories",
                     "created_at",
                     "effective_from",
                     "fiber_g",
                     "id",
                     "protein_g",
+                    "rationale",
                     "source"
                 ]
             },
@@ -1063,6 +1277,29 @@
                 "required": [
                     "calories",
                     "effective_from",
+                    "fiber_g",
+                    "protein_g"
+                ]
+            },
+            "Targets": {
+                "type": "object",
+                "description": "Three numbers, with no identity of their own.",
+                "properties": {
+                    "calories": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "protein_g": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "fiber_g": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "calories",
                     "fiber_g",
                     "protein_g"
                 ]

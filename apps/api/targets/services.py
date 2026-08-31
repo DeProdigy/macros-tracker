@@ -179,6 +179,89 @@ ABSOLUTE_FIBER_RANGE = (0, 100)
 #
 # 85 and 500 sit inside both crossings with room. `accounts.User` enforces them
 # on the column, and `targets/tests/test_units.py` pins the pair together.
+# --- the formula, MAC-51 --------------------------------------------------
+#
+# Everything here feeds Mifflin-St Jeor and the adjustments on top of it. The
+# bounds above are the guardrail; these are the numbers being guarded.
+#
+# **Every value below lands inside the suggested range above, on purpose.** If
+# our own formula tripped our own clamp, one of the two would be wrong, and a
+# test asserts it across the supported weight band rather than trusting the
+# arithmetic here.
+
+
+class Goal(StrEnum):
+    """What the user is aiming for. The fifth onboarding question."""
+
+    CUT = "cut"
+    MAINTAIN = "maintain"
+    GAIN = "gain"
+
+
+class Activity(StrEnum):
+    """Movement outside deliberate training. The sixth onboarding question."""
+
+    SEDENTARY = "sedentary"
+    LIGHT = "light"
+    MODERATE = "moderate"
+    VERY_ACTIVE = "very_active"
+
+
+# The published Harris-Benedict activity multipliers, which Mifflin-St Jeor is
+# conventionally used with. Four levels because doc 15 draws four.
+#
+# The hint doc 15 puts on this question carries the judgement the numbers cannot:
+# "A desk job all day is sedentary even if you train hard." Training is what the
+# multiplier does *not* measure, and it is the most common way people overstate
+# their burn.
+ACTIVITY_MULTIPLIER = {
+    Activity.SEDENTARY: Decimal("1.2"),
+    Activity.LIGHT: Decimal("1.375"),
+    Activity.MODERATE: Decimal("1.55"),
+    Activity.VERY_ACTIVE: Decimal("1.725"),
+}
+
+# What the goal does to maintenance calories.
+#
+# **A percentage, not a fixed number of calories.** A flat 500 kcal deficit is
+# gentle for a 250 lb person and brutal for a 120 lb one, because what matters
+# is the share of maintenance being removed rather than the absolute figure.
+#
+# The cut is 20%, which is a standard moderate deficit and lands near 1 lb a week
+# for an average adult. The gain is deliberately smaller at 10%: a surplus builds
+# muscle at a rate the body sets, and anything past that is fat. Rushing a cut
+# and rushing a bulk are not symmetric mistakes.
+GOAL_ADJUSTMENT = {
+    Goal.CUT: Decimal("-0.20"),
+    Goal.MAINTAIN: Decimal("0"),
+    Goal.GAIN: Decimal("0.10"),
+}
+
+# Protein per pound of body weight.
+#
+# 1.0 g/lb while cutting is 2.2 g/kg, the top of the replicated band for holding
+# muscle in a deficit and the reason the suggested ceiling was widened to 2.5.
+# 0.8 g/lb otherwise is 1.76 g/kg, the middle of the same band. Protein matters
+# most when calories are scarce, which is why the cut number is the higher one.
+#
+# Both sit inside `SUGGESTED_PROTEIN_G_PER_LB`, so the clamp never fires on our
+# own output.
+PROTEIN_G_PER_LB_CUTTING = Decimal("1.0")
+PROTEIN_G_PER_LB_OTHERWISE = Decimal("0.8")
+
+# Fiber per 1,000 kcal. The US Dietary Guidelines figure, and the middle of
+# `SUGGESTED_FIBER_G_PER_1000_KCAL`.
+FIBER_G_PER_1000_KCAL = Decimal("14")
+
+# Mifflin-St Jeor is defined in kilograms and centimetres, and it is the only
+# thing in this stack that wants metric. The conversion happens here, once,
+# rather than in every client. See the module docstring.
+_CENTIMETRES_PER_INCH = Decimal("2.54")
+
+# The constant term, which is the whole of the sex difference in this formula.
+_MIFFLIN_SEX_TERM = {Sex.FEMALE: Decimal("-161"), Sex.MALE: Decimal("5")}
+
+
 MINIMUM_SUPPORTED_WEIGHT_LB = Decimal("85")
 MAXIMUM_SUPPORTED_WEIGHT_LB = Decimal("500")
 
@@ -271,10 +354,14 @@ class ClampResult:
     def changed(self) -> bool:
         """Whether anything moved.
 
-        The caller needs this rather than comparing target sets itself. MAC-41
-        logs an out-of-bounds model response and falls back to the deterministic
-        numbers, and doc 15's result screen shows `BASELINE 2180 -> SET 2150`.
-        Both need to know a change happened, and both want to know which field.
+        The caller needs this rather than comparing target sets itself. Doc
+        15's result screen shows `BASELINE 2180 -> SET 2150` only when the two
+        differ, so it needs to know a change happened and which field moved.
+
+        This used to cite MAC-41's out-of-bounds model fallback as the second
+        caller. That ticket was cancelled on 31 Aug 2026 with the AI call, so
+        the only producer left is the formula itself, which trips this at the
+        edges of the supported weight band.
         """
         return bool(self.adjustments)
 
@@ -483,6 +570,282 @@ def reject_outside_absolute(targets: Targets, weight_lb: Decimal | None) -> None
         raise ValidationError(errors, code="target_out_of_bounds")
 
 
+# --- the proposal, MAC-51 ----------------------------------------------------
+#
+# Six answers in, three numbers and a paragraph out. No model provider, no
+# network, no persistence. See doc 05 for why the AI call that used to sit on
+# top of this was cancelled.
+
+
+@dataclass(frozen=True)
+class Answers:
+    """The six onboarding questions, as the client sends them.
+
+    **Pounds and inches**, the units every screen shows. The conversion to
+    metric happens once, inside `basal_metabolic_rate`, because Mifflin-St Jeor
+    is the only thing in this stack that wants it. An earlier design had the
+    client converting, which put the same arithmetic in every caller for one
+    formula's convenience.
+
+    Wider than `Profile` on purpose. `Profile` holds what the *bounds* depend
+    on; this holds what the *formula* does. Age, height, goal, and activity move
+    the answer without changing what counts as a safe target.
+    """
+
+    age: int
+    sex: Sex
+    height_in: int
+    weight_lb: Decimal
+    goal: Goal
+    activity: Activity
+
+    @property
+    def profile(self) -> Profile:
+        """The subset the guardrails read."""
+        return Profile(sex=self.sex, weight_lb=self.weight_lb)
+
+
+@dataclass(frozen=True)
+class Proposal:
+    """What the endpoint returns.
+
+    `baseline` is what the formula produced and `targets` is what survived the
+    clamp. They are equal for almost everyone, and doc 15's result screen shows
+    `BASELINE 2180 -> SET 2150` only when they differ.
+
+    Keeping both is what makes the guardrail visible rather than implied. A
+    formula that needed correcting is worth showing to the user and worth
+    knowing about.
+    """
+
+    targets: Targets
+    baseline: Targets
+    rationale: str
+
+    @property
+    def clamped(self) -> bool:
+        return self.targets != self.baseline
+
+
+def basal_metabolic_rate(answers: Answers) -> Decimal:
+    """Mifflin-St Jeor, in kcal per day.
+
+        BMR = 10 * kg + 6.25 * cm - 5 * age + s
+
+    where `s` is +5 for males and -161 for females.
+
+    Published in 1990 and still the formula with the best accuracy for the
+    general population, which is why it beats Harris-Benedict here. It is an
+    estimate either way: individual metabolic rate varies by roughly 10% around
+    any equation's answer, and that variance is the honest reason the adjust
+    screen exists.
+    """
+    kilograms = answers.weight_lb / _POUNDS_PER_KG
+    centimetres = Decimal(answers.height_in) * _CENTIMETRES_PER_INCH
+
+    return (
+        Decimal("10") * kilograms
+        + Decimal("6.25") * centimetres
+        - Decimal("5") * answers.age
+        + _MIFFLIN_SEX_TERM[answers.sex]
+    )
+
+
+def maintenance_calories(answers: Answers) -> Decimal:
+    """Resting burn times how much the user moves."""
+    return basal_metabolic_rate(answers) * ACTIVITY_MULTIPLIER[answers.activity]
+
+
+def baseline_targets(answers: Answers) -> Targets:
+    """The three numbers, before the clamp sees them.
+
+    Calories carry the goal adjustment. Protein keys on body weight, because
+    that is what the research measures it against. Fiber keys on **calories**,
+    not weight, because the guideline is written per 1,000 kcal and a 1,400 kcal
+    day genuinely needs less than a 3,000 kcal one.
+
+    Fiber reads the adjusted calorie figure rather than maintenance, so a
+    dieting user gets the fiber that goes with the day they are actually eating.
+    """
+    calories = maintenance_calories(answers) * (Decimal("1") + GOAL_ADJUSTMENT[answers.goal])
+
+    protein_per_lb = (
+        PROTEIN_G_PER_LB_CUTTING if answers.goal is Goal.CUT else PROTEIN_G_PER_LB_OTHERWISE
+    )
+
+    return Targets(
+        calories=round(calories),
+        protein_g=round(answers.weight_lb * protein_per_lb),
+        fiber_g=round(calories * FIBER_G_PER_1000_KCAL / Decimal("1000")),
+    )
+
+
+def _calorie_sentence(answers: Answers, calories: int, baseline_calories: int) -> str:
+    """Where the calorie number came from, in one sentence per goal.
+
+    Branches rather than one string with the percentage substituted in. A
+    maintain plan has no deficit and no rate, and "minus 0% for your goal" is
+    the sentence that betrays a template written as arithmetic.
+
+    **The clamp branches exist because the first version lied.** It wrote the
+    sentence from the answers and the number from the clamp, so a user whose
+    calories had been raised read "1,200 calories a day. That is 20% below the
+    1,455 you burn", where 1,200 is not 20% below 1,455. The prose has to
+    describe the number beside it.
+
+    **And the direction is read, not assumed.** The second version handled only
+    a raise, so a clamped-down target claimed the user's answers "worked out
+    lower than that" when they had worked out higher. Comparing the two numbers
+    costs nothing and cannot be wrong.
+    """
+    maintenance = round(maintenance_calories(answers))
+
+    if calories > baseline_calories:
+        return (
+            f"{calories:,} calories a day. Your answers worked out lower than that, "
+            f"and {calories:,} is the least this app will suggest for anyone. Eating "
+            f"less is a decision to take with a doctor rather than an app."
+        )
+
+    if calories < baseline_calories:
+        return (
+            f"{calories:,} calories a day. Your answers worked out higher than that, "
+            f"and {calories:,} is the most this app will suggest for anyone."
+        )
+
+    if answers.goal is Goal.MAINTAIN:
+        return (
+            f"{calories:,} calories a day, which is roughly what you burn at your "
+            f"current weight and activity level."
+        )
+
+    percent = abs(int(GOAL_ADJUSTMENT[answers.goal] * 100))
+    direction = "below" if answers.goal is Goal.CUT else "above"
+
+    return (
+        f"{calories:,} calories a day. That is {percent}% {direction} the "
+        f"{maintenance:,} you burn, which puts you on track for about "
+        f"{_weekly_rate(answers)} a week."
+    )
+
+
+def _weekly_rate(answers: Answers) -> str:
+    """Expected weight change per week, in pounds.
+
+    3,500 kcal per pound of body fat is a rule of thumb rather than a law, and
+    it is close enough over weeks to be worth saying. The number people actually
+    want is "how fast", and a percentage does not answer it.
+    """
+    daily = maintenance_calories(answers) * GOAL_ADJUSTMENT[answers.goal]
+    pounds = abs(daily) * 7 / Decimal("3500")
+
+    return f"{pounds.quantize(Decimal('0.1'))} lb"
+
+
+def _protein_sentence(answers: Answers, protein_g: int) -> str:
+    per_lb = PROTEIN_G_PER_LB_CUTTING if answers.goal is Goal.CUT else PROTEIN_G_PER_LB_OTHERWISE
+    reason = (
+        "the amount the research supports for holding on to muscle while you lose fat"
+        if answers.goal is Goal.CUT
+        else "enough to support training without crowding out the rest of your food"
+    )
+
+    return f"Protein at {protein_g} g is {per_lb} g per pound of body weight, {reason}."
+
+
+def explain(answers: Answers, targets: Targets, baseline: Targets) -> str:
+    """The paragraph shown under WHY THESE NUMBERS.
+
+    **A template, not a model.** MAC-41 was going to ask one to write this, and
+    doc 15 named that call's whole value as this paragraph. The argument turned
+    around: every figure in it is a variable this module already holds, so a
+    template reads the real values instead of being told about them. It cannot
+    name a number that is not on the screen, it cannot time out, and it costs
+    nothing per user.
+
+    Assembled from named pieces rather than one format string. The sentences
+    change with the goal, and conditionals inside a single template are how a
+    maintain plan ends up mentioning a deficit it does not have.
+    """
+    return " ".join(
+        [
+            _calorie_sentence(answers, targets.calories, baseline.calories),
+            _protein_sentence(answers, targets.protein_g),
+            f"Fiber at {targets.fiber_g} g follows the US guideline of 14 g per "
+            f"1,000 calories, which digestion and appetite both depend on.",
+        ]
+    )
+
+
+def proposal_calorie_range(profile: Profile) -> Range:
+    """The calorie band the **formula's own output** is held to.
+
+    Not `suggested_calorie_range`, and this is the most interesting thing in the
+    ticket. Both crossings below were found by running the formula on real
+    people, not by reading it.
+
+    **The per-pound floor inverts a heavy user's goal.** The suggested floor is
+    `max(22 kcal/kg, the sex floor)`. For a 480 lb man that per-pound term is
+    4,790, while Mifflin-St Jeor puts his maintenance at 3,788. Clamping to it
+    raised a 20% deficit into a 1,000 kcal surplus, and handed that to someone
+    who had asked to lose weight.
+
+    **The per-pound ceiling sits below maintenance for an active user.** 40
+    kcal/kg is 2,812 for a 155 lb man, and a very active one burns 2,864. So
+    "eat roughly what you burn" was clamped *down*, on a completely ordinary
+    profile rather than an edge case.
+
+    Both are the same mistake in opposite directions. The per-pound band is a
+    heuristic for judging a number **a user typed**, which has no formula behind
+    it. Mifflin already accounts for body size properly, so applying the
+    heuristic on top does the same job twice and the second pass is worse at it.
+
+    So the formula's output is held to two things only. The sex floor, which is
+    a real safety minimum and correctly catches a small sedentary cutter. And
+    the absolute ceiling, because suggesting a number the write path would refuse
+    is a bug whoever it comes from.
+
+    **The user-facing warning still uses the full suggested range.** A heavy
+    person who types 1,400 by hand is still told it is low. Only our own
+    arithmetic is exempt, and only from the per-pound half.
+    """
+    return Range(
+        floor=SUGGESTED_CALORIE_FLOOR_BY_SEX[profile.sex],
+        ceiling=ABSOLUTE_CALORIE_RANGE[1],
+    )
+
+
+def propose(answers: Answers) -> Proposal:
+    """The whole of target generation.
+
+    Compute, clamp, explain.
+
+    Calories are clamped first and fiber's range derives from the clamped value,
+    the same ordering `clamp_to_suggested` uses and for the same reason: a target
+    should be judged on the calories it actually gets.
+    """
+    baseline = baseline_targets(answers)
+    adjustments: list[Adjustment] = []
+
+    def apply(field: str, value: int, allowed: Range) -> int:
+        clamped = allowed.clamp(value)
+        if clamped != value:
+            adjustments.append(Adjustment(field=field, original=value, clamped=clamped))
+        return clamped
+
+    calories = apply("calories", baseline.calories, proposal_calorie_range(answers.profile))
+    protein_g = apply("protein_g", baseline.protein_g, suggested_protein_range(answers.profile))
+    fiber_g = apply("fiber_g", baseline.fiber_g, suggested_fiber_range(calories))
+
+    targets = Targets(calories=calories, protein_g=protein_g, fiber_g=fiber_g)
+
+    return Proposal(
+        targets=targets,
+        baseline=baseline,
+        rationale=explain(answers, targets, baseline),
+    )
+
+
 # --- the write path ----------------------------------------------------------
 #
 # Everything above this line is arithmetic. Everything below it writes rows.
@@ -526,7 +889,7 @@ def create_version(
     fiber_g: int,
     source: str,
     effective_from: date,
-    ai_rationale: str = "",
+    rationale: str = "",
 ) -> TargetVersion:
     """Create a target version, and complete onboarding if this is the first one.
 
@@ -557,7 +920,7 @@ def create_version(
             fiber_g=fiber_g,
             source=source,
             effective_from=effective_from,
-            ai_rationale=ai_rationale,
+            rationale=rationale,
         )
         completed = complete_onboarding(user)
 

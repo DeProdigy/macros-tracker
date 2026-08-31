@@ -7,13 +7,14 @@
  */
 
 /**
- * * `onboarding` - Onboarding
- * `manual` - Manual edit
+ * * `female` - female
+ * `male` - male
  */
-export type SourceEnum = (typeof SourceEnum)[keyof typeof SourceEnum];
+export type TargetProposalRequestSexEnum =
+  (typeof TargetProposalRequestSexEnum)[keyof typeof TargetProposalRequestSexEnum];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const SourceEnum = {
-  onboarding: "onboarding",
-  manual: "manual",
+export const TargetProposalRequestSexEnum = {
+  female: "female",
+  male: "male",
 } as const;

@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./activityEnum";
 export * from "./blankEnum";
+export * from "./goalEnum";
 export * from "./health";
 export * from "./healthStatusEnum";
 export * from "./patchedUserSettingsRequest";
@@ -21,7 +23,11 @@ export * from "./sessionRefresh";
 export * from "./sessionRefreshRequest";
 export * from "./sexEnum";
 export * from "./sourceEnum";
+export * from "./targetProposal";
+export * from "./targetProposalRequestRequest";
+export * from "./targetProposalRequestSexEnum";
 export * from "./targetVersion";
 export * from "./targetVersionCreateRequest";
+export * from "./targets";
 export * from "./user";
 export * from "./userSex";

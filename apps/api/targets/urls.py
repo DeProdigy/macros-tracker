@@ -2,7 +2,11 @@
 
 from django.urls import path
 
-from targets.views import CurrentTargetVersionView, TargetVersionListCreateView
+from targets.views import (
+    CurrentTargetVersionView,
+    TargetProposalView,
+    TargetVersionListCreateView,
+)
 
 app_name = "targets"
 
@@ -19,4 +23,7 @@ urlpatterns = [
     # exactly that reason. Give the detail route `<int:pk>/` when it arrives and
     # the collision cannot happen at all.
     path("current/", CurrentTargetVersionView.as_view(), name="current"),
+    # A computed thing the client asks for, so POST creates a proposal even
+    # though nothing is stored. Same literal-before-detail rule as `current/`.
+    path("proposals/", TargetProposalView.as_view(), name="proposals"),
 ]
