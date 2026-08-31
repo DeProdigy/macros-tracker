@@ -7,62 +7,58 @@ Mirror of the [Macros Tracker Native](https://linear.app/hintology/project/macro
 **Everything here except `tickets/` is generated.** Do not hand-edit it —
 change the Linear doc and run `pnpm sync:plans`.
 
-## Which doc wins
+## Source-of-truth order
 
-| Range | What | Authority |
-| -- | -- | -- |
-| 00–11 | Product and engineering plans | Authoritative. Always current |
-| 12–27 (`design/`) | Design docs and briefs | Superseded as design iterates — check the banner at the top |
-| Decision Log | Why things changed | Historical record, not a spec |
-| Follow-ups | What is parked and why | Authoritative on what is *not* being built |
-| `tickets/` | Approved implementation plans | Hand-written, committed with the work (doc 03) |
+1. Alex is the final source of truth for product clarification.
+2. START HERE and CANONICAL documents define current requirements.
+3. Active Linear milestones and issues define the current slice.
+4. Approved `tickets/` plans describe an accepted implementation.
+5. The repository and tests describe behavior that already exists.
 
-If a planning doc and the Decision Log disagree, the planning doc wins. If a
-design doc contradicts a planning doc, the planning doc wins and the design
-needs updating.
+**Never use a document under `archive/` to plan or implement work.** These
+files preserve history and can contain detailed requirements that were reversed.
 
-## Plans
+## Canonical
 
 | Doc | Source |
 | -- | -- |
-| [00 — App Overview](./00-app-overview.md) | [Linear](https://linear.app/hintology/document/00-app-overview-214d00168a7e) |
-| [01 — Architecture & Repo Structure](./01-architecture-and-repo-structure.md) | [Linear](https://linear.app/hintology/document/01-architecture-and-repo-structure-854c6ff9e12e) |
-| [02 — Data Model](./02-data-model.md) | [Linear](https://linear.app/hintology/document/02-data-model-2b01a7aaa301) |
-| [03 — Working Agreement & AI Workflow](./03-working-agreement-and-ai-workflow.md) | [Linear](https://linear.app/hintology/document/03-working-agreement-and-ai-workflow-74c0d25e7dd2) |
-| [04 — Feature: Authentication](./04-feature-authentication.md) | [Linear](https://linear.app/hintology/document/04-feature-authentication-8efb3525d18e) |
-| [05 — Feature: Onboarding & Targets](./05-feature-onboarding-and-targets.md) | [Linear](https://linear.app/hintology/document/05-feature-onboarding-and-targets-e112a3975b9a) |
-| [06 — Feature: Food Logging](./06-feature-food-logging.md) | [Linear](https://linear.app/hintology/document/06-feature-food-logging-bb59ab2b0ed6) |
-| [07 — Feature: Dashboard](./07-feature-dashboard.md) | [Linear](https://linear.app/hintology/document/07-feature-dashboard-53a71fbfe0c6) |
-| [08 — Feature: Advice](./08-feature-advice.md) | [Linear](https://linear.app/hintology/document/08-feature-advice-623b2a0b1e4a) |
-| [09 — Deployment & Production Ops](./09-deployment-and-production-ops.md) | [Linear](https://linear.app/hintology/document/09-deployment-and-production-ops-90968f6ad784) |
-| [10 — Feature: Apple Health (write-only)](./10-feature-apple-health-write-only.md) | [Linear](https://linear.app/hintology/document/10-feature-apple-health-write-only-10ec6a875a49) |
-| [11 — Feature: Post-Day Analysis](./11-feature-post-day-analysis.md) | [Linear](https://linear.app/hintology/document/11-feature-post-day-analysis-23f9b6242ccf) |
+| [CANONICAL — AI Delivery Workflow and Vertical Slices](./canonical-ai-delivery-workflow-and-vertical-slices.md) | [Linear](https://linear.app/hintology/document/canonical-ai-delivery-workflow-and-vertical-slices-9ee8ed45bf0e) |
+| [CANONICAL — Engineering Baseline and MVP Architecture](./canonical-engineering-baseline-and-mvp-architecture.md) | [Linear](https://linear.app/hintology/document/canonical-engineering-baseline-and-mvp-architecture-e65479ca911a) |
+| [CANONICAL — MVP Experience and Screen Flows](./canonical-mvp-experience-and-screen-flows.md) | [Linear](https://linear.app/hintology/document/canonical-mvp-experience-and-screen-flows-48e1ed94a401) |
+| [START HERE — Product, Scope, and Sources of Truth](./start-here-product-scope-and-sources-of-truth.md) | [Linear](https://linear.app/hintology/document/start-here-product-scope-and-sources-of-truth-f00dcbd827b2) |
 
-## Design
+## Archived history. Do not use for implementation
 
 | Doc | Source |
 | -- | -- |
-| [12 — Design: Home Screen and Visual System](./design/12-design-home-screen-and-visual-system.md) | [Linear](https://linear.app/hintology/document/12-design-home-screen-and-visual-system-e7ba44a84ad7) |
-| [13 — Design: Food Logging Flow (E4)](./design/13-design-food-logging-flow-e4.md) | [Linear](https://linear.app/hintology/document/13-design-food-logging-flow-e4-9c2f98fe40ae) |
-| [14 — Design: Authentication (E2)](./design/14-design-authentication-e2.md) | [Linear](https://linear.app/hintology/document/14-design-authentication-e2-bfac5272608a) |
-| [15 — Design: Onboarding and Targets (E3)](./design/15-design-onboarding-and-targets-e3.md) | [Linear](https://linear.app/hintology/document/15-design-onboarding-and-targets-e3-85c87496432b) |
-| [16 — Design: Entry Detail, Settings and Account](./design/16-design-entry-detail-settings-and-account.md) | [Linear](https://linear.app/hintology/document/16-design-entry-detail-settings-and-account-86d5712228be) |
-| [17 — Design: Post-Day Recap (E11)](./design/17-design-post-day-recap-e11.md) | [Linear](https://linear.app/hintology/document/17-design-post-day-recap-e11-f636ffaa552d) |
-| [18 — Design: Edge and Failure States](./design/18-design-edge-and-failure-states.md) | [Linear](https://linear.app/hintology/document/18-design-edge-and-failure-states-a84fd519c181) |
-| [19 — Design: Navigation & Information Architecture](./design/19-design-navigation-and-information-architecture.md) | [Linear](https://linear.app/hintology/document/19-design-navigation-and-information-architecture-735ed2f0bb37) |
-| [20 — Design: The Return Loop (streaks, history, recap gating)](./design/20-design-the-return-loop-streaks-history-recap-gating.md) | [Linear](https://linear.app/hintology/document/20-design-the-return-loop-streaks-history-recap-gating-865e8bfb6c03) |
-| [21 — Design: User Flows & State Inventory](./design/21-design-user-flows-and-state-inventory.md) | [Linear](https://linear.app/hintology/document/21-design-user-flows-and-state-inventory-c6c19c58844f) |
-| [22 — Design brief: Advice ("what should I eat")](./design/22-design-brief-advice-what-should-i-eat.md) | [Linear](https://linear.app/hintology/document/22-design-brief-advice-what-should-i-eat-7601ce9744ca) |
-| [23 — Design brief: Today, empty & first-run states](./design/23-design-brief-today-empty-and-first-run-states.md) | [Linear](https://linear.app/hintology/document/23-design-brief-today-empty-and-first-run-states-5e3724f50555) |
-| [24 — Design: Today empty & first-run states](./design/24-design-today-empty-and-first-run-states.md) | [Linear](https://linear.app/hintology/document/24-design-today-empty-and-first-run-states-b517c031e35b) |
-| [25 — Design: Advice](./design/25-design-advice.md) | [Linear](https://linear.app/hintology/document/25-design-advice-1ebb0a924952) |
-| [26 — Design: Authentication & Onboarding (revised)](./design/26-design-authentication-and-onboarding-revised.md) | [Linear](https://linear.app/hintology/document/26-design-authentication-and-onboarding-revised-6c92d855306a) |
-| [27 — Design: Food Logging (revised)](./design/27-design-food-logging-revised.md) | [Linear](https://linear.app/hintology/document/27-design-food-logging-revised-4477d5c2334a) |
-
-## Reference
-
-| Doc | Source |
-| -- | -- |
-| [Decision Log](./decision-log.md) | [Linear](https://linear.app/hintology/document/decision-log-3f0d791973e7) |
-| [Follow-ups & Parked Ideas](./follow-ups-and-parked-ideas.md) | [Linear](https://linear.app/hintology/document/follow-ups-and-parked-ideas-bcab8882f99c) |
+| [ARCHIVED — 00 — App Overview](./archive/archived-00-app-overview.md) | [Linear](https://linear.app/hintology/document/archived-00-app-overview-214d00168a7e) |
+| [ARCHIVED — 01 — Architecture & Repo Structure](./archive/archived-01-architecture-and-repo-structure.md) | [Linear](https://linear.app/hintology/document/archived-01-architecture-and-repo-structure-854c6ff9e12e) |
+| [ARCHIVED — 02 — Data Model](./archive/archived-02-data-model.md) | [Linear](https://linear.app/hintology/document/archived-02-data-model-2b01a7aaa301) |
+| [ARCHIVED — 03 — Working Agreement & AI Workflow](./archive/archived-03-working-agreement-and-ai-workflow.md) | [Linear](https://linear.app/hintology/document/archived-03-working-agreement-and-ai-workflow-74c0d25e7dd2) |
+| [ARCHIVED — 04 — Feature: Authentication](./archive/archived-04-feature-authentication.md) | [Linear](https://linear.app/hintology/document/archived-04-feature-authentication-8efb3525d18e) |
+| [ARCHIVED — 05 — Feature: Onboarding & Targets](./archive/archived-05-feature-onboarding-and-targets.md) | [Linear](https://linear.app/hintology/document/archived-05-feature-onboarding-and-targets-e112a3975b9a) |
+| [ARCHIVED — 06 — Feature: Food Logging](./archive/archived-06-feature-food-logging.md) | [Linear](https://linear.app/hintology/document/archived-06-feature-food-logging-bb59ab2b0ed6) |
+| [ARCHIVED — 07 — Feature: Dashboard](./archive/archived-07-feature-dashboard.md) | [Linear](https://linear.app/hintology/document/archived-07-feature-dashboard-53a71fbfe0c6) |
+| [ARCHIVED — 08 — Feature: Advice](./archive/archived-08-feature-advice.md) | [Linear](https://linear.app/hintology/document/archived-08-feature-advice-623b2a0b1e4a) |
+| [ARCHIVED — 09 — Deployment & Production Ops](./archive/archived-09-deployment-and-production-ops.md) | [Linear](https://linear.app/hintology/document/archived-09-deployment-and-production-ops-90968f6ad784) |
+| [ARCHIVED — 10 — Feature: Apple Health (write-only)](./archive/archived-10-feature-apple-health-write-only.md) | [Linear](https://linear.app/hintology/document/archived-10-feature-apple-health-write-only-10ec6a875a49) |
+| [ARCHIVED — 11 — Feature: Post-Day Analysis](./archive/archived-11-feature-post-day-analysis.md) | [Linear](https://linear.app/hintology/document/archived-11-feature-post-day-analysis-23f9b6242ccf) |
+| [ARCHIVED — 12 — Design: Home Screen and Visual System](./archive/archived-12-design-home-screen-and-visual-system.md) | [Linear](https://linear.app/hintology/document/archived-12-design-home-screen-and-visual-system-e7ba44a84ad7) |
+| [ARCHIVED — 13 — Design: Food Logging Flow (E4)](./archive/archived-13-design-food-logging-flow-e4.md) | [Linear](https://linear.app/hintology/document/archived-13-design-food-logging-flow-e4-9c2f98fe40ae) |
+| [ARCHIVED — 14 — Design: Authentication (E2)](./archive/archived-14-design-authentication-e2.md) | [Linear](https://linear.app/hintology/document/archived-14-design-authentication-e2-bfac5272608a) |
+| [ARCHIVED — 15 — Design: Onboarding and Targets (E3)](./archive/archived-15-design-onboarding-and-targets-e3.md) | [Linear](https://linear.app/hintology/document/archived-15-design-onboarding-and-targets-e3-85c87496432b) |
+| [ARCHIVED — 16 — Design: Entry Detail, Settings and Account](./archive/archived-16-design-entry-detail-settings-and-account.md) | [Linear](https://linear.app/hintology/document/archived-16-design-entry-detail-settings-and-account-86d5712228be) |
+| [ARCHIVED — 17 — Design: Post-Day Recap (E11)](./archive/archived-17-design-post-day-recap-e11.md) | [Linear](https://linear.app/hintology/document/archived-17-design-post-day-recap-e11-f636ffaa552d) |
+| [ARCHIVED — 18 — Design: Edge and Failure States](./archive/archived-18-design-edge-and-failure-states.md) | [Linear](https://linear.app/hintology/document/archived-18-design-edge-and-failure-states-a84fd519c181) |
+| [ARCHIVED — 19 — Design: Navigation & Information Architecture](./archive/archived-19-design-navigation-and-information-architecture.md) | [Linear](https://linear.app/hintology/document/archived-19-design-navigation-and-information-architecture-735ed2f0bb37) |
+| [ARCHIVED — 20 — Design: The Return Loop (streaks, history, recap gating)](./archive/archived-20-design-the-return-loop-streaks-history-recap-gating.md) | [Linear](https://linear.app/hintology/document/archived-20-design-the-return-loop-streaks-history-recap-gating-865e8bfb6c03) |
+| [ARCHIVED — 21 — Design: User Flows & State Inventory](./archive/archived-21-design-user-flows-and-state-inventory.md) | [Linear](https://linear.app/hintology/document/archived-21-design-user-flows-and-state-inventory-c6c19c58844f) |
+| [ARCHIVED — 22 — Design brief: Advice ("what should I eat")](./archive/archived-22-design-brief-advice-what-should-i-eat.md) | [Linear](https://linear.app/hintology/document/archived-22-design-brief-advice-what-should-i-eat-7601ce9744ca) |
+| [ARCHIVED — 23 — Design brief: Today, empty & first-run states](./archive/archived-23-design-brief-today-empty-and-first-run-states.md) | [Linear](https://linear.app/hintology/document/archived-23-design-brief-today-empty-and-first-run-states-5e3724f50555) |
+| [ARCHIVED — 24 — Design: Today empty & first-run states](./archive/archived-24-design-today-empty-and-first-run-states.md) | [Linear](https://linear.app/hintology/document/archived-24-design-today-empty-and-first-run-states-b517c031e35b) |
+| [ARCHIVED — 25 — Design: Advice](./archive/archived-25-design-advice.md) | [Linear](https://linear.app/hintology/document/archived-25-design-advice-1ebb0a924952) |
+| [ARCHIVED — 26 — Design: Authentication & Onboarding (revised)](./archive/archived-26-design-authentication-and-onboarding-revised.md) | [Linear](https://linear.app/hintology/document/archived-26-design-authentication-and-onboarding-revised-6c92d855306a) |
+| [ARCHIVED — 27 — Design: Food Logging (revised)](./archive/archived-27-design-food-logging-revised.md) | [Linear](https://linear.app/hintology/document/archived-27-design-food-logging-revised-4477d5c2334a) |
+| [ARCHIVED — Decision Log](./archive/archived-decision-log.md) | [Linear](https://linear.app/hintology/document/archived-decision-log-3f0d791973e7) |
+| [ARCHIVED — Follow-ups & Parked Ideas](./archive/archived-follow-ups-and-parked-ideas.md) | [Linear](https://linear.app/hintology/document/archived-follow-ups-and-parked-ideas-bcab8882f99c) |
 

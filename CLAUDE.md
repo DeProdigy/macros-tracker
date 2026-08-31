@@ -1,16 +1,17 @@
 # CLAUDE.md
 
 Planning source of truth is the Linear project. [`plans/`](./plans) is a
-**generated mirror** of it — never hand-edit anything in there except
-`plans/tickets/`. To change a plan, edit the Linear doc and run
-`pnpm sync:plans`. Feed the relevant plan doc into a session rather than
-re-explaining decisions.
+**generated mirror** of it. Never hand-edit anything there except
+`plans/tickets/`. To change a plan, edit Linear and run `pnpm sync:plans`.
 
-Start at [`plans/README.md`](./plans/README.md), which indexes every doc and
-says which one wins in a conflict. Architecture is in
-[`plans/01-architecture-and-repo-structure.md`](./plans/01-architecture-and-repo-structure.md);
-the working agreement this file enforces is in
-[`plans/03-working-agreement-and-ai-workflow.md`](./plans/03-working-agreement-and-ai-workflow.md).
+Start at [`plans/README.md`](./plans/README.md). Only documents whose titles
+start with `START HERE` or `CANONICAL` define current requirements. Alex is the
+final source of truth for clarification. Active milestones and issues apply
+after the canonical documents.
+
+Never use a document or mirror file marked `ARCHIVED` to plan or implement
+work. Archived files preserve history and can contain detailed requirements
+that were reversed. The Decision Log is historical reasoning, not a spec.
 
 ---
 
@@ -153,7 +154,7 @@ pnpm + turbo monorepo (`pnpm@11.15.1`), workspaces `apps/*` and `packages/*`:
 | `apps/api` | Django 6 + DRF, Python 3.12, dependencies managed with `uv` |
 | `apps/mobile` | Expo SDK 57 + expo-router, React Native 0.86, TypeScript |
 | `packages/api-client` | **Generated** TypeScript client (drf-spectacular → Orval). Never hand-edit |
-| `plans` | **Generated** mirror of the Linear docs (`pnpm sync:plans`). Never hand-edit, except `plans/tickets/` |
+| `plans` | **Generated** mirror of Linear. Read only START HERE and CANONICAL docs. Never hand-edit, except `plans/tickets/` |
 
 Django apps: `accounts` (custom User model), `uploads` (Cloudflare R2 presigned
 uploads). `entries`, `targets`, and `ai` are scaffolded but still empty.
