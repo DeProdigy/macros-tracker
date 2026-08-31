@@ -25,6 +25,7 @@ files preserve history and can contain detailed requirements that were reversed.
 | [CANONICAL — AI Delivery Workflow and Vertical Slices](./canonical-ai-delivery-workflow-and-vertical-slices.md) | [Linear](https://linear.app/hintology/document/canonical-ai-delivery-workflow-and-vertical-slices-9ee8ed45bf0e) |
 | [CANONICAL — Engineering Baseline and MVP Architecture](./canonical-engineering-baseline-and-mvp-architecture.md) | [Linear](https://linear.app/hintology/document/canonical-engineering-baseline-and-mvp-architecture-e65479ca911a) |
 | [CANONICAL — MVP Experience and Screen Flows](./canonical-mvp-experience-and-screen-flows.md) | [Linear](https://linear.app/hintology/document/canonical-mvp-experience-and-screen-flows-48e1ed94a401) |
+| [CANONICAL — MVP Visual Design and Approved Screens](./canonical-mvp-visual-design-and-approved-screens.md) | [Linear](https://linear.app/hintology/document/canonical-mvp-visual-design-and-approved-screens-7b137621de9b) |
 | [START HERE — Product, Scope, and Sources of Truth](./start-here-product-scope-and-sources-of-truth.md) | [Linear](https://linear.app/hintology/document/start-here-product-scope-and-sources-of-truth-f00dcbd827b2) |
 
 ## Archived history. Do not use for implementation

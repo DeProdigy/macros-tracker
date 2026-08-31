@@ -2,7 +2,7 @@
 linear_id: 71088d12-87a0-4e70-a097-a572e6e4e660
 linear_title: "CANONICAL â€” AI Delivery Workflow and Vertical Slices"
 linear_url: https://linear.app/hintology/document/canonical-ai-delivery-workflow-and-vertical-slices-9ee8ed45bf0e
-linear_updated_at: 2026-08-31T18:59:23.197Z
+linear_updated_at: 2026-08-31T19:25:56.965Z
 generated: true
 ---
 
@@ -19,13 +19,15 @@ The workflow must prevent large unexplained changes and must avoid horizontal â€
 
 Before planning an issue:
 
-1. Read the four canonical documents.
+1. Read the five canonical documents.
 2. Read the active milestone and issue.
 3. Inspect the relevant repository code and tests.
 4. Ignore every document marked ARCHIVED.
 5. Ask Alex when a product choice is not settled.
 
 Do not infer current requirements from the Decision Log or an archived design.
+
+Use only Approved artifacts from [MVP Visual Design and Approved Screens](<https://linear.app/hintology/document/canonical-mvp-visual-design-and-approved-screens-7b137621de9b>). A screenshot controls presentation, not behavior.
 
 ## Vertical slices
 

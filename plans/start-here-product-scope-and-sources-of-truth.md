@@ -2,7 +2,7 @@
 linear_id: f5ddc615-507b-441c-b25a-aefd8da262d2
 linear_title: "START HERE — Product, Scope, and Sources of Truth"
 linear_url: https://linear.app/hintology/document/start-here-product-scope-and-sources-of-truth-f00dcbd827b2
-linear_updated_at: 2026-08-31T18:59:13.504Z
+linear_updated_at: 2026-08-31T19:25:55.645Z
 generated: true
 ---
 
@@ -18,7 +18,7 @@ This document defines the current product and the rules for planning it.
 Use sources in this order:
 
 1. The owner, Alex Hint, for product intent and clarification.
-2. The four documents whose titles start with `START HERE` or `CANONICAL`.
+2. The five documents whose titles start with `START HERE` or `CANONICAL`.
 3. The active milestone description.
 4. The active Linear issue and its accepted implementation plan.
 5. The repository and its tests for behavior that already exists.
@@ -26,6 +26,8 @@ Use sources in this order:
 No other Linear document may guide implementation. Documents marked `ARCHIVED` preserve history only. Do not copy requirements, routes, screen flows, or acceptance criteria from them. If a canonical document and the repository disagree, stop and resolve the difference with Alex before changing behavior.
 
 The Decision Log explains why old choices changed. It is not a specification.
+
+The canonical visual-design document owns approved screen artifacts. Screenshots define presentation only. They cannot add behavior that the canonical flow does not specify.
 
 ## Product
 

@@ -2,7 +2,7 @@
 linear_id: 124e7f0e-5dda-4b9b-8d74-3e876ca91336
 linear_title: "CANONICAL — MVP Experience and Screen Flows"
 linear_url: https://linear.app/hintology/document/canonical-mvp-experience-and-screen-flows-48e1ed94a401
-linear_updated_at: 2026-08-31T18:59:16.278Z
+linear_updated_at: 2026-08-31T19:25:59.378Z
 generated: true
 ---
 
@@ -12,6 +12,8 @@ generated: true
 # Purpose
 
 This document defines the MVP user experience. It consolidates the useful parts of the old design documents without their reversed decisions.
+
+[MVP Visual Design and Approved Screens](<https://linear.app/hintology/document/canonical-mvp-visual-design-and-approved-screens-7b137621de9b>) owns approved images and editable design artifacts. This document owns behavior and navigation.
 
 The current visual direction remains in place. The app uses a dark, athletic, number-first design. A later follow-up may revise it with a design-quality skill such as Impeccable.
 

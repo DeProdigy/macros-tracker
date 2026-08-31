@@ -13,6 +13,10 @@ Never use a document or mirror file marked `ARCHIVED` to plan or implement
 work. Archived files preserve history and can contain detailed requirements
 that were reversed. The Decision Log is historical reasoning, not a spec.
 
+Approved visual references live in [`design/`](./design). The canonical flow
+defines behavior. An approved artifact defines presentation only for its named
+screen and state.
+
 ---
 
 ## How to work on this repo
