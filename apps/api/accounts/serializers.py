@@ -110,7 +110,13 @@ class UserSerializer(serializers.ModelSerializer):
             },
             "name": {"help_text": "Display name, or empty when Apple never supplied one."},
             "onboarding_completed": {
-                "help_text": "Whether the client should route to onboarding or to Today."
+                "help_text": (
+                    "Whether the client should route to onboarding or to Today. "
+                    "Server-derived, set when the user's first target version is "
+                    "created, and never writable. False means the user has no "
+                    "targets and onboarding is the only screen they may reach: "
+                    "there is no skip."
+                )
             },
         }
 

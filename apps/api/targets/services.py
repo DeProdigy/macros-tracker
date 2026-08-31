@@ -1,8 +1,15 @@
-"""The two-tier guardrail on daily macro targets.
+"""The two-tier guardrail on daily macro targets, and the one door that writes one.
 
-Pure functions. No HTTP, no database, no model provider. Everything here is
-arithmetic and comparison, which is why it is the most thoroughly tested module
-in the epic and the thing the AI path falls back to when it misbehaves.
+Two halves, and the split is worth reading before the code.
+
+Everything above `--- the write path ---` is pure arithmetic and comparison. No
+HTTP, no database, no model provider. That is why it is the most thoroughly
+tested module in the epic and the thing the AI path falls back to when it
+misbehaves.
+
+`create_version` at the bottom is the exception, added by MAC-47. It touches the
+database, and it lives here rather than in a serializer because two rows have to
+move together. See its docstring.
 
 **Everything here is pounds.** Weight comes in as pounds and every bound is per
 pound. This is a US app and the whole stack speaks pounds, from the onboarding
@@ -41,10 +48,23 @@ translating anything.
 
 import math
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
+from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework.exceptions import ValidationError
+
+from .models import TargetVersion
+
+if TYPE_CHECKING:
+    # Type-only. `Sex` below stays a mirror rather than becoming an import,
+    # because MAC-53 chose that deliberately and `targets/tests/test_units.py`
+    # pins the two copies together. Swapping it for a real import is a fair
+    # change and it is not this ticket's.
+    from accounts.models import User
 
 # Pounds in a kilogram. The one place this module names another unit, and it
 # names it to get rid of it: every bound below is per pound by the time anything
@@ -461,3 +481,91 @@ def reject_outside_absolute(targets: Targets, weight_lb: Decimal | None) -> None
         # All failing fields at once, not the first. A caller who fixes one and
         # resubmits only to be told about the next has been made to guess.
         raise ValidationError(errors, code="target_out_of_bounds")
+
+
+# --- the write path ----------------------------------------------------------
+#
+# Everything above this line is arithmetic. Everything below it writes rows.
+
+
+def complete_onboarding(user: "User") -> bool:
+    """Flip `onboarding_completed` unless it is already set.
+
+    Returns True when **this call** was the one that flipped it, which is what
+    makes the behaviour testable without reading generated SQL.
+
+    **The condition is "not done yet", not "this is the first version".**
+
+        User.objects.filter(pk=user.pk, onboarding_completed=False).update(...)
+
+    One conditional UPDATE, which buys three things a `count() == 0` check does
+    not. It costs no extra query. Two racing requests cannot both decide they
+    are first, because the database resolves the condition rather than Python.
+    And a later call matches zero rows and returns False.
+
+    Move the check into an `if` in Python and two racing first-target requests
+    both read False, both write, and the guarantee is gone with every test still
+    green. The return value is what a test can hold onto instead.
+
+    It is not identical to "first version". An operator who clears the flag by
+    hand gets it back on that user's next target, which is the wanted answer and
+    falls out of writing the condition in terms of the fact instead of the count.
+    """
+    return bool(
+        get_user_model()
+        .objects.filter(pk=user.pk, onboarding_completed=False)
+        .update(onboarding_completed=True)
+    )
+
+
+def create_version(
+    *,
+    user: "User",
+    calories: int,
+    protein_g: int,
+    fiber_g: int,
+    source: str,
+    effective_from: date,
+    ai_rationale: str = "",
+) -> TargetVersion:
+    """Create a target version, and complete onboarding if this is the first one.
+
+    **The one door.** Every caller that makes a `TargetVersion` comes through
+    here: MAC-40's endpoint today, MAC-45's entry backfill and MAC-51's accepted
+    proposal next. A second creation path is a second place to forget the flag,
+    and MAC-47 exists because nobody wrote the flag anywhere at all.
+
+    Not a signal. A `post_save` receiver would also fire from fixtures, from
+    migrations, and from any test that builds a row, and no reader of the call
+    site would know it happened. The cost of a signal is paid by whoever debugs
+    it two years later.
+
+    **Why the flag flips here.** `onboarding_completed` means "this user owns
+    targets", which under a hard gate is the same thing as "this user has been
+    through onboarding". The server derives it and the client never writes it.
+    Read `accounts.models.User` for the rest, and `complete_onboarding` above for
+    why the UPDATE carries a condition.
+
+    Both writes are in one transaction. A target that saves while the flag fails
+    leaves a user with targets who is still told to go and set some.
+    """
+    with transaction.atomic():
+        version = TargetVersion.objects.create(
+            user=user,
+            calories=calories,
+            protein_g=protein_g,
+            fiber_g=fiber_g,
+            source=source,
+            effective_from=effective_from,
+            ai_rationale=ai_rationale,
+        )
+        completed = complete_onboarding(user)
+
+    # The UPDATE above went round the in-memory object, so `user` still says
+    # False and anything later in this request would read a stale value. Nothing
+    # does today. Leaving the two disagreeing is how that stops being true
+    # quietly.
+    if completed:
+        user.onboarding_completed = True
+
+    return version

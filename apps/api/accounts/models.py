@@ -179,6 +179,18 @@ class User(AbstractBaseUser, PermissionsMixin):
     # IANA timezone name (e.g. "America/New_York"), never a numeric offset —
     # offsets break across DST.
     timezone = models.CharField(max_length=64, default="UTC")
+    # Server-derived, and the only thing the launch gate reads.
+    #
+    # It turns true when the user's first TargetVersion is written, and no
+    # client can set it: `UserSettingsSerializer` omits it and a test pins that.
+    # A client that could assert it could walk past onboarding by claiming to
+    # have finished it.
+    #
+    # **Onboarding is a hard gate.** Ruled 30 Aug 2026, reversing the 20 Aug
+    # sequencing. The six questions come first and there is no skip, so a user
+    # with no targets has no way into the app and every logged day has targets
+    # to measure against. The reversed order also removed the reason for a
+    # nullable `DailyLog.target_version`. See the Decision Log.
     onboarding_completed = models.BooleanField(default=False)
 
     # --- onboarding answers worth keeping (doc 05) ---

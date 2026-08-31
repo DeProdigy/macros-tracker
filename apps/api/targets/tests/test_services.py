@@ -2,6 +2,8 @@
 
 No database. These are pure functions and the tests should stay that way, so a
 `django_db` mark appearing here later is a sign something leaked.
+`services.create_version` is the one part of that module that writes rows, and
+`test_create_version.py` covers it.
 
 Weights are in **pounds**, like the rest of the stack. Some expected values look
 untidy, and they are meant to: the ratios carry eight decimal places, and

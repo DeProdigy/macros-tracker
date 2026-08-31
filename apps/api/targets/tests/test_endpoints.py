@@ -260,3 +260,83 @@ def test_creating_targets_needs_authentication():
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert TargetVersion.objects.count() == 0
+
+
+# --- MAC-47: the first target completes onboarding ---------------------------
+#
+# The bug these guard: `onboarding_completed` was read by two mobile routes and
+# written by nothing, so a user set targets, closed the app, and reopened it in
+# onboarding. Forever.
+
+
+def test_a_first_target_completes_onboarding(user, client_for):
+    assert user.onboarding_completed is False
+
+    response = client_for(user).post(reverse("targets:list-create"), payload(), format="json")
+
+    assert response.status_code == status.HTTP_201_CREATED
+    user.refresh_from_db()
+    assert user.onboarding_completed is True
+
+
+def test_the_round_trip_the_gate_actually_makes(user, client_for):
+    """Create a target, then refetch the user the way the app does on launch.
+
+    The unit test above reads the database directly. This one goes through
+    `GET /api/users/me/`, because that is the response the launch gate reads and
+    the serializer is where the field could still be dropped.
+    """
+    client = client_for(user)
+    client.post(reverse("targets:list-create"), payload(), format="json")
+
+    me = client.get(reverse("users:current"))
+
+    assert me.data["onboarding_completed"] is True
+
+
+def test_a_later_target_leaves_the_flag_alone(user, client_for):
+    client = client_for(user)
+    client.post(reverse("targets:list-create"), payload(), format="json")
+    user.refresh_from_db()
+    first_state = user.onboarding_completed
+
+    client.post(reverse("targets:list-create"), payload(calories=2200), format="json")
+
+    user.refresh_from_db()
+    assert first_state is True
+    assert user.onboarding_completed is True
+    assert TargetVersion.objects.for_user(user).count() == 2
+
+
+def test_a_rejected_target_does_not_complete_onboarding(user, client_for):
+    """The flag and the row move together, or neither moves.
+
+    A 400 here is the cheap version. The expensive version is a target that
+    saves while the flag write fails, which leaves a user who owns targets and
+    is still told to go and set some.
+    """
+    response = client_for(user).post(
+        reverse("targets:list-create"), payload(calories=400), format="json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    user.refresh_from_db()
+    assert user.onboarding_completed is False
+
+
+def test_the_flag_is_restored_if_an_operator_clears_it(user, client_for):
+    """The condition is "not completed yet", not "this is the first version".
+
+    Worth pinning, because the two are not the same and the difference is the
+    reason for a conditional UPDATE rather than a count. A user whose flag was
+    cleared by hand gets it back on their next target, which is the answer that
+    keeps the launch gate honest.
+    """
+    client = client_for(user)
+    client.post(reverse("targets:list-create"), payload(), format="json")
+    User.objects.filter(pk=user.pk).update(onboarding_completed=False)
+
+    client.post(reverse("targets:list-create"), payload(calories=2200), format="json")
+
+    user.refresh_from_db()
+    assert user.onboarding_completed is True

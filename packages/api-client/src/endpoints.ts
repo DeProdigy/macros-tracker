@@ -1142,6 +1142,8 @@ export const usePresignUpload = <TError = void, TContext = unknown>(
 /**
  * Returns the user the bearer token resolves to. This is how the client learns who it is signed in as after a cold start, and `onboarding_completed` is what it routes on: false sends the user to onboarding, true to Today.
 
+**Onboarding is a hard gate and there is no skip.** A user with false here may reach no screen but onboarding. The field is server-derived, set when their first target version is written, so the only way past it is to finish the questions.
+
 401 when the token is missing, malformed, or expired — which the client should treat as 'refresh, then retry once'.
  * @summary Read the signed-in user
  */
@@ -1279,7 +1281,7 @@ export function useGetCurrentUser<
 
 **Partial.** An omitted field is left untouched; an explicit null clears it back to unanswered. That distinction is the reason this is `PATCH` and not `PUT`: a full replace cannot tell the two apart.
 
-Only these fields are writable. `email` and `name` come from Apple at sign-in, and `onboarding_completed` is set by completing onboarding, so none of them are accepted here — sending them is ignored, not an error. The response is the full user, so the client can replace its cached copy with one round trip.
+Only these fields are writable. `email` and `name` come from Apple at sign-in, and `onboarding_completed` is server-derived, so none of them are accepted here — sending them is ignored, not an error. The response is the full user, so the client can replace its cached copy with one round trip.
  * @summary Update the signed-in user's settings
  */
 export type updateCurrentUserResponse200 = {

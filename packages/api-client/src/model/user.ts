@@ -34,7 +34,7 @@ export interface User {
   /** Display name, or empty when Apple never supplied one. */
   readonly name: string;
   readonly timezone: string;
-  /** Whether the client should route to onboarding or to Today. */
+  /** Whether the client should route to onboarding or to Today. Server-derived, set when the user's first target version is created, and never writable. False means the user has no targets and onboarding is the only screen they may reach: there is no skip. */
   readonly onboarding_completed: boolean;
   readonly sex: (typeof UserSex)[keyof typeof UserSex];
   /**

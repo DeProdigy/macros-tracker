@@ -385,6 +385,10 @@ class CurrentUserView(APIView):
             "client learns who it is signed in as after a cold start, and "
             "`onboarding_completed` is what it routes on: false sends the user "
             "to onboarding, true to Today.\n\n"
+            "**Onboarding is a hard gate and there is no skip.** A user with "
+            "false here may reach no screen but onboarding. The field is "
+            "server-derived, set when their first target version is written, so "
+            "the only way past it is to finish the questions.\n\n"
             "401 when the token is missing, malformed, or expired — which the "
             "client should treat as 'refresh, then retry once'."
         ),
@@ -434,10 +438,10 @@ class CurrentUserView(APIView):
             "is `PATCH` and not `PUT`: a full replace cannot tell the two "
             "apart.\n\n"
             "Only these fields are writable. `email` and `name` come from Apple "
-            "at sign-in, and `onboarding_completed` is set by completing "
-            "onboarding, so none of them are accepted here — sending them is "
-            "ignored, not an error. The response is the full user, so the "
-            "client can replace its cached copy with one round trip."
+            "at sign-in, and `onboarding_completed` is server-derived, so none "
+            "of them are accepted here — sending them is ignored, not an error. "
+            "The response is the full user, so the client can replace its cached "
+            "copy with one round trip."
         ),
         tags=["users"],
         request=UserSettingsSerializer,

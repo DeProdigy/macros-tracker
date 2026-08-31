@@ -2,7 +2,7 @@
 linear_id: 21b2f49e-7ac9-42b6-ae5d-3dd65e8a94fc
 linear_title: "07 — Feature: Dashboard"
 linear_url: https://linear.app/hintology/document/07-feature-dashboard-53a71fbfe0c6
-linear_updated_at: 2026-08-20T04:01:38.907Z
+linear_updated_at: 2026-08-30T18:25:22.372Z
 generated: true
 ---
 
@@ -65,7 +65,9 @@ Totals computed via aggregation over items, not stored. See doc 02.
 
 Each day response includes the targets **that applied on that day**, from the `DailyLog`'s `target_version` — not today's targets. A past day must render against the goals that were real at the time.
 
-A day with a null `target_version` (logged before onboarding) renders macros without progress.
+**There is no null** `target_version` **case.** Removed 30 Aug 2026 with the onboarding sequencing. It existed because a meal could be logged before onboarding finished, and that day had no targets to measure against. Onboarding is now a hard gate that comes first, so every day has targets and the column is NOT NULL.
+
+That deletes a whole render state from this screen: "macros without progress" is not reachable and should not be built. See doc 02.
 
 ## Empty states
 

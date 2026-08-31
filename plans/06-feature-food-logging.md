@@ -2,7 +2,7 @@
 linear_id: 2d991d32-9d12-42e8-bad1-1b03cfffdda2
 linear_title: "06 — Feature: Food Logging"
 linear_url: https://linear.app/hintology/document/06-feature-food-logging-bb59ab2b0ed6
-linear_updated_at: 2026-08-20T04:02:28.163Z
+linear_updated_at: 2026-08-30T18:25:13.945Z
 generated: true
 ---
 
@@ -38,9 +38,11 @@ Two entry points, equal weight:
 
 Permissions requested with context, at the moment of use, not on app launch. iOS users deny blanket requests. Handle denial gracefully with a path to settings.
 
-**The first-run case needs special care.** With onboarding resequenced behind the first meal, a brand-new user meets the camera permission prompt within seconds of installing — the coldest possible moment to ask. Camera is the permission that must succeed, and iOS gives exactly one shot at the system prompt.
+**The first-run case still needs care, and it got easier on 30 Aug 2026.** The prompt used to arrive within seconds of installing, because onboarding sat behind the first meal. That was the coldest possible moment to ask, and iOS gives exactly one shot at the system prompt.
 
-Precede it with a sentence of context on the capture screen, or offer the library path first for anyone who declines. A denied camera permission on day one is close to fatal for activation, and it can't be re-prompted.
+Onboarding now comes first, so the user answers six questions and sees their own targets before the camera is ever mentioned. They arrive at capture having already been shown what the app is for, which is the context the prompt needed.
+
+The protections stay anyway. Precede the prompt with a sentence of context on the capture screen, and offer the library path to anyone who declines. A denied camera permission is close to fatal for activation and it cannot be re-prompted, so the warmer moment reduces the risk rather than removing it.
 
 ### The description field is prominent, not buried
 

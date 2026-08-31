@@ -2,7 +2,7 @@
 linear_id: afad3d4f-f24b-4fb2-b6ea-0e45cd997939
 linear_title: "Decision Log"
 linear_url: https://linear.app/hintology/document/decision-log-3f0d791973e7
-linear_updated_at: 2026-08-20T18:23:47.418Z
+linear_updated_at: 2026-08-30T18:27:22.296Z
 generated: true
 ---
 
@@ -14,6 +14,56 @@ generated: true
 Kept because the reasoning is the valuable part — and because "here's a project where I made and documented real tradeoffs" is directly useful material for engineering leadership interviews.
 
 Newest first.
+
+---
+
+## 30 Aug 2026 — Onboarding comes first, and cannot be skipped
+
+Reverses the 20 Aug sequencing in doc 05 and the onboarding half of doc 26. The six questions run straight after sign-in, the first meal comes after targets exist, and there is no skip.
+
+Found while reviewing [MAC-47](<https://linear.app/hintology/issue/MAC-47/nothing-ever-sets-onboarding-completed-so-the-launch-gate-loops>), which had just shipped a whole `onboarding_skipped_at` column to make the skip work properly. The owner's question was short: why are we setting it, the onboarding should not be skipped. The docs said otherwise, and the docs were out of date rather than right.
+
+### What the reversed order was for, and why it lost
+
+The 20 Aug argument was real. Asking for effort before showing value is a bad activation shape, and the design it replaced asked ten questions before the app did anything.
+
+It loses on what the first meal actually shows. **This product is a number measured against a target.** A meal logged before targets exist has no ring, no progress and nothing scored, so it demonstrates half the trick. The payoff the resequencing wanted to lead with was not available yet.
+
+Cutting ten questions to six is what fixed the activation shape. The reorder was a second fix for a problem the cut had already solved, and it cost more than it returned.
+
+### What the reversal deletes
+
+More than a screen, which is the argument for writing it down properly.
+
+* `onboarding_skipped_at`**.** Column, migration, serializer field, clock-skew validator, and the client write. Never merged, so it is a deleted branch rather than a migration
+* `9d`**, the bridge screen.** It existed only to fill the gap between the first entry and the first question. There is no gap now
+* **The nullable** `DailyLog.target_version`**,** and the backfill it required, and the "macros without progress" render state on the dashboard. No entry can exist before targets do
+* **The dismissible re-prompt row on Today.** It re-offered onboarding to a skipper. There are none
+* [**MAC-45**](<https://linear.app/hintology/issue/MAC-45/backfill-null-target-version-on-first-target-creation>) **and [MAC-46](<https://linear.app/hintology/issue/MAC-46/mobile-the-set-targets-bridge-after-the-first-entry-9d>)**, cancelled
+
+Worth noticing how far a sequencing decision reached. It set a column's nullability, a screen's existence, a dashboard render state, and two tickets. A reversal that only changed the routing would have left all of that in place, each piece defensible on its own and none of it needed.
+
+### The hole the audit found
+
+`apps/mobile/app/(app)/_layout.tsx` guarded authentication and not onboarding. The launch gate at `/` checked it, and a deep link straight to `/today` never runs the launch gate. So a user with no targets could walk in.
+
+That was tolerable while the skip existed, because leaving was allowed anyway. It is not tolerable now. **A gate with a way round it is not a gate**, and the guard on every signed-in route is where the check belongs, by the same argument that file already made for auth.
+
+The server side is still open. The mobile guard stops a person, not a request. Whatever builds `DailyLog` creation in E4 has to refuse when the user has no current `TargetVersion`, or the NOT NULL column turns a bad request into a 500.
+
+### The cost, accepted
+
+Abandoning the questions now means landing back at question one, with no way into the app. An unexitable flow with a blocking step traps everyone who reaches it, and doc 04 describes exactly that trap in the verify-email stack this design deleted.
+
+The protection is that all six questions are local. Nothing in the stack waits on a network call except the final target write, and doc 18's deterministic fallback covers the AI step. **Any future step that can block must not go inside this stack.**
+
+There is also a gap in the ticket order. Until [MAC-50](<https://linear.app/hintology/issue/MAC-50/mobile-the-adjust-screen-and-the-settings-target-editor-6h>) lands, the onboarding placeholder is a dead end and a new user cannot reach the app at all. That is the honest consequence of removing the exit before building the replacement, and on an app with no users it is a two-ticket window rather than an outage.
+
+### What survives from the deleted reasoning
+
+Doc 02 kept the sentence the skip field was built on, because it applies elsewhere: **a flag meaning "the user resolved this" is not the same as one meaning "the data exists", and choosing the second because it is derivable is how a supported choice becomes a nag.**
+
+It is sound, and it needs a supported choice to exist. Onboarding no longer has one, so "has targets" and "resolved onboarding" are now the same fact, and one server-derived field is the honest model.
 
 ---
 
@@ -39,7 +89,7 @@ Generalisable: when a rule's only reachable failure mode is "our own infrastruct
 
 **Was:** no name field. Nothing displays a name, so nothing is lost by dropping Apple's one-shot `fullName`.
 
-**Now:** `User.name`, explicitly unverified.
+Now: `User.name`, explicitly unverified.
 
 **Why:** not a new use for it. The asymmetry. Apple sends `fullName` on the first authorization and never again, so not capturing it is permanent. Same argument that decided `real_user_status` in [MAC-34](<https://linear.app/hintology/issue/MAC-34/move-identity-off-the-user-table-into-an-identity-join-table>), and worth stating as a rule: **for data available exactly once, "nothing reads it yet" is a much weaker argument than usual.**
 
@@ -77,7 +127,7 @@ I argued against building this, on the grounds that a join table for a provider 
 
 ### Why the shape is right regardless of a second provider
 
-The usual justification for an identities table is Google-plus-Apple, which we may never have. The better justification is one nobody mentions: **an app transfer between Apple developer teams reissues every user's** `sub`**.** Apple provides a `transfer_sub` mapping for exactly this. With the subject inlined on `User` that migration rewrites the user table under live traffic; with a join table it inserts rows.
+The usual justification for an identities table is Google-plus-Apple, which we may never have. The better justification is one nobody mentions: **an app transfer between Apple developer teams reissues every user's** `sub`. Apple provides a `transfer_sub` mapping for exactly this. With the subject inlined on `User` that migration rewrites the user table under live traffic; with a join table it inserts rows.
 
 The generalisable version: when judging whether a normalisation is premature, look for the migration it makes cheap rather than the feature it enables. Features are speculative. Migrations are not.
 
@@ -105,7 +155,7 @@ Supabase keeps one on both sides and it was tempting. Nothing would read it unti
 
 ### The migration was hand-ordered
 
-`makemigrations` emitted `RemoveField` *before* `CreateModel`, which drops the data before there is anywhere to put it. The autodetector also cannot write the copy: nothing tells it that `apple_user_id` and `Identity.subject` mean the same thing. Three steps, hand-ordered, with a reversible `RunPython` in the middle.
+`makemigrations` emitted `RemoveField` before `CreateModel`, which drops the data before there is anywhere to put it. The autodetector also cannot write the copy: nothing tells it that `apple_user_id` and `Identity.subject` mean the same thing. Three steps, hand-ordered, with a reversible `RunPython` in the middle.
 
 Production is empty, so the copy is a no-op there and the reverse was optional. Both were written anyway and tested through Django's `MigrationExecutor` against the real historical models. The only honest way to know a rollback works is to run one, and the cheapest time to learn that is when the stakes are zero.
 
@@ -157,9 +207,9 @@ The closest call. It fetches and caches JWKS for you, but into its own per-proce
 
 ### `email` is now nullable
 
-**Was:** `NOT NULL, unique`, inherited from the email/password design that doc 04 deleted.
+Was: `NOT NULL, unique`, inherited from the email/password design that doc 04 deleted.
 
-**Now:** `null=True, blank=True, unique`.
+Now: `null=True, blank=True, unique`.
 
 **Why:** Apple does not guarantee an email claim. It is normally in the identity token, but it can be absent for a stale app association, for a Managed Apple ID, or when a client reads the first-authorization-only `credential.email` property instead of the token. Under `NOT NULL` the sign-in path gets two choices in those cases: reject a legitimate user, or fabricate a placeholder that then occupies a unique column. NULL is better than both. Postgres treats NULLs as distinct, so uniqueness survives.
 
@@ -238,7 +288,7 @@ Almost nothing, which is the point of doing it now. One shipped route (`/api/upl
 
 ### REVERSED: group the day by meal
 
-**Was:** `meal_type` on `FoodEntry`, defaulted from time of day, with Today and history grouped into breakfast / lunch / dinner / snack. Accepted from external feedback earlier the same day.
+Was: `meal_type` on `FoodEntry`, defaulted from time of day, with Today and history grouped into breakfast / lunch / dinner / snack. Accepted from external feedback earlier the same day.
 
 **Now:** cut. Entries are a simple reverse-chronological list.
 
@@ -292,7 +342,7 @@ Five changes accepted, one rejected, one core decision reversed.
 
 **Was:** one photo produces one entry with total macros, no per-food breakdown. Chosen early for a simpler model and simpler UI.
 
-**Now:** `FoodEntry` holds one or more `FoodItem` children.
+Now: `FoodEntry` holds one or more `FoodItem` children.
 
 **Why:** the constraint had become the wall four separate features ran into — per-item correction, saved foods, meal planning, and recipes. When that many things pile up behind one decision, the decision is usually the mistake.
 
@@ -324,7 +374,7 @@ Five changes accepted, one rejected, one core decision reversed.
 
 **Why:** demanding effort before demonstrating value is the worst possible activation shape. Six questions cover Mifflin-St Jeor; the other four were refinement and moved to settings.
 
-**Consequence:** `DailyLog.target_version` becomes nullable, backfilled when targets are first created.
+Consequence: `DailyLog.target_version` becomes nullable, backfilled when targets are first created.
 
 → Docs 02, 05
 
@@ -394,7 +444,7 @@ The design draft referenced four. The model has three — calories, protein, fib
 
 ## Earlier decisions worth remembering
 
-**The day is an entity.** `DailyLog` as a real row rather than a computed local date. Grouping, "log to yesterday", and historical target accuracy all fall out of it. Still the single best structural decision in the project.
+The day is an entity. `DailyLog` as a real row rather than a computed local date. Grouping, "log to yesterday", and historical target accuracy all fall out of it. Still the single best structural decision in the project.
 
 **Targets are append-only.** Slowly-changing-dimension pattern. Eliminates the "why did last month's numbers change?" bug class.
 
@@ -404,4 +454,4 @@ The design draft referenced four. The model has three — calories, protein, fib
 
 **Hybrid target generation.** Mifflin-St Jeor computed deterministically, passed to the model as a baseline for adjustment and explanation. Arithmetic stays reproducible; the model contributes judgment. The concrete example of when *not* to hand something to an LLM.
 
-**The** `logging` **app naming trap.** An app called `logging` shadows Python's stdlib module and breaks imports. Use `entries`.
+The `logging` **app naming trap.** An app called `logging` shadows Python's stdlib module and breaks imports. Use `entries`.

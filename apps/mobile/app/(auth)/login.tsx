@@ -19,6 +19,7 @@ import { StyleSheet, Text, View, useColorScheme } from "react-native";
 
 import { AppleSignInCancelled, signInWithApple } from "@/lib/apple-sign-in";
 import { saveTokens } from "@/lib/auth-storage";
+import { needsOnboarding } from "@/lib/onboarding";
 import { darkPalette, lightPalette, type Palette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
 
@@ -156,12 +157,15 @@ export default function LoginScreen() {
 
   // `created` is not consulted. A returning user whose onboarding never
   // finished belongs in the same place as a brand-new one, and the server
-  // already tracks that in one field rather than two.
+  // tracks that on the user rather than in anything this screen knows.
+  //
+  // Same helper as the launch gate. Sign-in and cold start have to agree, and
+  // the only way to guarantee that is to run the same function.
   if (phase === "done" && session.status === "signedIn") {
-    return session.user.onboarding_completed ? (
-      <Redirect href="/today" />
-    ) : (
+    return needsOnboarding(session.user) ? (
       <Redirect href="/onboarding" />
+    ) : (
+      <Redirect href="/today" />
     );
   }
 
