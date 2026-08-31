@@ -52,7 +52,12 @@ class TargetVersion(models.Model):
     """
 
     class Source(models.TextChoices):
-        ONBOARDING_AI = "onboarding_ai", "Onboarding (AI proposal)"
+        # `onboarding`, not `onboarding_ai`. Renamed 31 Aug 2026 with the AI
+        # call: target generation is deterministic, so the old value named a
+        # producer that will not exist. `goal_weight_kg` held pounds for two
+        # tickets before anyone noticed, which is the cost of leaving a name
+        # that lies.
+        ONBOARDING = "onboarding", "Onboarding"
         MANUAL = "manual", "Manual edit"
 
     user = models.ForeignKey(
@@ -71,15 +76,19 @@ class TargetVersion(models.Model):
 
     source = models.CharField(max_length=32, choices=Source.choices)
 
-    # The model's explanation, shown to the user under WHY THESE NUMBERS.
+    # The explanation shown to the user under WHY THESE NUMBERS.
+    #
+    # `rationale`, not `ai_rationale`. Renamed 31 Aug 2026 when the AI call was
+    # cancelled. A template writes this now, from the same numbers the formula
+    # just produced, so it cannot name a figure that is not on the screen.
     #
     # Blank rather than null, per Django's own guidance on text fields: a
     # nullable CharField gives two ways to spell "empty" and every reader then
     # has to handle both. A manual edit has no rationale and stores "".
-    ai_rationale = models.TextField(
+    rationale = models.TextField(
         blank=True,
         help_text=(
-            "The model's plain-English explanation, shown under WHY THESE NUMBERS "
+            "Plain-English explanation of the numbers, shown under WHY THESE NUMBERS "
             "on screen 9f. Around 60 words, naming the deficit, the rate, and why "
             "protein is set from body weight. Empty for a manual edit."
         ),

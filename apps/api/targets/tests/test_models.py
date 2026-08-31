@@ -162,24 +162,24 @@ def test_versions_list_newest_first(user):
 
 @pytest.mark.django_db
 def test_a_manual_version_stores_an_empty_rationale_not_null(user):
-    """`ai_rationale` is `blank=True`, never nullable. A nullable text field
+    """`rationale` is `blank=True`, never nullable. A nullable text field
     gives two ways to spell "empty" and every reader has to handle both."""
     version = make_version(user, source=TargetVersion.Source.MANUAL)
 
-    assert version.ai_rationale == ""
+    assert version.rationale == ""
 
 
 @pytest.mark.django_db
 def test_an_onboarding_version_keeps_its_rationale(user):
     version = make_version(
         user,
-        source=TargetVersion.Source.ONBOARDING_AI,
-        ai_rationale="A 400 kcal deficit puts you on track for roughly 0.4 kg a week.",
+        source=TargetVersion.Source.ONBOARDING,
+        rationale="A 400 kcal deficit puts you on track for roughly 0.4 kg a week.",
     )
 
     version.refresh_from_db()
-    assert version.source == "onboarding_ai"
-    assert version.ai_rationale.startswith("A 400 kcal deficit")
+    assert version.source == "onboarding"
+    assert version.rationale.startswith("A 400 kcal deficit")
 
 
 @pytest.mark.django_db

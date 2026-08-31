@@ -150,7 +150,7 @@ def test_a_superuser_can_actually_save_a_new_version(superuser_client, owner):
             "protein_g": 176,
             "fiber_g": 32,
             "source": TargetVersion.Source.MANUAL,
-            "ai_rationale": "",
+            "rationale": "",
             "effective_from": timezone.now().date().isoformat(),
         },
     )

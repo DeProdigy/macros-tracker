@@ -7,13 +7,15 @@
  */
 
 /**
- * * `onboarding` - Onboarding
- * `manual` - Manual edit
+ * * `cut` - cut
+ * `maintain` - maintain
+ * `gain` - gain
  */
-export type SourceEnum = (typeof SourceEnum)[keyof typeof SourceEnum];
+export type GoalEnum = (typeof GoalEnum)[keyof typeof GoalEnum];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const SourceEnum = {
-  onboarding: "onboarding",
-  manual: "manual",
+export const GoalEnum = {
+  cut: "cut",
+  maintain: "maintain",
+  gain: "gain",
 } as const;

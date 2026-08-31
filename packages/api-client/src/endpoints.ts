@@ -32,6 +32,8 @@ import type {
   SessionDeleteRequest,
   SessionRefresh,
   SessionRefreshRequest,
+  TargetProposal,
+  TargetProposalRequestRequest,
   TargetVersion,
   TargetVersionCreateRequest,
   User,
@@ -1028,6 +1030,135 @@ export function useGetCurrentTarget<
 
   return query;
 }
+
+/**
+ * Takes the six onboarding answers and returns proposed daily calorie, protein, and fiber targets with a plain-English explanation.
+
+**Nothing is created or stored.** The response is computed. A user accepts it by posting the three numbers to `/api/targets/`, which is where a target version comes from. That is why this returns 200 rather than 201.
+
+**Deterministic.** Mifflin-St Jeor for resting burn, an activity multiplier, then a percentage adjustment for the goal. The same answers always give the same numbers, no model provider is involved, and the call costs nothing.
+
+**Units are pounds and inches**, matching every screen. The server converts once, where the formula needs metric.
+
+`baseline` is what the formula produced and `targets` is what survived the guardrails. They are equal unless `clamped` is true, and screen 9f shows the pair only when it is.
+ * @summary Work out targets from the six onboarding answers
+ */
+export type createTargetProposalResponse200 = {
+  data: TargetProposal;
+  status: 200;
+};
+
+export type createTargetProposalResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type createTargetProposalResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type createTargetProposalResponse429 = {
+  data: void;
+  status: 429;
+};
+
+export type createTargetProposalResponseSuccess = createTargetProposalResponse200 & {
+  headers: Headers;
+};
+export type createTargetProposalResponseError = (
+  | createTargetProposalResponse400
+  | createTargetProposalResponse401
+  | createTargetProposalResponse429
+) & {
+  headers: Headers;
+};
+
+export type createTargetProposalResponse =
+  createTargetProposalResponseSuccess | createTargetProposalResponseError;
+
+export const getCreateTargetProposalUrl = () => {
+  return `/api/targets/proposals/`;
+};
+
+export const createTargetProposal = async (
+  targetProposalRequestRequest: TargetProposalRequestRequest,
+  options?: RequestInit,
+): Promise<createTargetProposalResponse> => {
+  return customFetch<createTargetProposalResponse>(getCreateTargetProposalUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(targetProposalRequestRequest),
+  });
+};
+
+export const getCreateTargetProposalMutationOptions = <
+  TError = void,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTargetProposal>>,
+    TError,
+    { data: TargetProposalRequestRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTargetProposal>>,
+  TError,
+  { data: TargetProposalRequestRequest },
+  TContext
+> => {
+  const mutationKey = ["createTargetProposal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTargetProposal>>,
+    { data: TargetProposalRequestRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createTargetProposal(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateTargetProposalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createTargetProposal>>
+>;
+export type CreateTargetProposalMutationBody = TargetProposalRequestRequest;
+export type CreateTargetProposalMutationError = void;
+
+/**
+ * @summary Work out targets from the six onboarding answers
+ */
+export const useCreateTargetProposal = <TError = void, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createTargetProposal>>,
+      TError,
+      { data: TargetProposalRequestRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createTargetProposal>>,
+  TError,
+  { data: TargetProposalRequestRequest },
+  TContext
+> => {
+  const mutationOptions = getCreateTargetProposalMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
 
 /**
  * Returns a short-lived presigned PUT URL and the object key the upload will land at.

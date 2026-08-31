@@ -16,8 +16,8 @@ export interface TargetVersion {
   /** Daily fiber target, in grams. */
   readonly fiber_g: number;
   readonly source: SourceEnum;
-  /** The model's plain-English explanation, shown under WHY THESE NUMBERS on screen 9f. Around 60 words, naming the deficit, the rate, and why protein is set from body weight. Empty for a manual edit. */
-  readonly ai_rationale: string;
+  /** Plain-English explanation of the numbers, shown under WHY THESE NUMBERS on screen 9f. Around 60 words, naming the deficit, the rate, and why protein is set from body weight. Empty for a manual edit. */
+  readonly rationale: string;
   readonly effective_from: string;
   readonly created_at: string;
 }
