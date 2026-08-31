@@ -272,3 +272,81 @@ Three mutations, each caught:
 
 Gates: ruff, ruff format, mypy on 61 files, 439 python tests,
 `makemigrations --check` clean, prettier, `pnpm lint`, `pnpm check-types`.
+
+
+---
+
+# Review round three
+
+One finding, and **the fix in round two caused it.**
+
+## `clamped` was true for users nothing clamped
+
+`propose` recomputed fiber from the rounded integer calories. `baseline_targets`
+still computed it from the unrounded `Decimal`. The two land on different
+integers whenever the product straddles a rounding boundary.
+
+`Proposal.clamped` compares whole target sets, so a 1 g fiber difference set it
+even though no guardrail had fired.
+
+A 20 year old woman, 5'7", 110 lb, sedentary, cutting:
+
+```
+baseline = Targets(calories=1250, protein_g=110, fiber_g=17)
+targets  = Targets(calories=1250, protein_g=110, fiber_g=18)
+clamped  = True
+```
+
+Calories and protein identical. Screen 9f would have drawn
+`BASELINE 17 -> SET 18` with nothing to explain.
+
+Review swept 9,285,120 combinations and found 29,695 of them, 0.32%, skewed
+toward small women cutting. Those are the users the calorie floor already talks
+to, so they would have met two confusing messages at once.
+
+Both callers go through `fiber_for(calories: int)` now, which takes the rounded
+integer and nothing else. `baseline_targets` rounds calories first and feeds it
+the same number. Verified across 39,936 profiles: zero disagreements, zero
+spurious clamps.
+
+**The integer is also the honest input.** It is the calorie number on the screen,
+and the guideline is a ratio against what the user is told to eat.
+
+## A test that passed by luck
+
+`test_fiber_follows_the_calorie_target_not_body_weight` already asserted:
+
+```python
+assert cutting.fiber_g == round(Decimal(cutting.calories) * 14 / 1000)
+```
+
+against the rounded integer, while `baseline_targets` computed from the
+unrounded Decimal. **32,763 profiles in review's sweep fail that assertion.** It
+passed because its single fixture profile is not one of them.
+
+Fourth time this epic a green test proved nothing, after MAC-38's fake tiebreak,
+MAC-40's SQL substring, and MAC-50's wrong-premise routing test. The shape here
+is new though: the assertion was correct and the sample was not.
+
+## Why the round-two sweep missed it
+
+`test_every_sentence_in_the_rationale_is_true_of_the_numbers_returned` sweeps the
+band and still passed, because **every sentence stayed true of the numbers
+returned**. The prose was fine. The baseline was wrong.
+
+So the new test asserts a different property: if calories and protein are
+untouched, `clamped` is false. Two properties over the same sweep, because one
+property only covers what it names.
+
+## Verification after round three
+
+Two mutations, each caught:
+
+| Mutation | Result |
+| ----------------------------------------------- | ------------ |
+| The baseline rounds fiber from the raw Decimal | 2 tests fail |
+| `propose` stops sharing `fiber_for` | 3 tests fail |
+
+Gates: ruff, ruff format, mypy on 61 files, 441 python tests,
+`makemigrations --check` clean, prettier, `pnpm lint`, `pnpm check-types`,
+109 jest tests, client regenerated with no drift.

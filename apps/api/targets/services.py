@@ -656,6 +656,26 @@ def maintenance_calories(answers: Answers) -> Decimal:
     return basal_metabolic_rate(answers) * ACTIVITY_MULTIPLIER[answers.activity]
 
 
+def fiber_for(calories: int) -> int:
+    """14 g per 1,000 of the calorie figure the user is shown.
+
+    **Takes the rounded integer, never the raw Decimal**, and that is the whole
+    reason it exists as a function.
+
+    `propose` recomputes fiber after the calorie clamp, so two callers produce
+    this number. An earlier version had them rounding from different inputs:
+    `baseline_targets` from the unrounded Decimal and `propose` from the integer.
+    They disagreed by 1 g whenever the product straddled a rounding boundary,
+    and `Proposal.clamped` compares whole target sets, so a profile nothing
+    clamped still reported a clamp. Screen 9f drew `BASELINE 17 -> SET 18` with
+    nothing to explain.
+
+    The integer is also the honest input. It is the calorie number on the
+    screen, and the guideline is a ratio against what the user is told to eat.
+    """
+    return round(Decimal(calories) * FIBER_G_PER_1000_KCAL / Decimal("1000"))
+
+
 def baseline_targets(answers: Answers) -> Targets:
     """The three numbers, before the clamp sees them.
 
@@ -667,16 +687,19 @@ def baseline_targets(answers: Answers) -> Targets:
     Fiber reads the adjusted calorie figure rather than maintenance, so a
     dieting user gets the fiber that goes with the day they are actually eating.
     """
-    calories = maintenance_calories(answers) * (Decimal("1") + GOAL_ADJUSTMENT[answers.goal])
+    raw_calories = maintenance_calories(answers) * (Decimal("1") + GOAL_ADJUSTMENT[answers.goal])
+    calories = round(raw_calories)
 
     protein_per_lb = (
         PROTEIN_G_PER_LB_CUTTING if answers.goal is Goal.CUT else PROTEIN_G_PER_LB_OTHERWISE
     )
 
+    # Rounded first, then fiber from the rounded figure. Both callers go through
+    # `fiber_for` so they cannot round from different inputs again.
     return Targets(
-        calories=round(calories),
+        calories=calories,
         protein_g=round(answers.weight_lb * protein_per_lb),
-        fiber_g=round(calories * FIBER_G_PER_1000_KCAL / Decimal("1000")),
+        fiber_g=fiber_for(calories),
     )
 
 
@@ -845,9 +868,9 @@ def propose(answers: Answers) -> Proposal:
     # which is 11.7 per 1,000, while the rationale beside it said 14.
     #
     # The unclamped figure stays in `baseline`, so screen 9f can still show
-    # `BASELINE 14 -> SET 17`.
-    adjusted_fiber = round(Decimal(calories) * FIBER_G_PER_1000_KCAL / Decimal("1000"))
-    fiber_g = suggested_fiber_range(calories).clamp(adjusted_fiber)
+    # `BASELINE 14 -> SET 17`. `fiber_for` is shared with `baseline_targets` so
+    # the two agree exactly when no clamp fires.
+    fiber_g = suggested_fiber_range(calories).clamp(fiber_for(calories))
 
     targets = Targets(calories=calories, protein_g=protein_g, fiber_g=fiber_g)
 

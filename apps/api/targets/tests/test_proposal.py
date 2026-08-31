@@ -27,6 +27,7 @@ from targets.services import (
     basal_metabolic_rate,
     baseline_targets,
     explain,
+    fiber_for,
     maintenance_calories,
     propose,
     suggested_calorie_range,
@@ -435,6 +436,62 @@ def test_fiber_matches_the_calories_actually_returned(label, person):
     expected = round(Decimal(result.targets.calories) * 14 / 1000)
     assert result.targets.fiber_g == suggested_fiber_range(result.targets.calories).clamp(expected)
     assert f"Fiber at {result.targets.fiber_g} g" in result.rationale
+
+
+def test_clamped_is_false_when_no_guardrail_fired():
+    """The property, swept, because the arithmetic version missed a regression.
+
+    `Proposal.clamped` compares whole target sets. So the fiber fix introduced a
+    quieter bug than the one it removed: `baseline_targets` rounded fiber from
+    the unrounded Decimal calories and `propose` rounded from the integer, and
+    the two disagreed by 1 g whenever the product straddled a boundary.
+
+    A 20 year old woman, 5'7", 110 lb, sedentary, cutting got
+    `BASELINE 17 -> SET 18` on screen 9f with nothing to explain, because
+    calories and protein were identical and no guardrail had run.
+
+    **The rationale sweep could not catch it.** Every sentence stayed true of the
+    numbers returned. It was the baseline that was wrong, not the prose, which is
+    why this asserts a different property: if calories and protein are untouched,
+    nothing was clamped.
+    """
+    for pounds in range(85, 501, 5):
+        for goal in Goal:
+            for activity in Activity:
+                for sex in Sex:
+                    result = propose(
+                        answers(
+                            sex=sex,
+                            goal=goal,
+                            activity=activity,
+                            weight_lb=Decimal(pounds),
+                            height_in=70,
+                            age=30,
+                        )
+                    )
+
+                    untouched = (
+                        result.targets.calories == result.baseline.calories
+                        and result.targets.protein_g == result.baseline.protein_g
+                    )
+                    if untouched:
+                        assert result.clamped is False, f"{pounds} lb {sex} {goal} {activity}"
+
+
+def test_the_baseline_fiber_matches_its_own_calorie_number():
+    """Both callers of `fiber_for` round from the same input.
+
+    Swept rather than sampled, because the old assertion in
+    `test_fiber_follows_the_calorie_target_not_body_weight` was already written
+    against the rounded integer and passed only because its one fixture profile
+    happened to agree. Review found 32,763 profiles where it did not.
+    """
+    for pounds in range(85, 501, 3):
+        for goal in Goal:
+            person = answers(goal=goal, weight_lb=Decimal(pounds), height_in=64, age=22)
+            baseline = baseline_targets(person)
+
+            assert baseline.fiber_g == fiber_for(baseline.calories)
 
 
 def test_the_unclamped_fiber_is_still_reported_as_the_baseline():
