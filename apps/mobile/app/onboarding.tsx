@@ -58,6 +58,8 @@ const QUESTIONS = [
   ["How active is your day?", "Count ordinary daily movement, outside deliberate workouts."],
 ] as const;
 
+const LAST_QUESTION_INDEX = QUESTIONS.length - 1;
+
 const numeric = (value: string): number | null => {
   if (!value.trim()) return null;
   const parsed = Number(value);
@@ -129,7 +131,7 @@ export default function Onboarding() {
   const next = async () => {
     const validation = validateQuestion(step, answers);
     if (validation) return setError(validation);
-    if (step < QUESTIONS.length - 1) {
+    if (step < LAST_QUESTION_INDEX) {
       setStep((current) => current + 1);
       setError(null);
       return;
@@ -144,7 +146,7 @@ export default function Onboarding() {
       setError(
         caught instanceof ApiError && caught.status === 400
           ? "One of those answers was refused. Check your answers and try again."
-          : "We couldn't calculate your targets. Your answers are still here—try again.",
+          : "We couldn't calculate your targets. Your answers are still here. Try again.",
       );
     } finally {
       setSubmitting(false);
@@ -183,7 +185,7 @@ export default function Onboarding() {
           accessibilityRole="button"
           onPress={() => {
             setProposal(null);
-            setStep(5);
+            setStep(LAST_QUESTION_INDEX);
           }}
           style={[styles.secondaryButton, { borderColor: palette.hairline }]}
         >
@@ -214,7 +216,9 @@ export default function Onboarding() {
         contentContainerStyle={styles.questionContent}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.eyebrow, { color: palette.dimText }]}>{step + 1} OF 6</Text>
+        <Text style={[styles.eyebrow, { color: palette.dimText }]}>
+          {step + 1} OF {QUESTIONS.length}
+        </Text>
         <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
         <Text style={[styles.body, { color: palette.secondaryText }]}>{help}</Text>
         <QuestionControl step={step} answers={answers} update={update} palette={palette} />
@@ -260,7 +264,9 @@ export default function Onboarding() {
           {submitting ? (
             <ActivityIndicator color="#001111" />
           ) : (
-            <Text style={styles.nextLabel}>{step === 5 ? "BUILD MY TARGETS" : "NEXT"}</Text>
+            <Text style={styles.nextLabel}>
+              {step === LAST_QUESTION_INDEX ? "BUILD MY TARGETS" : "NEXT"}
+            </Text>
           )}
         </Pressable>
       </View>
