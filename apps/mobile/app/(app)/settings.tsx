@@ -79,6 +79,16 @@ export default function SettingsScreen() {
         <Text style={[styles.meta, { color: palette.secondaryText }]}>Signed in with Apple</Text>
       </View>
 
+      {/* A plain link, deliberately. Doc 16's `7c` row carries the three
+          current numbers plus ADJUST and HISTORY, and MAC-44 builds it. Shipping
+          the full row now would mean a HISTORY control opening nothing. */}
+      <View style={[styles.group, { borderColor: palette.hairline }]}>
+        <Text style={[styles.groupLabel, { color: palette.dimText }]}>Targets</Text>
+        <Link href="/targets" style={[styles.link, { color: palette.accent }]}>
+          Adjust targets
+        </Link>
+      </View>
+
       <View style={[styles.group, { borderColor: palette.hairline }]}>
         <Text style={[styles.groupLabel, { color: palette.dimText }]}>Diagnostics</Text>
         <Link href="/health" style={[styles.link, { color: palette.accent }]}>

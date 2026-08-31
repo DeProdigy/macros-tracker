@@ -47,6 +47,19 @@ export type SessionState =
 export type Session = SessionState & {
   /** Adopts the user the sign-in call returned. Tokens are already in the Keychain by then. */
   signIn: (user: User) => void;
+  /**
+   * Replace the cached user after a write that changed it.
+   *
+   * Separate from `signIn`, which takes the same argument and does nearly the
+   * same thing. Calling `signIn` from a target screen would read as signing
+   * someone in, and a name that lies costs more than the five lines it saves.
+   *
+   * MAC-47 added this, then removed it when the sequencing reversal deleted its
+   * only caller. MAC-50 brings it back with the caller that needs it: saving a
+   * first target flips `onboarding_completed` on the server, and the route
+   * guard reads the session rather than the network.
+   */
+  updateUser: (user: User) => void;
   /** Blacklists the refresh token, clears the Keychain, empties the cache. */
   signOut: () => Promise<void>;
   /** Soft-deletes the account, then does everything sign-out does. */
@@ -205,6 +218,17 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = useCallback((user: User) => setState({ status: "signedIn", user }), []);
 
+  const updateUser = useCallback(
+    (user: User) =>
+      // Only while signed in. A response can land after the global 401 handler
+      // has signed the user out, and writing state unconditionally would put
+      // the app back into a session the server already rejected.
+      setState((current) =>
+        current.status === "signedIn" ? { status: "signedIn", user } : current,
+      ),
+    [],
+  );
+
   const signOut = useCallback(async () => {
     const refreshToken = await getRefreshToken();
 
@@ -232,8 +256,8 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
   }, [endSession]);
 
   const value = useMemo<Session>(
-    () => ({ ...state, signIn, signOut, deleteAccount }),
-    [state, signIn, signOut, deleteAccount],
+    () => ({ ...state, signIn, updateUser, signOut, deleteAccount }),
+    [state, signIn, updateUser, signOut, deleteAccount],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
