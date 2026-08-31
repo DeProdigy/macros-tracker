@@ -33,6 +33,16 @@ For every ticket:
 - Save the approved plan to `plans/tickets/MAC-NN.md` and commit it
 - In the PR description, call out anything the owner should look at closely
   and anything you were unsure about
+- Every PR that changes user-visible UI includes live screenshots before
+  review. Capture each new or materially changed primary state. Include before
+  and after images when an existing screen changes materially. Include relevant
+  empty, loading, error, or destructive states when they changed.
+- Upload review-only screenshots to the GitHub PR description or a PR comment.
+  Do not commit screenshots only for PR review. Reuse an existing tracked image
+  by URL when appropriate.
+- A design mockup can be a labeled visual reference. It does not replace a live
+  simulator, device, or web capture as proof of the implementation.
+- A non-UI PR states that screenshots are not applicable.
 
 When asked "why", explain the concept, not just this instance. Name the
 pattern. Say when it's the wrong choice.

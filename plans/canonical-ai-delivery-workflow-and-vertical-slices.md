@@ -2,7 +2,7 @@
 linear_id: 71088d12-87a0-4e70-a097-a572e6e4e660
 linear_title: "CANONICAL — AI Delivery Workflow and Vertical Slices"
 linear_url: https://linear.app/hintology/document/canonical-ai-delivery-workflow-and-vertical-slices-9ee8ed45bf0e
-linear_updated_at: 2026-08-31T19:25:56.965Z
+linear_updated_at: 2026-08-31T21:03:22.726Z
 generated: true
 ---
 
@@ -104,6 +104,18 @@ Each PR:
 * reports automated and manual verification;
 * states known follow-ups;
 * does not merge itself.
+
+### UI screenshots
+
+Every pull request that changes user-visible UI includes screenshots before review.
+
+* Show each new primary screen or the states changed by the PR.
+* Include before and after images when an existing screen changes materially.
+* Include relevant empty, loading, error, or destructive states when the PR changes them.
+* Use a live simulator, device, or web render. A design mockup may be labeled as a design reference, but it is not proof of the implementation.
+* Upload review-only screenshots to the GitHub PR description or a PR comment. Do not commit screenshots solely for PR review.
+* If an existing tracked image is reused, embed its existing URL instead of adding a duplicate.
+* A non-UI PR states that screenshots are not applicable.
 
 Alex decides when to merge.
 
