@@ -1,43 +1,20 @@
 /**
- * The manual target editor, screen `6h` from doc 15.
- *
- * **Deliberately outside the `(app)` group.** That guard redirects anyone
- * without targets, and this is the screen where a user gets their first ones.
- * Inside `(app)` it would be hidden from every person who needs it, which is
- * the same trap that hid sign-out from un-onboarded users in MAC-47. A route
- * group guard hides everything in it, including the screens that are the way
- * out of the state being guarded.
- *
- * So it carries its own signed-out check, like `onboarding.tsx`.
- *
- * Two entry points, one component. From onboarding it is the hard gate's exit,
- * and saving is what sets `onboarding_completed` and opens the app. From
- * Settings it is an edit. The only difference is where the user came from, and
- * doc 15 says to keep them one component for exactly that reason.
- *
- * No orange "outside the suggested range" warning yet, and that is a decision
- * rather than an omission. The suggested range scales with body weight, the
- * server never sends it, and nothing has asked the user for a weight until
- * MAC-42. Copying the bands into TypeScript would put research numbers in two
- * places that drift apart in silence. It lands in slice 2, where the weight
- * exists. The absolute range still holds: the steppers clamp inside it and a
- * 400 renders if anything gets past them.
+ * One target editor serves proposal adjustment and later Settings edits.
+ * It lives outside the guarded app group because saving the first version is
+ * the action that completes onboarding.
  */
 
-import {
-  ApiError,
-  createTarget,
-  getCurrentTarget,
-  getCurrentUser,
-  type TargetVersion,
-} from "@macros/api-client";
-import { Redirect, useRouter } from "expo-router";
+import { ApiError, getCurrentTarget, type TargetVersion } from "@macros/api-client";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { needsOnboarding } from "@/lib/onboarding";
 import { usePalette, type Palette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
+import { saveTargetVersion, TargetSavedButRefreshFailed } from "@/lib/target-save";
+
+export { localIsoDate } from "@/lib/target-save";
 
 /**
  * The flat half of the absolute range, mirrored from `targets/services.py`.
@@ -57,14 +34,7 @@ import { useSession } from "@/lib/session";
 const CALORIE_LIMITS = { min: 1000, max: 5000 };
 const FIBER_LIMITS = { min: 0, max: 100 };
 
-/**
- * What the steppers start on for a user who has never set targets.
- *
- * A neutral middle rather than a recommendation. The app cannot recommend
- * anything yet: Mifflin-St Jeor needs six answers and MAC-42 is the ticket that
- * asks for them. The copy on screen says so, because a number presented with no
- * hedge reads as advice.
- */
+/** Neutral defaults for a Settings deep link without an existing version. */
 const STARTING_POINT = { calories: 2000, protein_g: 140, fiber_g: 30 };
 
 const STEPS = { calories: 10, protein_g: 5, fiber_g: 1 };
@@ -81,11 +51,6 @@ const STEPS = { calories: 10, protein_g: 5, fiber_g: 1 };
  * `toISOString()` is the other wrong answer: it converts to UTC first, so
  * someone in Auckland setting targets at 09:00 files them under yesterday.
  */
-export const localIsoDate = (now: Date): string => {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-};
-
 type Field = keyof typeof STARTING_POINT;
 type Values = Record<Field, number>;
 type FieldErrors = Partial<Record<Field, string>>;
@@ -152,6 +117,23 @@ export default function AdjustTargets() {
   const session = useSession();
   const palette = usePalette();
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    source?: string;
+    calories?: string;
+    protein_g?: string;
+    fiber_g?: string;
+  }>();
+  const proposalValues =
+    params.source === "onboarding"
+      ? {
+          calories: Number(params.calories),
+          protein_g: Number(params.protein_g),
+          fiber_g: Number(params.fiber_g),
+        }
+      : null;
+  const hasProposalValues =
+    proposalValues !== null &&
+    Object.values(proposalValues).every((value) => Number.isFinite(value));
 
   const [values, setValues] = useState<Values>(STARTING_POINT);
   const [loading, setLoading] = useState(true);
@@ -177,6 +159,12 @@ export default function AdjustTargets() {
       //
       // A `signedOut` session renders a `Redirect` and never reads this flag.
       // A `loading` session should keep waiting.
+      return;
+    }
+
+    if (hasProposalValues && proposalValues) {
+      setValues(proposalValues);
+      setLoading(false);
       return;
     }
 
@@ -215,7 +203,7 @@ export default function AdjustTargets() {
     return () => {
       cancelled = true;
     };
-  }, [session.status]);
+  }, [hasProposalValues, params.calories, params.fiber_g, params.protein_g, session.status]);
 
   if (session.status === "loading") {
     return null;
@@ -245,21 +233,19 @@ export default function AdjustTargets() {
     setFieldErrors({});
     setFailure(null);
 
-    // Two try blocks, not one, and the split is the point.
-    //
-    // Review found that a single block tells the user something false. By the
-    // time the refetch runs, `createTarget` has returned 201: the row exists
-    // and the server has already flipped `onboarding_completed`, both in one
-    // transaction. A timeout on the refetch would have shown "Your targets
-    // weren't saved. Nothing changed", and both halves of that are wrong.
-    //
-    // The user then taps save again. `create_version` has no idempotency, so a
-    // second row lands for the same date and MAC-44's history shows two
-    // versions for one edit.
     try {
-      await createTarget({ ...values, effective_from: localIsoDate(new Date()) });
+      const user = await saveTargetVersion(values);
+      session.updateUser(user);
+      if (wasOnboarding) router.replace("/first-food");
     } catch (error) {
       setSaving(false);
+
+      if (error instanceof TargetSavedButRefreshFailed) {
+        setFailure(
+          "Your targets are saved. The app could not refresh your account, so reopen it to continue.",
+        );
+        return;
+      }
 
       if (error instanceof ApiError && error.status === 400) {
         const { fields, other } = errorsFrom(error.body);
@@ -277,38 +263,11 @@ export default function AdjustTargets() {
       return;
     }
 
-    // Saved. Everything below is about catching the app up.
-    //
-    // The server flips `onboarding_completed` on a first target, and the route
-    // guard reads the session rather than the network. Without this refetch a
-    // new user saves targets and bounces straight back here.
-    try {
-      const me = await getCurrentUser();
-      if (me.status === 200) {
-        session.updateUser(me.data);
-      }
-    } catch {
-      setSaving(false);
-      setFailure(
-        "Your targets are saved. The app could not refresh your account, so reopen it to continue.",
-      );
-      return;
-    }
+    setSaving(false);
+    if (wasOnboarding) return;
 
-    // Back to Settings for someone who came from Settings, on to Today for a
-    // user finishing onboarding.
-    //
-    // **`canGoBack()` alone gets this backwards**, and the first version of
-    // this fix shipped that. `app/index.tsx` redirects to `/onboarding`, which
-    // replaces, and `onboarding.tsx` then renders a `Link` to `/targets`, which
-    // pushes. So the onboarding stack is `[/onboarding, /targets]` and
-    // `canGoBack()` is true there too. `router.back()` put a user who had just
-    // set their first target back on "Set your targets", where tapping the
-    // button again writes a second version for the same date. That is the exact
-    // duplicate the two try blocks above exist to prevent.
-    //
-    // **The state answers this and the history does not.** Where the user came
-    // from is a fact about their account, not about the navigation stack.
+    // Return to Settings when it opened the editor. A direct Settings deep
+    // link has no history, so Today is the safe fallback.
     if (!wasOnboarding && router.canGoBack()) {
       router.back();
       return;
@@ -326,10 +285,13 @@ export default function AdjustTargets() {
       contentContainerStyle={styles.content}
       style={[styles.container, { backgroundColor: palette.background }]}
     >
-      <Text style={[styles.title, { color: palette.text }]}>Your call</Text>
+      <Text style={[styles.title, { color: palette.text }]}>
+        {hasProposalValues ? "Make it yours" : "Your call"}
+      </Text>
       <Text style={[styles.body, { color: palette.secondaryText }]}>
-        These are a starting point, not a recommendation. The app can work them out for you once it
-        knows your height, weight, and what you are aiming for.
+        {hasProposalValues
+          ? "Adjust the proposed targets before saving your first version."
+          : "Adjust your daily targets. Saving keeps the earlier version in your history."}
       </Text>
 
       <Row

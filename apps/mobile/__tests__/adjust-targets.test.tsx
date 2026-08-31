@@ -20,9 +20,11 @@ import { useSession } from "../lib/session";
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
 const mockCanGoBack = jest.fn<() => boolean>();
+const mockParams = jest.fn<() => Record<string, string>>();
 
 jest.mock("expo-router", () => ({
   Redirect: jest.fn(),
+  useLocalSearchParams: () => mockParams(),
   useRouter: () => ({ replace: mockReplace, back: mockBack, canGoBack: mockCanGoBack }),
 }));
 
@@ -72,6 +74,7 @@ beforeEach(() => {
   // Default: someone editing from Settings, who already owns targets.
   signedInAs({ onboarding_completed: true });
   mockCanGoBack.mockReturnValue(false);
+  mockParams.mockReturnValue({});
   mockCurrent.mockRejectedValue(new ApiError(404, null));
   mockCreate.mockResolvedValue({ status: 201, data: {} } as never);
   mockMe.mockResolvedValue({ status: 200, data: onboardedUser } as never);
@@ -80,7 +83,7 @@ beforeEach(() => {
 const renderScreen = async () => {
   render(<AdjustTargets />);
   // The seed request resolves before the form renders.
-  await waitFor(() => expect(screen.getByText("Your call")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("SAVE NEW VERSION")).toBeTruthy());
 };
 
 describe("the manual target editor", () => {
@@ -245,7 +248,24 @@ describe("failures the first version hid", () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it("sends a user finishing onboarding to Today, even though it can go back", async () => {
+  it("seeds onboarding adjustment from the proposal without loading current targets", async () => {
+    signedInAs({ onboarding_completed: false });
+    mockParams.mockReturnValue({
+      source: "onboarding",
+      calories: "2150",
+      protein_g: "180",
+      fiber_g: "33",
+    });
+
+    await renderScreen();
+
+    expect(screen.getByText("2150 kcal")).toBeTruthy();
+    expect(screen.getByText("180 g")).toBeTruthy();
+    expect(screen.getByText("33 g")).toBeTruthy();
+    expect(mockCurrent).not.toHaveBeenCalled();
+  });
+
+  it("sends a user finishing onboarding to the first-food prompt, even if it can go back", async () => {
     // The bug the first version of this fix shipped, and the reason this test
     // sets `canGoBack` to **true**.
     //
@@ -264,7 +284,7 @@ describe("failures the first version hid", () => {
     await renderScreen();
     fireEvent.press(screen.getByText("SAVE NEW VERSION"));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/today"));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/first-food"));
     expect(mockBack).not.toHaveBeenCalled();
   });
 });
