@@ -34,8 +34,9 @@ For every ticket:
 - In the PR description, call out anything the owner should look at closely
   and anything you were unsure about
 - Every PR that changes user-visible UI includes live screenshots before
-  review. Capture each new or materially changed primary state. Include
-  relevant empty, loading, error, or destructive states when they changed.
+  review. Capture each new or materially changed primary state. Include before
+  and after images when an existing screen changes materially. Include relevant
+  empty, loading, error, or destructive states when they changed.
 - Upload review-only screenshots to the GitHub PR description or a PR comment.
   Do not commit screenshots only for PR review. Reuse an existing tracked image
   by URL when appropriate.
