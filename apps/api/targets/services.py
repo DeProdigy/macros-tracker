@@ -703,14 +703,14 @@ def _calorie_sentence(answers: Answers, calories: int, baseline_calories: int) -
     if calories > baseline_calories:
         return (
             f"{calories:,} calories a day. Your answers worked out lower than that, "
-            f"and {calories:,} is the least this app will suggest for anyone. Eating "
-            f"less is a decision to take with a doctor rather than an app."
+            f"and {calories:,} is the least this app suggests. Eating less is a "
+            f"decision to take with a doctor rather than an app."
         )
 
     if calories < baseline_calories:
         return (
             f"{calories:,} calories a day. Your answers worked out higher than that, "
-            f"and {calories:,} is the most this app will suggest for anyone."
+            f"and {calories:,} is the most this app suggests."
         )
 
     if answers.goal is Goal.MAINTAIN:
@@ -820,22 +820,34 @@ def propose(answers: Answers) -> Proposal:
 
     Compute, clamp, explain.
 
-    Calories are clamped first and fiber's range derives from the clamped value,
-    the same ordering `clamp_to_suggested` uses and for the same reason: a target
-    should be judged on the calories it actually gets.
+    Calories are clamped first, and both the fiber **value** and its range then
+    derive from the clamped figure. A target should be judged on the calories it
+    actually gets, and the paragraph beside it has to be true of the same
+    numbers.
+
+    `Range.clamp` directly rather than through an `Adjustment` list. An earlier
+    version collected those and nothing read them, because `Proposal` carries
+    `baseline` and derives `clamped` from it. A record that looks like it feeds
+    the screen and does not is worse than no record.
     """
     baseline = baseline_targets(answers)
-    adjustments: list[Adjustment] = []
 
-    def apply(field: str, value: int, allowed: Range) -> int:
-        clamped = allowed.clamp(value)
-        if clamped != value:
-            adjustments.append(Adjustment(field=field, original=value, clamped=clamped))
-        return clamped
+    calories = proposal_calorie_range(answers.profile).clamp(baseline.calories)
+    protein_g = suggested_protein_range(answers.profile).clamp(baseline.protein_g)
 
-    calories = apply("calories", baseline.calories, proposal_calorie_range(answers.profile))
-    protein_g = apply("protein_g", baseline.protein_g, suggested_protein_range(answers.profile))
-    fiber_g = apply("fiber_g", baseline.fiber_g, suggested_fiber_range(calories))
+    # **Recomputed from the clamped calories, not carried over from the
+    # baseline.** Review caught this, and it is the same bug as the calorie
+    # sentence one macro over.
+    #
+    # `suggested_fiber_range` already followed the clamped figure. The *value*
+    # being clamped did not: it came from the calories the clamp had just
+    # refused. So an 85 lb woman raised from 1,010 to 1,200 kept 14 g of fiber,
+    # which is 11.7 per 1,000, while the rationale beside it said 14.
+    #
+    # The unclamped figure stays in `baseline`, so screen 9f can still show
+    # `BASELINE 14 -> SET 17`.
+    adjusted_fiber = round(Decimal(calories) * FIBER_G_PER_1000_KCAL / Decimal("1000"))
+    fiber_g = suggested_fiber_range(calories).clamp(adjusted_fiber)
 
     targets = Targets(calories=calories, protein_g=protein_g, fiber_g=fiber_g)
 

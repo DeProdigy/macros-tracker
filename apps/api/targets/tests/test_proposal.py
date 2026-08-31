@@ -303,6 +303,7 @@ def test_the_clamp_direction_is_read_rather_than_assumed():
 
     assert "worked out higher" in lowered
     assert "worked out lower" in raised
+    assert "for anyone" not in lowered
 
 
 def test_the_user_facing_suggested_range_is_left_alone():
@@ -396,7 +397,81 @@ def test_the_rationale_does_not_describe_a_number_the_clamp_replaced():
     assert result.clamped is True
     assert "20% below" not in result.rationale
     assert "1,200 calories a day" in result.rationale
-    assert "least this app will suggest" in result.rationale
+    assert "least this app suggests" in result.rationale
+    # Not "the least for anyone". The floor is 1,200 for women and 1,500 for
+    # men, so a man reading "for anyone" would be reading a false claim.
+    assert "for anyone" not in result.rationale
+
+
+@pytest.mark.parametrize(
+    ("label", "person"),
+    [
+        (
+            "raised to the floor",
+            Answers(25, Sex.FEMALE, 60, Decimal("85"), Goal.CUT, Activity.SEDENTARY),
+        ),
+        (
+            "lowered to the ceiling",
+            Answers(30, Sex.MALE, 78, Decimal("500"), Goal.GAIN, Activity.VERY_ACTIVE),
+        ),
+    ],
+)
+def test_fiber_matches_the_calories_actually_returned(label, person):
+    """The bug review found, and it is the calorie-sentence bug one macro over.
+
+    `suggested_fiber_range` already followed the clamped calories. The value
+    being clamped did not: it came from the calories the clamp had just refused.
+
+    An 85 lb woman raised from 1,010 to 1,200 kept 14 g of fiber, which is 11.7
+    per 1,000 against a stated 14. A 500 lb man lowered from 6,378 to 5,000 kept
+    89 g, which is 17.8. Both rationales claimed 14.
+
+    Asserted on both clamp directions, because the old code was wrong in both
+    and the previous test only ever looked at `baseline_targets`.
+    """
+    result = propose(person)
+
+    assert result.clamped is True
+    expected = round(Decimal(result.targets.calories) * 14 / 1000)
+    assert result.targets.fiber_g == suggested_fiber_range(result.targets.calories).clamp(expected)
+    assert f"Fiber at {result.targets.fiber_g} g" in result.rationale
+
+
+def test_the_unclamped_fiber_is_still_reported_as_the_baseline():
+    """Screen 9f needs both numbers to draw `BASELINE 14 -> SET 17`."""
+    person = Answers(25, Sex.FEMALE, 60, Decimal("85"), Goal.CUT, Activity.SEDENTARY)
+
+    result = propose(person)
+
+    assert result.baseline.fiber_g == 14
+    assert result.targets.fiber_g == 17
+
+
+def test_every_sentence_in_the_rationale_is_true_of_the_numbers_returned():
+    """The property all three prose bugs violated, swept rather than sampled.
+
+    Each of the three was found one at a time, by a person running the formula
+    and reading the output. This asserts the shared shape instead: whatever the
+    clamp does, every figure named in the paragraph is a figure returned beside
+    it.
+    """
+    for pounds in range(85, 501, 5):
+        for goal in Goal:
+            for activity in Activity:
+                for sex in Sex:
+                    person = answers(
+                        sex=sex,
+                        goal=goal,
+                        activity=activity,
+                        weight_lb=Decimal(pounds),
+                        height_in=70,
+                        age=30,
+                    )
+                    result = propose(person)
+
+                    assert f"{result.targets.calories:,} calories" in result.rationale
+                    assert f"Protein at {result.targets.protein_g} g" in result.rationale
+                    assert f"Fiber at {result.targets.fiber_g} g" in result.rationale
 
 
 def test_the_protein_reason_changes_with_the_goal():

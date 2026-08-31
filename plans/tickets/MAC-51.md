@@ -139,9 +139,14 @@ formula that would happily return nonsense.
 them: `SexD67Enum`. `ENUM_NAME_OVERRIDES` points `SexEnum` at
 `accounts.models.Sex`, which doc 02 already calls canonical.
 
-Worth knowing rather than working around: the generated suffix is derived from
-the choice set, so an unrelated edit to either enum would have churned the
-committed client. The same argument the existing comment in that setting makes.
+**It pins one name. It does not merge the two**, and both the comment and the
+first PR body said otherwise. The client still ships `sexEnum.ts` and
+`targetProposalRequestSexEnum.ts` with identical members. What the override buys
+is that neither name is a hash any more, so an unrelated edit to a choice set
+cannot churn the committed client.
+
+Review caught the claim. The next reader takes a comment at its word and goes
+looking for one type.
 
 ## Files
 
@@ -198,3 +203,72 @@ Gates: ruff, ruff format, mypy on 61 files, 435 python tests,
   for someone carrying a lot of fat, and this is the same shape as the two
   calorie crossings above. Not fixed here because it needs a body-composition
   input nobody collects
+
+
+---
+
+# Review round two
+
+Three findings. One is a real bug and it is the same shape as bug 3 above, one
+macro over.
+
+## Fiber stated a ratio that was false
+
+`suggested_fiber_range(calories)` already followed the clamped calorie figure.
+**The value being clamped did not.** It came from `baseline.fiber_g`, computed
+from the calories the clamp had just refused.
+
+Two runs on the branch:
+
+- 85 lb woman, 5'0", 25, sedentary, cutting. Calories 1,010 raised to 1,200,
+  fiber stays 14. That is 11.7 g per 1,000, and the rationale says 14. The
+  guideline figure for 1,200 kcal is 17
+- 500 lb man, 6'6", 30, very active, gaining. Calories 6,378 lowered to 5,000,
+  fiber stays 89. That is 17.8 per 1,000, against a stated 14
+
+Review swept 40,320 combinations and found a worst deviation of 5.8 g per 1,000.
+Protein never clamps anywhere in that sweep, so its sentence was safe.
+
+Fiber is derived from the clamped calories now, then clamped. The unclamped
+figure stays in `baseline`, so screen 9f still draws `BASELINE 14 -> SET 17`.
+
+**Why the tests missed it.** `test_fiber_follows_the_calorie_target_not_body_weight`
+asserts on `baseline_targets`, never on `propose` output after a clamp. And
+`test_the_rationale_does_not_describe_a_number_the_clamp_replaced` checked only
+the calorie sentence of the very rationale carrying the wrong fiber claim.
+
+**So the replacement asserts the property rather than the instance.** All three
+prose bugs in this ticket were found one at a time, by a person running the
+formula and reading the output. `test_every_sentence_in_the_rationale_is_true_of_the_numbers_returned`
+sweeps the supported band on every combination and checks that whatever the
+clamp does, every figure named in the paragraph is a figure returned beside it.
+That is the shared shape all three violated.
+
+## A write-only list that looked like it fed something
+
+`propose` collected `Adjustment` records and nothing read them. `Proposal`
+carries `baseline` and derives `clamped` from it, so the list was dead. It read
+like something screen 9f consumed.
+
+Replaced with `Range.clamp` directly.
+
+## Two claims that were not true
+
+*"the least this app will suggest for anyone"* is wrong: the floor is 1,500 for
+men and 1,200 for women, so a man reads a claim the app contradicts on the next
+phone. Two words dropped.
+
+And the `ENUM_NAME_OVERRIDES` comment, above.
+
+## Verification after round two
+
+Three mutations, each caught:
+
+| Mutation | Result |
+| --------------------------------------------- | ------------ |
+| Fiber is carried over from the baseline again | 3 tests fail |
+| Fiber uses the baseline calories for its ratio | 3 tests fail |
+| The false "for anyone" claim returns | 1 test fails |
+
+Gates: ruff, ruff format, mypy on 61 files, 439 python tests,
+`makemigrations --check` clean, prettier, `pnpm lint`, `pnpm check-types`.

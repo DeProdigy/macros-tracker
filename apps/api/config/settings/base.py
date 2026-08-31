@@ -337,14 +337,18 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "HealthStatusEnum": "config.serializers.HEALTH_STATUS_CHOICES",
         # `sex` appears on two request shapes: the user settings PATCH and the
-        # target proposal. The values are identical, and doc 02 says
-        # `accounts.models.Sex` is canonical, so both point at one component
-        # rather than getting `SexEnum` and `SexD67Enum`.
+        # target proposal. Without this, spectacular could not name either and
+        # emitted `SexD67Enum`, where the suffix is a hash of the choice set.
         #
-        # The generated hash suffix is the reason this matters. It is derived
-        # from the choice set, so an unrelated edit can change it and churn the
-        # committed client, which is the same argument the comment above makes
-        # for naming enums at all.
+        # **This pins one name. It does not merge the two.** The client still
+        # ships `sexEnum.ts` and `targetProposalRequestSexEnum.ts` with identical
+        # members, and an earlier version of this comment claimed otherwise.
+        # What the override buys is that neither name is a hash any more, so an
+        # unrelated edit to a choice set cannot churn the committed client. That
+        # is the same argument the comment above makes for naming enums at all.
+        #
+        # Merging them would need one serializer field shared by both shapes.
+        # Not worth it for two members that have never disagreed.
         "SexEnum": "accounts.models.Sex",
     },
 }
