@@ -20,12 +20,16 @@ That document defines how to review and approve an artifact.
 | `source/`      | Editable source files, including original `.dc.html` files when available |
 | `exports/mvp/` | Approved PNG exports used by implementation issues                        |
 
+The 2026-08-31 Linear upload is preserved under
+[`source/linear-2026-08-31/`](source/linear-2026-08-31/README.md). Its review
+notes explicitly separate current MVP candidates from stale and follow-up work.
+
 ## Artifact index
 
 Add one row when an artifact arrives. Do not mark it Approved until Alex reviews it against the canonical screen inventory.
 
-| Artifact            | Screen and state | Original source | Status | Approved by | Notes |
-| ------------------- | ---------------- | --------------- | ------ | ----------- | ----- |
-| _None gathered yet_ |                  |                 |        |             |       |
+| Artifact                    | Screen and state             | Original source                         | Status           | Approved by | Notes                                                                     |
+| --------------------------- | ---------------------------- | --------------------------------------- | ---------------- | ----------- | ------------------------------------------------------------------------- |
+| `source/linear-2026-08-31/` | 46 screens and flow diagrams | Canonical Linear visual-design document | Candidate intake | —           | Mixed generations; see the directory review. No artifact is approved yet. |
 
 Use Candidate, Approved, or Superseded for Status.

@@ -2,7 +2,7 @@
 linear_id: 3d4dd4f7-7a87-4501-85e2-f5145075302f
 linear_title: "CANONICAL — MVP Visual Design and Approved Screens"
 linear_url: https://linear.app/hintology/document/canonical-mvp-visual-design-and-approved-screens-7b137621de9b
-linear_updated_at: 2026-08-31T19:25:29.962Z
+linear_updated_at: 2026-08-31T19:35:19.589Z
 generated: true
 ---
 
@@ -19,9 +19,9 @@ Alex approves visual artifacts. Archived designs and their images are history on
 
 ## Artifact status
 
-The design direction is approved. Original editable files and exports still need to be gathered.
+The design direction is approved. Alex uploaded a 46-file screen and flow package on 2026-08-31. The package contains both current MVP candidates and older concepts, so upload does not equal approval.
 
-Until an artifact is attached here and marked Approved, use the visual-system rules and canonical flow. Do not copy a screen from an archived document.
+Until an artifact is explicitly marked Approved, use the visual-system rules and canonical flow. Do not copy a screen from an archived document or infer scope from an uploaded flow board.
 
 ## Durable files
 
@@ -77,12 +77,12 @@ A later polish issue may use Impeccable in preserve-system mode. It must not cha
 
 | Screen | Required states | Status |
 | -- | -- | -- |
-| Welcome | default; Apple unavailable; authorization cancelled | Awaiting artifacts |
-| Apple authorization | system-sheet reference | Awaiting artifacts |
-| Verification | working; retryable failure | Awaiting artifacts |
-| Six questions | each control type; validation; keyboard | Awaiting artifacts |
-| Target result | proposed; adjusted; guardrail explanation | Awaiting artifacts |
-| First-food prompt | default | Awaiting artifacts |
+| Welcome | default; Apple unavailable; authorization cancelled | Assets received — see review snapshot |
+| Apple authorization | system-sheet reference | Assets received — see review snapshot |
+| Verification | working; retryable failure | Assets received — see review snapshot |
+| Six questions | each control type; validation; keyboard | Assets received — see review snapshot |
+| Target result | proposed; adjusted; guardrail explanation | Assets received — see review snapshot |
+| First-food prompt | default | Assets received — see review snapshot |
 
 Sequence: Welcome → Apple authorization → verification → six questions → target result or adjustment → first-food prompt. No skip action.
 
@@ -90,15 +90,15 @@ Sequence: Welcome → Apple authorization → verification → six questions →
 
 | Screen | Required states | Status |
 | -- | -- | -- |
-| Logging entry | Photo; Recents; Manual choices | Awaiting artifacts |
-| Photo capture | camera; library; description | Awaiting artifacts |
-| Permission failure | Library and Settings actions | Awaiting artifacts |
-| Upload and analysis | working; failure; quota reached | Awaiting artifacts |
-| Itemized review | typical; low confidence; no photo | Awaiting artifacts |
-| Item correction | quantity; edit; add; remove | Awaiting artifacts |
-| Manual entry | default; validation | Awaiting artifacts |
-| Recents | populated; search; preview; empty | Awaiting artifacts |
-| Save confirmation | photo; no photo | Awaiting artifacts |
+| Logging entry | Photo; Recents; Manual choices | Assets received — see review snapshot |
+| Photo capture | camera; library; description | Assets received — see review snapshot |
+| Permission failure | Library and Settings actions | Assets received — see review snapshot |
+| Upload and analysis | working; failure; quota reached | Assets received — see review snapshot |
+| Itemized review | typical; low confidence; no photo | Assets received — see review snapshot |
+| Item correction | quantity; edit; add; remove | Assets received — see review snapshot |
+| Manual entry | default; validation | Assets received — see review snapshot |
+| Recents | populated; search; preview; empty | Assets received — see review snapshot |
+| Save confirmation | photo; no photo | Assets received — see review snapshot |
 
 Do not include meal grouping, offline queued state, whole-entry macro steppers, or streak copy.
 
@@ -106,14 +106,14 @@ Do not include meal grouping, offline queued state, whole-entry macro steppers, 
 
 | Screen | Required states | Status |
 | -- | -- | -- |
-| Today | within targets | Awaiting artifacts |
-| Today | calories over target | Awaiting artifacts |
-| Today | protein or fiber cleared | Awaiting artifacts |
-| Today | first-run empty | Awaiting artifacts |
-| Today | current empty | Awaiting artifacts |
-| Past day | populated; empty | Awaiting artifacts |
-| Date picker | default; markers; selected day | Awaiting artifacts |
-| Entry row | photo; no photo; long name | Awaiting artifacts |
+| Today | within targets | Assets received — see review snapshot |
+| Today | calories over target | Assets received — see review snapshot |
+| Today | protein or fiber cleared | Assets received — see review snapshot |
+| Today | first-run empty | Assets received — see review snapshot |
+| Today | current empty | Assets received — see review snapshot |
+| Past day | populated; empty | Assets received — see review snapshot |
+| Date picker | default; markers; selected day | Assets received — see review snapshot |
+| Entry row | photo; no photo; long name | Assets received — see review snapshot |
 
 Today has no streak, Advice, meal sections, Recap, or analytics-history navigation in the MVP.
 
@@ -121,11 +121,11 @@ Today has no streak, Advice, meal sections, Recap, or analytics-history navigati
 
 | Screen | Required states | Status |
 | -- | -- | -- |
-| Detail | photo entry | Awaiting artifacts |
-| Detail | Manual or Recent entry | Awaiting artifacts |
-| Edit | item editing | Awaiting artifacts |
-| Delete | confirmation | Awaiting artifacts |
-| Log again | quantity and date when needed | Awaiting artifacts |
+| Detail | photo entry | Assets received — see review snapshot |
+| Detail | Manual or Recent entry | Assets received — see review snapshot |
+| Edit | item editing | Assets received — see review snapshot |
+| Delete | confirmation | Assets received — see review snapshot |
+| Log again | quantity and date when needed | Assets received — see review snapshot |
 
 Deletion copy does not mention streaks.
 
@@ -133,14 +133,28 @@ Deletion copy does not mention streaks.
 
 | Screen | Required states | Status |
 | -- | -- | -- |
-| Settings | default | Awaiting artifacts |
-| Current targets | default | Awaiting artifacts |
-| Edit targets | default; validation; refusal | Awaiting artifacts |
-| Target history | populated; empty | Awaiting artifacts |
-| Account | default | Awaiting artifacts |
-| Delete account | confirmation; scheduled deletion | Awaiting artifacts |
+| Settings | default | Assets received — see review snapshot |
+| Current targets | default | Assets received — see review snapshot |
+| Edit targets | default; validation; refusal | Assets received — see review snapshot |
+| Target history | populated; empty | Assets received — see review snapshot |
+| Account | default | Assets received — see review snapshot |
+| Delete account | confirmation; scheduled deletion | Assets received — see review snapshot |
 
 Do not add Advice preferences, Health, notification settings, or public-product controls to MVP screens.
+
+## 2026-08-31 asset review snapshot
+
+All 46 PNGs and the attached manifest have been reviewed for scope. Repository copies live in `design/source/linear-2026-08-31/`; none have been copied to `design/exports/mvp/` yet.
+
+| Files | Intake status | Decision |
+| -- | -- | -- |
+| 01, 02, 05–10, 12–15, 18, 21, 22, 36, 38 | Candidate | Fits the MVP direction; needs Alex's explicit approval and any missing states. |
+| 03, 11, 16, 17, 19, 20, 23, 34, 37, 39 | Candidate — revise | Remove stale sequence, technical metadata, Advice, streak, password auth, Health, quota-reset, or offline copy before approval. |
+| 04, 40 | Superseded | Meal-first onboarding and a skip path conflict with mandatory target-first onboarding. |
+| 24–33, 35, 44 | Superseded for MVP | Retained as follow-up references for Advice, Recap, History analytics, and coaching. |
+| 41–43, 45, 46 | Superseded as whole diagrams | These boards mix current screens with behavior outside or contradictory to the MVP. |
+
+The mandatory first-run order remains Welcome → Apple authorization → verification → six questions → target result or adjustment → first-food prompt. Uploaded artwork cannot override this order.
 
 ## Intake checklist
 
@@ -175,3 +189,97 @@ An issue cites only the approved artifacts needed for its slice. The implementat
 When no approved image exists, use canonical behavior and the visual system. Keep the UI easy to revise. Do not search archived documents for a substitute.
 
 If an approved artifact conflicts with canonical behavior, stop and ask Alex.
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+_[image omitted — see the Linear doc]_
+
+[README.md](https://uploads.linear.app/1b736130-dc66-4c51-97b6-cd71dcec683f/60b9eb7f-1df7-4412-8746-5a2a549714fb/d2e6d16c-bffe-4427-8b10-e6b78e595db1?signature=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwYXRoIjoiLzFiNzM2MTMwLWRjNjYtNGM1MS05N2I2LWNkNzFkY2VjNjgzZi82MGI5ZWI3Zi0xZGY3LTQ0MTItODc0Ni01YTJhNTQ5NzE0ZmIvZDJlNmQxNmMtYmZmZS00NDI3LThiMTAtZTZiNzhlNTk1ZGIxIiwiaWF0IjoxNzg4MjA0OTE2LCJleHAiOjE3ODgyMDUyMTZ9.CSCSfc85tO2xaExheiGZbe19Yqpq_3Oe08vkZoIlQYI)
