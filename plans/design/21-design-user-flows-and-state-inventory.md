@@ -2,7 +2,7 @@
 linear_id: 8ca907f2-8175-4f47-ab65-ce55914c4c6d
 linear_title: "21 — Design: User Flows & State Inventory"
 linear_url: https://linear.app/hintology/document/21-design-user-flows-and-state-inventory-c6c19c58844f
-linear_updated_at: 2026-08-30T18:29:20.449Z
+linear_updated_at: 2026-08-31T02:44:49.134Z
 generated: true
 ---
 
@@ -53,7 +53,7 @@ The longest path in the app and the only one a user walks once. Everything from 
 | 6b Register | One screen, two modes. Toggle to Login |
 | 6c Verify email | Blocking. Resend carries a visible cooldown |
 | 6e Ten questions | One per screen, three control types |
-| 6f Building targets | Formula first, then the AI pass |
+| ~~6f Building targets~~ | **Cut 31 Aug 2026.** There is no AI pass and no wait. The sixth answer goes straight to the result screen |
 | 6g Your targets | Three numbers and the reasoning |
 | 4a Home — first run | **NOT DRAWN.** Specified in doc 12 as a state of 4a |
 

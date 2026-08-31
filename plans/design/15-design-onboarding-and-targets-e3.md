@@ -2,7 +2,7 @@
 linear_id: b31889be-59e4-4e47-bd80-4d8a1a9e689c
 linear_title: "15 — Design: Onboarding and Targets (E3)"
 linear_url: https://linear.app/hintology/document/15-design-onboarding-and-targets-e3-85c87496432b
-linear_updated_at: 2026-08-30T01:15:05.746Z
+linear_updated_at: 2026-08-31T02:42:15.870Z
 generated: true
 ---
 
@@ -52,11 +52,15 @@ Hints carry the judgement the numbers can't: `A desk job all day is sedentary ev
 
 All ten answers are collected **before** any AI call. One request, not a conversation.
 
-## Building targets (6f)
+## ~~Building targets (6f)~~ — cut 31 Aug 2026
 
-The call takes a few seconds, and the wait is used to explain what is actually happening — which is also the honest answer to "why is an LLM doing arithmetic?"
+**There is no wait to draw.** The AI call went, so target generation is one arithmetic pass on the server and the sixth answer goes straight to the result screen.
 
-Three rows, in order, with state:
+The screen existed to fill a few seconds of model latency, and it did a good job of it: three rows explaining that the maths was local and only the judgement was being asked for. That was the honest answer to "why is an LLM doing arithmetic?" The better answer turned out to be not to.
+
+Keep the row copy in mind for E4's photo estimate, which has a real wait and the same need to say what is happening.
+
+The original spec:
 
 | Row | Value | Sub-line |
 | -- | -- | -- |
@@ -64,15 +68,21 @@ Three rows, in order, with state:
 | `ADJUSTING PROTEIN & FIBER` | `ASKING…` (accent, live) | The baseline goes into the prompt as context, so the model adjusts and explains rather than doing the maths. |
 | `CHECKING SERVER BOUNDS` | `QUEUED` (muted) | Anything outside sane limits falls back to the formula. |
 
-This is doc 05's recommended implementation made visible: deterministic arithmetic plus AI judgement and rationale. Heading: `Doing the arithmetic first, then asking for judgement.`
-
 ## Targets result (6g)
 
 Three numbers as a grouped list, each 40px/900 with its macro's colour on the mono label. Then, in order:
 
-**Baseline line** — `BASELINE 2180 → SET 2150` with `WITHIN SERVER BOUNDS` in green. This is the guardrail made visible rather than implied; a model drifting far from the baseline becomes obvious to the user and loggable for you.
+**Baseline line** — `BASELINE 2180 → SET 2150` with `WITHIN SERVER BOUNDS` in green. The guardrail made visible rather than implied.
 
-`WHY THESE NUMBERS` — the model's rationale, in plain language, roughly 60 words. Names the deficit, the rate, why protein is set from body weight, and why fiber matters on a cut. This paragraph is the actual value the AI call adds; without it the whole call is a formula with extra steps.
+It survives the 31 Aug 2026 removal of the AI call, with a narrower job. It used to catch a model drifting from the baseline. Now it shows the clamp acting on the formula's own output, which happens at the edges of the supported weight band. Show the line only when the two numbers differ, because `BASELINE 2180 → SET 2180` is noise.
+
+`WHY THESE NUMBERS` — the rationale, in plain language, roughly 60 words. Names the deficit, the rate, why protein is set from body weight, and why fiber matters on a cut.
+
+**Written from a template, not by a model. Changed 31 Aug 2026.** This section used to end: *"This paragraph is the actual value the AI call adds; without it the whole call is a formula with extra steps."* True, and it turned out to be the argument for cutting the call rather than for keeping it. A paragraph about numbers the server just computed does not need a model to write it, and a template reads the real values instead of being told about them:
+
+> 2,180 calories. That is your resting burn of 1,750, times your activity, minus 20% for your goal. Protein at 176 g is 1.0 g per pound, the band research supports for holding muscle in a deficit. Fiber at 32 g follows the US guideline of 14 g per 1,000 calories.
+
+Same length, same job, and it cannot name a figure that is not on the screen. See doc 05.
 
 **Disclaimer**, in an over-target-orange panel, in the flow rather than as a footnote:
 
