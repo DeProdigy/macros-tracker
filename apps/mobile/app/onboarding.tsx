@@ -10,15 +10,15 @@
  * one launch, and the fix for it was briefly a whole `onboarding_skipped_at`
  * column before the sequencing decision removed the reason for either.
  *
- * MAC-50 makes this screen completable by hand. MAC-42 replaces it with the six
- * questions. Until MAC-50 lands, a new user has no route into the app, which is
- * a real cost of the reversal and is written down rather than worked around.
+ * MAC-50 gave it the button below, so the gate now has a way *through* it
+ * rather than around it. MAC-42 replaces the whole screen with the six
+ * questions.
  *
  * **The sign-out below is not a leftover exit.** See its own comment: the gate
  * keeps people out of Today, and it must not keep them out of their own account.
  */
 
-import { Redirect } from "expo-router";
+import { Link, Redirect } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -53,8 +53,15 @@ export default function OnboardingPlaceholder() {
         Six questions turn into a calorie and macro target. That flow is E3 and is not built yet.
       </Text>
       <Text style={[styles.body, { color: palette.secondaryText }]}>
-        Targets come first. Nothing logs until they exist, so there is no way past this screen yet.
+        Targets come first. Nothing logs until they exist, so set them by hand for now.
       </Text>
+
+      {/* The way through the gate, not around it. Saving a first target is what
+          sets `onboarding_completed`, so this button and the six questions end
+          in the same place by the same route. */}
+      <Link href="/targets" style={[styles.primary, { backgroundColor: palette.accent }]}>
+        SET TARGETS BY HAND
+      </Link>
 
       {/* The gate keeps a user out of Today. It must not keep them out of their
           own account.
@@ -94,6 +101,17 @@ const styles = StyleSheet.create({
   container: { flex: 1, gap: 12, justifyContent: "center", paddingHorizontal: 32 },
   title: { fontSize: 28, fontWeight: "700", letterSpacing: -0.5 },
   body: { fontSize: 16, lineHeight: 23 },
+  primary: {
+    borderRadius: 12,
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginTop: 16,
+    overflow: "hidden",
+    paddingVertical: 16,
+    textAlign: "center",
+  },
   button: {
     alignItems: "center",
     borderRadius: 12,
