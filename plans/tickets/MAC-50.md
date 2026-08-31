@@ -255,3 +255,93 @@ Five mutations, each caught:
 
 Gates: prettier, `pnpm lint`, `pnpm check-types`, 107 jest tests, 364 python
 tests.
+
+
+---
+
+# Review round three
+
+Four findings. The first one is a bug **the previous round of fixes introduced**,
+which is the part worth keeping.
+
+## `canGoBack()` sent an onboarding user back to onboarding
+
+Round two changed the destination after a save from `router.replace("/today")`
+to `router.canGoBack() ? back() : replace("/today")`, so someone editing from
+Settings returns to Settings.
+
+`canGoBack()` does not separate the two entry points. `app/index.tsx` redirects
+to `/onboarding`, which **replaces**. `onboarding.tsx` then renders a `Link` to
+`/targets`, which **pushes**. So the onboarding stack is
+`[/onboarding, /targets]` and `canGoBack()` is true there too.
+
+A user who had just set their first target landed back on "Set your targets".
+`onboarding.tsx` checked only `loading` and `signedOut`, so it rendered happily,
+and the only way out was killing the app. Tapping the button again wrote a second
+`TargetVersion` for the same date, which is the exact duplicate the two `try`
+blocks were added to prevent.
+
+**The state answers this and the history does not.** Where the user came from is
+a fact about their account, not about the navigation stack. `needsOnboarding` is
+read before the write, while the session still holds the pre-save user, because
+the refetch is what flips the flag.
+
+`onboarding.tsx` also gained a `needsOnboarding` redirect. A user with targets
+should never render that screen whatever routed them there, and the same
+argument `lib/onboarding.ts` already makes about asking the question in one place
+applies to asking it everywhere it matters.
+
+**Worth naming, because it is the second navigation bug in this ticket.**
+Routing decisions that depend on how the user arrived should read state, not
+history. History is a fact about the stack, and two different journeys can leave
+the same stack behind.
+
+## A test that asserted the right thing from the wrong premise
+
+`test_sends_a_user_finishing_onboarding_to_today` passed with `canGoBack` stubbed
+`false`. The real onboarding path has it `true`, so the test described a state
+that path never reaches and would have sailed over the bug above.
+
+It now sets `canGoBack` true and the user to `onboarding_completed: false`, which
+is the real case, and fails against the broken version.
+
+Third time this epic that a passing test proved nothing. MAC-38's fake tiebreak,
+MAC-40's SQL substring, and now this. The shape is the same each time: the test
+fixes the world so the assertion holds, rather than checking the assertion holds
+in the world.
+
+## The form painted before the seed landed
+
+`session.status` is an effect dependency, so a cold start runs the effect twice:
+once while the session is loading, then again once it resolves. The early return
+added in round two cleared the loading flag on that first pass.
+
+So the form rendered 2,000 / 140 / 30 while `getCurrentTarget` was still in
+flight, over a user whose real targets were 2,400. A step taken in that window
+was lost, because the seed replaces the whole values object.
+
+`setLoading(false)` is gone from that branch. A `signedOut` session renders a
+`Redirect` and never reads the flag; a `loading` session should keep waiting.
+
+**The first mutation for this survived too.** Every existing test stubbed a
+session that was already resolved, so the double-run never happened. The
+replacement renders with a `loading` session, rerenders as signed in, and asserts
+the starting point is absent while the request is unresolved.
+
+## A docstring on the wrong function
+
+The 400-body explanation stayed on `firstMessage`, a one-line array check, when
+the reasoning it describes moved into `errorsFrom`. Moved.
+
+## Verification after round three
+
+Three mutations, each caught:
+
+| Mutation | Result |
+| ------------------------------------------- | ------------ |
+| The destination keys off history alone | 1 test fails |
+| The placeholder's completed-user guard is removed | 1 test fails |
+| The loading flag is cleared in the early return | 1 test fails |
+
+Gates: prettier, `pnpm lint`, `pnpm check-types`, 109 jest tests, 364 python
+tests.

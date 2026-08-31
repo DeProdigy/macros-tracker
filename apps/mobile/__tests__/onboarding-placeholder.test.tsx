@@ -17,7 +17,7 @@ import { useSession } from "../lib/session";
 jest.mock("expo-router", () => {
   const { Text } = jest.requireActual<typeof import("react-native")>("react-native");
   return {
-    Redirect: jest.fn(),
+    Redirect: ({ href }: { href: string }) => <Text>redirect:{href}</Text>,
     // Rendered as its label so a test can assert on the route it points at.
     Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
       <Text>
@@ -66,5 +66,24 @@ describe("the onboarding placeholder", () => {
     fireEvent.press(screen.getByText("Sign out"));
 
     return waitFor(() => expect(mockSignOut).toHaveBeenCalled());
+  });
+});
+
+describe("who may see the placeholder", () => {
+  it("sends a user who already has targets to Today", () => {
+    // `/targets` sits on top of this screen in the stack, so anything that pops
+    // back lands here. Before this guard, a user who had just saved their first
+    // target could end up on "Set your targets" with no way out but killing the
+    // app, and tapping the button again wrote a second version for the day.
+    mockUseSession.mockReturnValue({
+      status: "signedIn",
+      user: { onboarding_completed: true },
+      signOut: mockSignOut,
+    } as unknown as ReturnType<typeof useSession>);
+
+    render(<OnboardingPlaceholder />);
+
+    expect(screen.getByText("redirect:/today")).toBeTruthy();
+    expect(screen.queryByText("Set your targets")).toBeNull();
   });
 });

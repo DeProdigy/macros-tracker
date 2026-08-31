@@ -35,6 +35,7 @@ import { Redirect, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { needsOnboarding } from "@/lib/onboarding";
 import { usePalette, type Palette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
 
@@ -97,8 +98,11 @@ const LIMITS: Partial<Record<Field, { min: number; max: number }>> = {
   fiber_g: FIBER_LIMITS,
 };
 
+const firstMessage = (value: unknown): string | undefined =>
+  Array.isArray(value) && typeof value[0] === "string" ? value[0] : undefined;
+
 /**
- * Pull per-field messages out of a 400 body.
+ * Split a 400 body into what the steppers can fix and what they cannot.
  *
  * `reject_outside_absolute` raises with every failing field at once, and the
  * screen shows them all. A caller who fixes one, resubmits, and is told about
@@ -109,9 +113,6 @@ const LIMITS: Partial<Record<Field, { min: number; max: number }>> = {
  * this reads it defensively. An unrecognised body falls through to the generic
  * message rather than rendering `undefined` at someone.
  */
-const firstMessage = (value: unknown): string | undefined =>
-  Array.isArray(value) && typeof value[0] === "string" ? value[0] : undefined;
-
 const errorsFrom = (body: unknown): { fields: FieldErrors; other: string | null } => {
   if (typeof body !== "object" || body === null) {
     return { fields: {}, other: null };
@@ -167,7 +168,15 @@ export default function AdjustTargets() {
     // an unauthenticated deep link fires one request that `customFetch` then
     // tries to refresh a token for. Harmless, invisible, and easy to stop.
     if (session.status !== "signedIn") {
-      setLoading(false);
+      // No `setLoading(false)` here, deliberately. With `session.status` as a
+      // dependency this effect runs twice on a cold start: once while the
+      // session is still loading, then again once it resolves. Clearing the
+      // flag on the first pass painted the form with the 2,000 / 140 / 30
+      // starting point while `getCurrentTarget` was still in flight, and a
+      // step taken in that window was overwritten when the seed landed.
+      //
+      // A `signedOut` session renders a `Redirect` and never reads this flag.
+      // A `loading` session should keep waiting.
       return;
     }
 
@@ -227,6 +236,11 @@ export default function AdjustTargets() {
   };
 
   const save = async () => {
+    // Read before the write, while the session still holds the pre-save user.
+    // The refetch below flips `onboarding_completed`, so afterwards there is no
+    // way to tell which entry point this was.
+    const wasOnboarding = needsOnboarding(session.user);
+
     setSaving(true);
     setFieldErrors({});
     setFailure(null);
@@ -281,13 +295,21 @@ export default function AdjustTargets() {
       return;
     }
 
-    // Back to Settings for someone who came from Settings, and on to Today for
-    // a user finishing onboarding, who has no Settings to go back to.
+    // Back to Settings for someone who came from Settings, on to Today for a
+    // user finishing onboarding.
     //
-    // The plan left "the screen does not know where it came from" as an open
-    // question. This answers it for the destination, which is the half that
-    // was landing an editing user somewhere they did not ask to be.
-    if (router.canGoBack()) {
+    // **`canGoBack()` alone gets this backwards**, and the first version of
+    // this fix shipped that. `app/index.tsx` redirects to `/onboarding`, which
+    // replaces, and `onboarding.tsx` then renders a `Link` to `/targets`, which
+    // pushes. So the onboarding stack is `[/onboarding, /targets]` and
+    // `canGoBack()` is true there too. `router.back()` put a user who had just
+    // set their first target back on "Set your targets", where tapping the
+    // button again writes a second version for the same date. That is the exact
+    // duplicate the two try blocks above exist to prevent.
+    //
+    // **The state answers this and the history does not.** Where the user came
+    // from is a fact about their account, not about the navigation stack.
+    if (!wasOnboarding && router.canGoBack()) {
       router.back();
       return;
     }

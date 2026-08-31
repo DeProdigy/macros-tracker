@@ -22,6 +22,7 @@ import { Link, Redirect } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { needsOnboarding } from "@/lib/onboarding";
 import { usePalette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
 
@@ -34,9 +35,20 @@ export default function OnboardingPlaceholder() {
     return null;
   }
 
-  // Outside the (app) group, so this route carries its own guard.
+  // Outside the (app) group, so this route carries its own guards.
   if (session.status === "signedOut") {
     return <Redirect href="/login" />;
+  }
+
+  // A user who owns targets has no business here, whatever routed them. The
+  // launch gate never sends them, but `/targets` sits on top of this screen in
+  // the stack, so anything that pops back lands on it.
+  //
+  // Defence in depth rather than a fix for one caller, which is the same
+  // argument `lib/onboarding.ts` already makes for asking the question in one
+  // place and asking it everywhere it matters.
+  if (!needsOnboarding(session.user)) {
+    return <Redirect href="/today" />;
   }
 
   const handleSignOut = async () => {

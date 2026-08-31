@@ -59,13 +59,18 @@ const mockUpdateUser = jest.fn();
 
 const onboardedUser = { onboarding_completed: true };
 
-beforeEach(() => {
-  jest.clearAllMocks();
+/** The session as it is *before* the save, which is what decides the destination. */
+const signedInAs = (user: { onboarding_completed: boolean }) =>
   mockUseSession.mockReturnValue({
     status: "signedIn",
-    user: {},
+    user,
     updateUser: mockUpdateUser,
   } as unknown as ReturnType<typeof useSession>);
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  // Default: someone editing from Settings, who already owns targets.
+  signedInAs({ onboarding_completed: true });
   mockCanGoBack.mockReturnValue(false);
   mockCurrent.mockRejectedValue(new ApiError(404, null));
   mockCreate.mockResolvedValue({ status: 201, data: {} } as never);
@@ -161,6 +166,34 @@ describe("the manual target editor", () => {
 });
 
 describe("failures the first version hid", () => {
+  it("does not paint the starting point while the seed is still in flight", async () => {
+    // The double-run this guards. `session.status` is a dependency, so a cold
+    // start runs the effect once while the session is loading and again once it
+    // resolves. Clearing the loading flag on that first pass painted 2,000 over
+    // a user whose real targets were still arriving, and a step taken in that
+    // window was overwritten when they landed.
+    mockUseSession.mockReturnValue({ status: "loading" } as unknown as ReturnType<
+      typeof useSession
+    >);
+
+    let landSeed: (value: unknown) => void = () => {};
+    mockCurrent.mockReturnValue(
+      new Promise((resolve) => {
+        landSeed = resolve;
+      }) as never,
+    );
+
+    const { rerender } = render(<AdjustTargets />);
+
+    signedInAs({ onboarding_completed: true });
+    rerender(<AdjustTargets />);
+
+    expect(screen.queryByText("2000 kcal")).toBeNull();
+
+    landSeed({ status: 200, data: { calories: 2400, protein_g: 180, fiber_g: 40 } });
+    await waitFor(() => expect(screen.getByText("2400 kcal")).toBeTruthy());
+  });
+
   it("says so when the current targets could not be loaded", async () => {
     // Not a 404. A user whose targets are 2,400 opens this on a dropped
     // connection, sees 2,000, and saves a number they never chose.
@@ -212,7 +245,22 @@ describe("failures the first version hid", () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it("sends a user finishing onboarding to Today", async () => {
+  it("sends a user finishing onboarding to Today, even though it can go back", async () => {
+    // The bug the first version of this fix shipped, and the reason this test
+    // sets `canGoBack` to **true**.
+    //
+    // `app/index.tsx` redirects to `/onboarding`, which replaces, and
+    // `onboarding.tsx` renders a `Link` to `/targets`, which pushes. So the
+    // real onboarding stack is `[/onboarding, /targets]` and `canGoBack()` is
+    // true. Keying off history alone sent a user who had just set their first
+    // target straight back to "Set your targets".
+    //
+    // The previous version of this test stubbed `canGoBack` false, which is a
+    // state the onboarding path never reaches. It asserted the right
+    // destination from the wrong premise, so it would have passed over the bug.
+    mockCanGoBack.mockReturnValue(true);
+    signedInAs({ onboarding_completed: false });
+
     await renderScreen();
     fireEvent.press(screen.getByText("SAVE NEW VERSION"));
 
