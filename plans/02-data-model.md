@@ -2,7 +2,7 @@
 linear_id: 794ca722-e849-40c9-9d7c-804cdee285e3
 linear_title: "02 — Data Model"
 linear_url: https://linear.app/hintology/document/02-data-model-2b01a7aaa301
-linear_updated_at: 2026-08-30T18:25:02.886Z
+linear_updated_at: 2026-08-31T02:42:42.889Z
 generated: true
 ---
 
@@ -154,8 +154,8 @@ TargetVersion
   calories         IntegerField
   protein_g        IntegerField
   fiber_g          IntegerField
-  source           CharField     # "onboarding_ai" | "manual"
-  ai_rationale     TextField     # explanation shown to the user, blank for a manual edit
+  source           CharField     # "onboarding" | "manual"
+  rationale        TextField     # explanation shown to the user, blank for a manual edit
   effective_from   DateField
   created_at
 
@@ -176,7 +176,9 @@ The index is new here, not new in the code. [MAC-38](https://linear.app/hintolog
 
 The tiebreak is the same story. The code orders by `(-created_at, -id)`. "Latest by `created_at`" alone is ambiguous the moment two rows share a timestamp, which `bulk_create`, a data migration, or a fixture can all produce.
 
-`ai_rationale` is **not** nullable. It is `blank=True` and a manual edit stores `""`. A nullable text field gives two ways to spell "empty" and forces every reader to handle both.
+`rationale` is **not** nullable. It is `blank=True` and a manual edit stores `""`. A nullable text field gives two ways to spell "empty" and forces every reader to handle both.
+
+**Both names lost their** `ai` **on 31 Aug 2026**, with the AI call. The column shipped as `ai_rationale` and the choice as `onboarding_ai`, and a template writes the text now, so both names describe a producer that does not exist. This repo has paid for a name that lies once already: `goal_weight_kg` held pounds for two tickets. The rename lands with [MAC-51](https://linear.app/hintology/issue/MAC-51/post-apitargetsproposals-the-deterministic-proposal-no-ai), the ticket that starts writing the field, and there are no rows to migrate.
 
 ## AI calls
 
@@ -245,11 +247,11 @@ The unique constraint is on the pair, never on `subject` **alone.** A subject is
 
 Superusers have no `Identity` **at all.** They have a password and log in at `/admin/`. That is the sentence that makes the split easy to reason about: authentication is not something every row must have.
 
-**One onboarding field, and it is server-derived. **`onboarding_completed` turns true when the user's first `TargetVersion` is written, and no client can set it. `PATCH /api/users/me/` refuses it, and a test asserts that refusal, because a shared read/write serializer would let any client walk past onboarding by sending one field.
+One onboarding field, and it is server-derived. `onboarding_completed` turns true when the user's first `TargetVersion` is written, and no client can set it. `PATCH /api/users/me/` refuses it, and a test asserts that refusal, because a shared read/write serializer would let any client walk past onboarding by sending one field.
 
 Nothing wrote it until 30 Aug 2026. It was read by two mobile routes and written nowhere, so a user set targets, closed the app, and reopened it in onboarding, forever. The bug was invisible in every ticket taken alone: it only appears if you ask who writes the field. `targets.services.create_version` is now the one door that makes a `TargetVersion`, and it flips the flag in the same transaction.
 
-**A second field,** `onboarding_skipped_at`**, was designed and then removed the same day.** It recorded a user choosing *Not now*, and it was client-writable through the settings endpoint while `onboarding_completed` was not. The asymmetry was sound reasoning on a premise that then changed: onboarding became a hard gate, so there is no choice left to record.
+**A second field, **`onboarding_skipped_at`**, was designed and then removed the same day.** It recorded a user choosing *Not now*, and it was client-writable through the settings endpoint while `onboarding_completed` was not. The asymmetry was sound reasoning on a premise that then changed: onboarding became a hard gate, so there is no choice left to record.
 
 The reasoning is kept here because it applies elsewhere. **A flag meaning "the user resolved this" is not the same as one meaning "the data exists", and choosing the second because it is derivable is how a supported choice becomes a nag.** That shape is real. It just needs a supported choice to exist, and onboarding no longer has one.
 

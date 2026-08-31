@@ -2,7 +2,7 @@
 linear_id: afad3d4f-f24b-4fb2-b6ea-0e45cd997939
 linear_title: "Decision Log"
 linear_url: https://linear.app/hintology/document/decision-log-3f0d791973e7
-linear_updated_at: 2026-08-30T18:27:22.296Z
+linear_updated_at: 2026-08-31T02:43:07.327Z
 generated: true
 ---
 
@@ -14,6 +14,50 @@ generated: true
 Kept because the reasoning is the valuable part — and because "here's a project where I made and documented real tradeoffs" is directly useful material for engineering leadership interviews.
 
 Newest first.
+
+---
+
+## 31 Aug 2026 — No AI call in target generation
+
+Cancels [MAC-41](<https://linear.app/hintology/issue/MAC-41/add-the-ai-pass-to-post-apitargetsproposals>) and [MAC-52](<https://linear.app/hintology/issue/MAC-52/mobile-the-ai-wait-screen-the-rationale-and-the-timeout-state>). Target generation is deterministic end to end, and the rationale comes from a template.
+
+The owner asked why an AI call was in the plan at all, given the server already computes the targets. The short version of their argument: it costs money per user, and the people using this app can adjust a number they disagree with.
+
+### The doc made the case against itself
+
+Doc 15 described what the call was worth, honestly:
+
+> `WHY THESE NUMBERS` — the model's rationale, in plain language, roughly 60 words. **This paragraph is the actual value the AI call adds; without it the whole call is a formula with extra steps.**
+
+That is true, and it is the argument for removing the call rather than for keeping it. **A paragraph about numbers the server just computed does not need a model to write it.** Every figure in it, the deficit, the rate, the protein per pound, the fiber ratio, is already a variable in `targets/services.py` with its source in a comment.
+
+A template reads the real values. A model gets told about them and writes prose around them, which is strictly more ways to be wrong for the same sentence.
+
+Doc 05 already named the arithmetic as the example of when not to hand a job to an LLM. The rationale turned out to be the same case one step removed, and it took an outside question to see it.
+
+### What it takes with it
+
+The wait screen (`6f`), doc 18's timeout state 6, the strict output parsing, the fallback-and-log path, and a model call every user makes at signup before they have seen anything work.
+
+It also takes the last network dependency out of an unexitable flow. The 30 Aug hard-gate decision noted that a blocking step inside onboarding traps everyone who reaches it, and the AI call was the only one left.
+
+### What it does not take
+
+**The AI plumbing is moved, not saved.** E4's photo estimate genuinely needs a model, and no formula replaces "what is in this picture". The `ai/` app, the key from the environment, the timeout, the strict parse, and [MAC-49](<https://linear.app/hintology/issue/MAC-49/ai-call-log-store-every-request-and-response-derive-the-quota-from-it>)'s call log all get built there, by the ticket that cannot ship without them. This decision changes which ticket pays for them, and it means the first one written is written for the case that needs it rather than for a rationale paragraph.
+
+**The clamp stays. **[MAC-39](https://linear.app/hintology/issue/MAC-39/server-side-target-guardrails-the-two-tier-clamp)'s two tiers never existed only for the model. They bound the formula's own output at the edges of the supported weight band, and every number a user types in the adjust screen.
+
+**The disclaimer stays.** These are still estimates, not medical advice, and a deterministic estimate is no less an estimate.
+
+### Two names that now lie
+
+`TargetVersion.ai_rationale` and the `onboarding_ai` source both describe a producer that will not exist. They become `rationale` and `onboarding`, in [MAC-51](https://linear.app/hintology/issue/MAC-51/post-apitargetsproposals-the-deterministic-proposal-no-ai), which is the ticket that starts writing them. No rows to migrate.
+
+This repo has already paid for a name that lies: `goal_weight_kg` held pounds for two tickets before anyone noticed.
+
+### If a model is ever wanted here again
+
+Not in the first-run flow. The place for it is a later action a user asks for, "explain this differently" or "talk me through changing my goal", where a slow answer costs nothing and nobody is blocked behind it.
 
 ---
 
@@ -37,9 +81,9 @@ More than a screen, which is the argument for writing it down properly.
 
 * `onboarding_skipped_at`**.** Column, migration, serializer field, clock-skew validator, and the client write. Never merged, so it is a deleted branch rather than a migration
 * `9d`**, the bridge screen.** It existed only to fill the gap between the first entry and the first question. There is no gap now
-* **The nullable** `DailyLog.target_version`**,** and the backfill it required, and the "macros without progress" render state on the dashboard. No entry can exist before targets do
+* **The nullable **`DailyLog.target_version`**,** and the backfill it required, and the "macros without progress" render state on the dashboard. No entry can exist before targets do
 * **The dismissible re-prompt row on Today.** It re-offered onboarding to a skipper. There are none
-* [**MAC-45**](<https://linear.app/hintology/issue/MAC-45/backfill-null-target-version-on-first-target-creation>) **and [MAC-46](<https://linear.app/hintology/issue/MAC-46/mobile-the-set-targets-bridge-after-the-first-entry-9d>)**, cancelled
+* [**MAC-45 **](<https://linear.app/hintology/issue/MAC-45/backfill-null-target-version-on-first-target-creation>)**and [MAC-46](<https://linear.app/hintology/issue/MAC-46/mobile-the-set-targets-bridge-after-the-first-entry-9d>)**, cancelled
 
 Worth noticing how far a sequencing decision reached. It set a column's nullability, a screen's existence, a dashboard render state, and two tickets. A reversal that only changed the routing would have left all of that in place, each piece defensible on its own and none of it needed.
 
@@ -127,7 +171,7 @@ I argued against building this, on the grounds that a join table for a provider 
 
 ### Why the shape is right regardless of a second provider
 
-The usual justification for an identities table is Google-plus-Apple, which we may never have. The better justification is one nobody mentions: **an app transfer between Apple developer teams reissues every user's** `sub`. Apple provides a `transfer_sub` mapping for exactly this. With the subject inlined on `User` that migration rewrites the user table under live traffic; with a join table it inserts rows.
+The usual justification for an identities table is Google-plus-Apple, which we may never have. The better justification is one nobody mentions: **an app transfer between Apple developer teams reissues every user's **`sub`. Apple provides a `transfer_sub` mapping for exactly this. With the subject inlined on `User` that migration rewrites the user table under live traffic; with a join table it inserts rows.
 
 The generalisable version: when judging whether a normalisation is premature, look for the migration it makes cheap rather than the feature it enables. Features are speculative. Migrations are not.
 

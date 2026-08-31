@@ -2,7 +2,7 @@
 linear_id: 9431886b-eaea-4453-9452-e692a88a009d
 linear_title: "18 — Design: Edge and Failure States"
 linear_url: https://linear.app/hintology/document/18-design-edge-and-failure-states-a84fd519c181
-linear_updated_at: 2026-08-29T05:13:37.157Z
+linear_updated_at: 2026-08-31T02:42:28.497Z
 generated: true
 ---
 
@@ -74,14 +74,20 @@ Doc 09 requires a clear message rather than a silent failure. Note what the copy
 
 The visible half of the global 401 handler from doc 04: one silent refresh attempt first, and only if that fails does this appear. Most users should never see it.
 
-## 6 · Targets timed out — green
+## ~~6 · Targets timed out — green~~ — cut 31 Aug 2026
+
+**Nothing to time out.** Target generation lost its AI call and is now one arithmetic pass on the server, so this state is unreachable.
+
+It was a good screen and its reasoning outlives it. A brand-new user must never be stranded before they reach the home screen, and this was the one failure that could do it. That worry is what put an outside service in the first-run flow under review, and the answer was to take the service out rather than to design around it.
+
+**Keep the tone for E4.** The photo estimate does call a model, it can time out, and this green treatment is the shape that failure should take: say what you have, say it is fine, offer the retry, never block.
+
+The original copy:
 
 > **We have your numbers anyway.**
 > The judgement call did not come back in time, so these are straight from the formula — 2,180 calories, 176g protein, 32g fiber. They are sound. You can adjust them now or any time later.
 
 `USE THESE TARGETS` · *Try the AI pass again*
-
-The deterministic fallback from doc 05, surfaced honestly and in a positive tone — because the formula result genuinely is fine. A brand-new user must never be stranded before they reach the home screen, and this is the one failure that could do it.
 
 ## Cut: first run with nothing logged
 
