@@ -31,17 +31,17 @@ beforeEach(() => {
         fiber_g: 32,
         source: "onboarding",
         rationale: "Built from your answers.",
-        effective_from: "2026-07-20",
+        effective_from: "2026-08-01",
       },
     ],
   } as Awaited<ReturnType<typeof listTargets>>);
 });
 
 describe("target history", () => {
-  it("shows newest first with ranges, source, and stored rationale", async () => {
+  it("shows every same-day version with its year, source, and stored rationale", async () => {
     render(<TargetHistoryScreen />);
-    expect(await screen.findByText("AUG 1 → NOW")).toBeTruthy();
-    expect(screen.getByText("JUL 20 → JUL 31")).toBeTruthy();
+    expect(await screen.findAllByText("EFFECTIVE AUG 1, 2026")).toHaveLength(2);
+    expect(screen.queryByText(/AUG 1 →/)).toBeNull();
     expect(screen.getByText("MANUAL")).toBeTruthy();
     expect(screen.getByText("ONBOARDING")).toBeTruthy();
     expect(screen.getByText("Built from your answers.")).toBeTruthy();
@@ -62,7 +62,8 @@ describe("target history", () => {
       headers: new Headers(),
     } as Awaited<ReturnType<typeof listTargets>>);
     render(<TargetHistoryScreen />);
-    fireEvent.press(await screen.findByText("TRY AGAIN"));
+    expect(await screen.findByText(/Nothing on this screen changed/)).toBeTruthy();
+    fireEvent.press(screen.getByText("TRY AGAIN"));
     expect(await screen.findByText("No target versions yet.")).toBeTruthy();
     expect(mockList).toHaveBeenCalledTimes(2);
   });

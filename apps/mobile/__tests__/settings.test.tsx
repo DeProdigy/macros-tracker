@@ -1,5 +1,5 @@
 /**
- * Settings — sign out, and the delete-account confirmation.
+ * Settings: targets, sign out, and the delete-account confirmation.
  *
  * Both stores require an in-app deletion path, which is why account deletion
  * has a screen this early. The cases below are about what the screen refuses to
@@ -9,10 +9,12 @@
 
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { ApiError, getCurrentTarget, type User } from "@macros/api-client";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import SettingsScreen from "../app/(app)/settings";
 import { useSession } from "../lib/session";
+
+let mockFocusCallback: (() => void | (() => void)) | null = null;
 
 jest.mock("expo-router", () => {
   const { Text } = jest.requireActual<typeof import("react-native")>("react-native");
@@ -20,7 +22,11 @@ jest.mock("expo-router", () => {
 
   return {
     useRouter: () => ({ back: jest.fn() }),
-    useFocusEffect: (callback: () => void) => React.useEffect(callback, [callback]),
+    useFocusEffect: (callback: () => void | (() => void)) =>
+      React.useEffect(() => {
+        mockFocusCallback = callback;
+        return callback();
+      }, [callback]),
     Link: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text>,
   };
 });
@@ -46,6 +52,7 @@ beforeEach(() => {
   signOut.mockResolvedValue(undefined);
   deleteAccount.mockResolvedValue(undefined);
   mockCurrent.mockImplementation(() => new Promise(() => {}));
+  mockFocusCallback = null;
 
   mockUseSession.mockReturnValue({
     status: "signedIn",
@@ -85,6 +92,27 @@ describe("targets", () => {
     render(<SettingsScreen />);
     fireEvent.press(await screen.findByText("Try again"));
     expect(await screen.findByText("2,200")).toBeTruthy();
+  });
+
+  it("reads the current singleton again when Settings regains focus", async () => {
+    mockCurrent
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { id: 1, calories: 2150, protein_g: 180, fiber_g: 33 },
+      } as Awaited<ReturnType<typeof getCurrentTarget>>)
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { id: 2, calories: 2200, protein_g: 175, fiber_g: 30 },
+      } as Awaited<ReturnType<typeof getCurrentTarget>>);
+    render(<SettingsScreen />);
+    expect(await screen.findByText("2,150")).toBeTruthy();
+
+    act(() => {
+      mockFocusCallback?.();
+    });
+
+    expect(await screen.findByText("2,200")).toBeTruthy();
+    expect(mockCurrent).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -1,4 +1,4 @@
-import { listTargets, type TargetVersion } from "@macros/api-client";
+import { listTargets, type SourceEnum, type TargetVersion } from "@macros/api-client";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -11,16 +11,20 @@ const parseDate = (date: string) => {
 };
 
 const displayDate = (date: string) =>
-  new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  })
     .format(parseDate(date))
     .toUpperCase();
 
-const dayBefore = (date: string) => {
-  const parsed = parseDate(date);
-  parsed.setUTCDate(parsed.getUTCDate() - 1);
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
-    .format(parsed)
-    .toUpperCase();
+// Keep this exhaustive. If the API adds a source, TypeScript makes this screen
+// choose honest copy instead of silently calling the new source Manual.
+const SOURCE_LABELS: Record<SourceEnum, string> = {
+  onboarding: "ONBOARDING",
+  manual: "MANUAL",
 };
 
 export default function TargetHistoryScreen() {
@@ -34,7 +38,10 @@ export default function TargetHistoryScreen() {
     setVersions(null);
     try {
       const response = await listTargets();
-      if (response.status === 200) setVersions(response.data);
+      if (response.status !== 200) {
+        throw new Error(`Unexpected target list status: ${response.status}`);
+      }
+      setVersions(response.data);
     } catch {
       setFailed(true);
     }
@@ -69,7 +76,7 @@ export default function TargetHistoryScreen() {
             Target history did not load.
           </Text>
           <Text style={[styles.stateBody, { color: palette.secondaryText }]}>
-            Your targets have not changed. Try again when the connection is ready.
+            Nothing on this screen changed. Try again when the connection is ready.
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -87,35 +94,22 @@ export default function TargetHistoryScreen() {
           </Text>
         </View>
       ) : (
-        versions?.map((version, index) => (
-          <VersionCard
-            key={version.id}
-            version={version}
-            end={index === 0 ? "NOW" : dayBefore(versions[index - 1].effective_from)}
-            palette={palette}
-          />
+        versions?.map((version) => (
+          <VersionCard key={version.id} version={version} palette={palette} />
         ))
       )}
     </ScrollView>
   );
 }
 
-const VersionCard = ({
-  version,
-  end,
-  palette,
-}: {
-  version: TargetVersion;
-  end: string;
-  palette: Palette;
-}) => (
+const VersionCard = ({ version, palette }: { version: TargetVersion; palette: Palette }) => (
   <View style={[styles.card, { backgroundColor: palette.hairline }]}>
     <View style={styles.cardHeader}>
       <Text style={[styles.date, { color: palette.text }]}>
-        {displayDate(version.effective_from)} → {end}
+        EFFECTIVE {displayDate(version.effective_from)}
       </Text>
       <Text style={[styles.source, { color: palette.secondaryText }]}>
-        {version.source === "onboarding" ? "ONBOARDING" : "MANUAL"}
+        {SOURCE_LABELS[version.source]}
       </Text>
     </View>
     <View style={styles.metrics}>

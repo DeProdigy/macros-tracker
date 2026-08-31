@@ -1,7 +1,13 @@
-/** Settings for target management, account actions, and diagnostics. */
+/**
+ * Settings owns reads, while the target editor owns writes.
+ *
+ * Keeping the current-target request here lets this screen refresh on focus.
+ * Passing saved values through route parameters would couple two routes. It
+ * would also miss changes from deep links or a future second editor.
+ */
 
 import { ApiError, getCurrentTarget, type TargetVersion } from "@macros/api-client";
-import { Link, useFocusEffect, useRouter, type Href } from "expo-router";
+import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -21,21 +27,26 @@ export default function SettingsScreen() {
   const [targetsLoading, setTargetsLoading] = useState(true);
   const [targetsFailure, setTargetsFailure] = useState(false);
 
-  const loadTargets = useCallback(async () => {
+  const loadTargets = useCallback(async (isActive: () => boolean = () => true) => {
     setTargetsLoading(true);
     setTargetsFailure(false);
 
     try {
       const response = await getCurrentTarget();
-      if (response.status === 200) setTarget(response.data);
+      if (!isActive()) return;
+      if (response.status !== 200) {
+        throw new Error(`Unexpected current target status: ${response.status}`);
+      }
+      setTarget(response.data);
     } catch (error) {
+      if (!isActive()) return;
       if (error instanceof ApiError && error.status === 404) {
         setTarget(null);
       } else {
         setTargetsFailure(true);
       }
     } finally {
-      setTargetsLoading(false);
+      if (isActive()) setTargetsLoading(false);
     }
   }, []);
 
@@ -44,7 +55,11 @@ export default function SettingsScreen() {
   // route parameters or shared draft state.
   useFocusEffect(
     useCallback(() => {
-      if (session.status === "signedIn") void loadTargets();
+      let active = true;
+      if (session.status === "signedIn") void loadTargets(() => active);
+      return () => {
+        active = false;
+      };
     }, [loadTargets, session.status]),
   );
 
@@ -131,7 +146,7 @@ export default function SettingsScreen() {
             Adjust
           </Link>
           <Link
-            href={"/target-history" as Href}
+            href="/target-history"
             style={[styles.targetAction, { color: palette.accent, borderColor: palette.hairline }]}
           >
             History
@@ -164,7 +179,11 @@ export default function SettingsScreen() {
 
         {confirmingDelete ? (
           <>
-            {/* A timeline answers what deletion does before the destructive tap. */}
+            {/*
+              A timeline replaces a generic warning because the 30-day recovery
+              window changes the decision. If deletion becomes immediate, this
+              sequence must change with the server behavior.
+            */}
             <Text style={[styles.value, { color: palette.text }]}>Delete your account?</Text>
             <Text style={[styles.meta, { color: palette.secondaryText }]}>
               Now: signed out everywhere, and you can no longer log in.

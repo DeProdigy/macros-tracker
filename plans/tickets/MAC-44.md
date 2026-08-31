@@ -20,7 +20,7 @@ Settings has a plain link to the existing target editor. The editor loads the cu
 
 Settings reads the current-target singleton when it gains focus. This makes a newly saved version visible when the editor returns to Settings. The history screen reads the append-only target collection.
 
-The history screen derives a display range from adjacent versions. The newest version ends at `Now`. An older version ends on the calendar day before the next newer version starts. Cards show the stored source, effective date range, and all three target values. An onboarding rationale appears when one exists. A manual version does not receive invented explanatory copy.
+The history screen shows each stored effective date with its year. It does not infer an end date. Creation order and effective dates can differ, and two versions can start on the same day. Cards show the stored source and all three target values. An onboarding rationale appears when one exists. A manual version does not receive invented explanatory copy.
 
 The screens use the canonical dark visual system. The Candidate Settings and target-history images provide composition context only. They are not implementation authority because Alex has not approved them.
 
@@ -28,7 +28,7 @@ The screens use the canonical dark visual system. The Candidate Settings and tar
 
 - Do not add `/api/targets/history/`. The existing target collection is the history resource.
 - Do not combine the singleton and history reads. The ticket explicitly requires the singleton for current targets, and Settings does not need the full collection.
-- Do not store an end date. The next version defines it, so stored end dates could disagree with the append-only record.
+- Do not infer or store an end date. The API does not promise that creation order and effective dates stay aligned. An inferred range can run backwards when two versions share a date.
 - Do not refresh Settings only after a local save callback. A focus refresh also covers deep links and changes from another route.
 
 ## Concepts
@@ -40,7 +40,8 @@ The React Native work uses Expo Router navigation and focus-based refresh. The h
 - Settings shows current targets and both actions.
 - Settings shows loading, empty, and retryable failure states.
 - Settings refreshes after it regains focus.
-- History renders newest first with effective ranges and sources.
+- History renders newest first with effective dates, years, and sources.
+- History renders two versions on the same effective date without a false range.
 - History renders its loading, empty, and retryable failure states.
 - The existing editor still saves a new version and returns to Settings.
 - Run mobile Jest, type checks, lint, formatting checks, and `git diff --check`.
