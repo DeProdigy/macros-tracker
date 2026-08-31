@@ -488,6 +488,36 @@ def reject_outside_absolute(targets: Targets, weight_lb: Decimal | None) -> None
 # Everything above this line is arithmetic. Everything below it writes rows.
 
 
+def complete_onboarding(user: "User") -> bool:
+    """Flip `onboarding_completed` unless it is already set.
+
+    Returns True when **this call** was the one that flipped it, which is what
+    makes the behaviour testable without reading generated SQL.
+
+    **The condition is "not done yet", not "this is the first version".**
+
+        User.objects.filter(pk=user.pk, onboarding_completed=False).update(...)
+
+    One conditional UPDATE, which buys three things a `count() == 0` check does
+    not. It costs no extra query. Two racing requests cannot both decide they
+    are first, because the database resolves the condition rather than Python.
+    And a later call matches zero rows and returns False.
+
+    Move the check into an `if` in Python and two racing first-target requests
+    both read False, both write, and the guarantee is gone with every test still
+    green. The return value is what a test can hold onto instead.
+
+    It is not identical to "first version". An operator who clears the flag by
+    hand gets it back on that user's next target, which is the wanted answer and
+    falls out of writing the condition in terms of the fact instead of the count.
+    """
+    return bool(
+        get_user_model()
+        .objects.filter(pk=user.pk, onboarding_completed=False)
+        .update(onboarding_completed=True)
+    )
+
+
 def create_version(
     *,
     user: "User",
@@ -510,25 +540,11 @@ def create_version(
     site would know it happened. The cost of a signal is paid by whoever debugs
     it two years later.
 
-    **Why the flag flips here.** `onboarding_completed` means "this user has
-    been through the flow". Owning targets is the server-side proof of that, so
-    the server derives it and the client never writes it. Read
-    `accounts.models.User` for the other half of the pair.
-
-    **The condition is "not done yet", not "this is the first version".**
-
-        User.objects.filter(pk=..., onboarding_completed=False).update(...)
-
-    One conditional UPDATE, which buys three things a `count() == 0` check does
-    not. It costs no extra query. Two racing requests cannot both decide they are
-    first, because the database resolves the condition. And a second version
-    matches zero rows and changes nothing, which is the behaviour the ticket asks
-    for.
-
-    It is not *identical* to "first version": an operator who unsets the flag by
-    hand gets it back on the user's next target. That is the wanted answer, and
-    it falls out of writing the condition in terms of the fact rather than the
-    count.
+    **Why the flag flips here.** `onboarding_completed` means "this user owns
+    targets", which under a hard gate is the same thing as "this user has been
+    through onboarding". The server derives it and the client never writes it.
+    Read `accounts.models.User` for the rest, and `complete_onboarding` above for
+    why the UPDATE carries a condition.
 
     Both writes are in one transaction. A target that saves while the flag fails
     leaves a user with targets who is still told to go and set some.
@@ -543,11 +559,7 @@ def create_version(
             effective_from=effective_from,
             ai_rationale=ai_rationale,
         )
-        completed = (
-            get_user_model()
-            .objects.filter(pk=user.pk, onboarding_completed=False)
-            .update(onboarding_completed=True)
-        )
+        completed = complete_onboarding(user)
 
     # The UPDATE above went round the in-memory object, so `user` still says
     # False and anything later in this request would read a stale value. Nothing

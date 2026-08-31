@@ -5,16 +5,19 @@
  *
  *   token in secure store?
  *     no  → Welcome
- *     yes → valid? → needs onboarding?
- *                      yes → onboarding
- *                      no  → Today
+ *     yes → valid? → has targets?
+ *                      no  → onboarding
+ *                      yes → Today
  *
- * Three outcomes, not two. A user with entries and no targets is a coherent
- * state now that doc 26 made the onboarding stack exitable, so "signed in" and
- * "ready for Today" are different questions.
+ * Three outcomes, not two. "Signed in" and "ready for Today" are different
+ * questions: onboarding is a hard gate, so a signed-in user with no targets
+ * belongs on the onboarding screen and nowhere else.
  *
- * `needsOnboarding` owns the third question, and it reads two fields rather
- * than one. See `lib/onboarding.ts` for why a skip has to count.
+ * `needsOnboarding` owns the third question. See `lib/onboarding.ts`.
+ *
+ * **This is not the only place that asks it.** A deep link straight to `/today`
+ * never runs this route, so `(app)/_layout.tsx` asks the same question for
+ * every signed-in screen. Do not treat this file as the enforcement point.
  *
  * `SessionProvider` did the asking. This route only reads the answer and
  * redirects, which is what routing-from-state buys: nothing here has to know
@@ -51,9 +54,10 @@ export default function LaunchGate() {
     return <Redirect href="/login" />;
   }
 
-  // Through the helper, never inline. The rule reads two fields, and the same
-  // rule runs in `(auth)/login.tsx`. Two inline copies is how one of them gets
-  // updated and the other does not.
+  // Through the helper, never inline. The same rule runs in `(auth)/login.tsx`
+  // and in `(app)/_layout.tsx`, and it has already changed once: it read two
+  // fields while onboarding was skippable. Three inline copies is how one of
+  // them gets updated and the others do not.
   if (needsOnboarding(session.user)) {
     return <Redirect href="/onboarding" />;
   }

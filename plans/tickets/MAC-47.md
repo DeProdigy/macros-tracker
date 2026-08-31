@@ -329,3 +329,85 @@ Five mutations, each caught:
 Gates: ruff, ruff format, mypy on 58 files, 364 python tests,
 `makemigrations --check` clean, prettier, `pnpm lint`, `pnpm check-types`,
 90 jest tests.
+
+
+---
+
+# Review round two, 30 Aug 2026
+
+Three findings on the post-reversal code. All three were right.
+
+## The gate locked people inside their own account
+
+The bug I shipped closing the deep-link hole. `signOut` and `deleteAccount` are
+called from exactly one place, `app/(app)/settings.tsx`, and the new guard
+redirects anyone without targets away from that whole route group.
+
+So a new user signed in with Apple, landed on onboarding, and could not sign out,
+could not switch Apple ID, and could not delete the account they had just made.
+Deleting the app was the only way out.
+
+The plan above named the cost as "a new user has no route into the app". That was
+the smaller half. **They had no route out of the session either**, and that half
+has a legal edge: App Review looks for an in-app account-deletion path, and in
+slice 1 every user is un-onboarded, so the path existed for nobody.
+
+Fixed with a sign-out button on the placeholder. Six lines, and it does not wait
+on MAC-50.
+
+**Worth naming the shape, because it will recur.** A guard that hides a route
+group hides everything in it, including the screens that have nothing to do with
+the feature being guarded. Ask what else lives behind the redirect before adding
+one. I checked that the guard blocked Today. I did not check what else was in
+there with it.
+
+## Stale comments the reversal left behind
+
+`app/index.tsx` still described the two-field rule, still said a user with
+entries and no targets is a coherent state, and still pointed at
+`lib/onboarding.ts` "for why a skip has to count". That file now says the
+opposite.
+
+A stale comment is worse than no comment. The next reader believes the two-field
+rule exists and goes looking for a field that is not there. Fixed, and the header
+now also says this route is not the enforcement point, because `(app)/_layout.tsx`
+is the one a deep link actually meets.
+
+## The SQL assertion, replaced
+
+The PR body asked for a cleaner way to pin the conditional UPDATE. Review found
+it, and it was inside the function already.
+
+`.update()` returns the row count, and `create_version` was binding it as
+`completed` without exposing it. Pulling the write into `complete_onboarding`
+gives that count a name and a return value:
+
+```python
+assert services.complete_onboarding(user) is True
+assert services.complete_onboarding(user) is False   # matched no rows
+```
+
+Drop the condition from the filter and the second call returns True, because an
+unconditional UPDATE matches the row every time. Same mutation caught, no
+`CaptureQueriesContext`, no reading generated SQL.
+
+It also fixes a weakness I had missed. `assert "NOT" in updates[0]` matches a
+`NOT` anywhere in the statement, including in a different clause or a column
+name. A substring check standing in for a semantic one.
+
+The helper has a second payoff: the long docstring about why the UPDATE carries a
+condition now sits on the function that carries it.
+
+## Verification after round two
+
+Three mutations, each caught:
+
+| Mutation | Result |
+| ------------------------------------------- | ------------------- |
+| `complete_onboarding` drops its condition | 1 test fails |
+| `complete_onboarding` always reports True | 5 tests fail |
+| The sign-out button is removed | 1 mobile test fails |
+
+Gates: ruff, ruff format, mypy on 58 files, 364 python tests,
+`makemigrations --check` clean, prettier, `pnpm lint`, `pnpm check-types`,
+92 jest tests.

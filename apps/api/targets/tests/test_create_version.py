@@ -9,8 +9,6 @@ from unittest import mock
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.db import connection
-from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from targets import services
@@ -66,37 +64,25 @@ def test_create_version_rolls_the_flag_back_with_the_row(db):
     assert TargetVersion.objects.filter(user=user).count() == 0
 
 
-def test_the_flag_update_carries_its_condition_in_the_where_clause(db):
-    """The conditional UPDATE, pinned on the SQL, because nothing else can see it.
+def test_complete_onboarding_reports_whether_it_was_the_one_that_flipped(db):
+    """The conditional UPDATE, pinned on behaviour rather than on generated SQL.
 
     The endpoint test asserting the flag is still True after a second target
     passes either way: writing True over True is invisible from outside. That
     let the mutation "drop `onboarding_completed=False` from the filter"
-    survive, which means the design this function documents at length was
-    unproven.
+    survive, which means the design was documented at length and proved by
+    nothing.
 
-    White-box, and deliberately so. What the condition buys is that **the
-    database decides who is first**, not Python. Two requests racing on a user's
-    first target cannot both win, because only one UPDATE matches the row. Move
-    the check into an `if` in Python and both read False, both write, and the
-    guarantee is gone with every test still green.
+    The first fix for that read the SQL out of `CaptureQueriesContext` and
+    asserted `"NOT" in`, which is a substring check standing in for a semantic
+    one and would match a `NOT` in any clause or column name. Review pointed out
+    that `.update()` already returns the row count, so the answer was sitting
+    inside the function the whole time. It just needed a name and a return value.
 
-    The query still runs on a later target. It simply matches no rows.
+    Drop the condition from the filter and the second call returns True, because
+    an unconditional UPDATE matches the row every time.
     """
     user = get_user_model().objects.create_user(email="second@example.com")
 
-    with CaptureQueriesContext(connection) as captured:
-        services.create_version(
-            user=user,
-            calories=2150,
-            protein_g=140,
-            fiber_g=30,
-            source=TargetVersion.Source.MANUAL,
-            effective_from=timezone.now().date(),
-        )
-
-    updates = [q["sql"] for q in captured.captured_queries if q["sql"].startswith("UPDATE")]
-    assert len(updates) == 1
-    assert "onboarding_completed" in updates[0]
-    # The guard itself. Without it the statement is an unconditional write.
-    assert "NOT" in updates[0]
+    assert services.complete_onboarding(user) is True
+    assert services.complete_onboarding(user) is False
