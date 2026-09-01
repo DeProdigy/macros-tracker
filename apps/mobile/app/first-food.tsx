@@ -1,4 +1,4 @@
-import { Redirect } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { needsOnboarding } from "@/lib/onboarding";
@@ -22,16 +22,12 @@ export default function FirstFoodPrompt() {
         Your targets are ready. Your first entry will start filling the day.
       </Text>
       <Pressable
-        accessibilityHint="Food logging arrives in the next build slice"
         accessibilityRole="button"
-        disabled
-        style={[styles.button, { backgroundColor: palette.hairline }]}
+        onPress={() => router.push("./(app)/log-food")}
+        style={[styles.button, { backgroundColor: palette.accent }]}
       >
-        <Text style={[styles.buttonLabel, { color: palette.dimText }]}>LOG YOUR FIRST FOOD</Text>
+        <Text style={[styles.buttonLabel, { color: palette.background }]}>LOG YOUR FIRST FOOD</Text>
       </Pressable>
-      <Text style={[styles.note, { color: palette.dimText }]}>
-        Food logging is the next build slice.
-      </Text>
     </View>
   );
 }

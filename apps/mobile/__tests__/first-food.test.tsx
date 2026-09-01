@@ -22,11 +22,11 @@ beforeEach(() => {
 });
 
 describe("first-food prompt", () => {
-  it("confirms saved targets and keeps food logging disabled", () => {
+  it("confirms saved targets and enables food logging", () => {
     render(<FirstFoodPrompt />);
 
     expect(screen.getByText("TARGETS SAVED")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "LOG YOUR FIRST FOOD" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "LOG YOUR FIRST FOOD" })).toBeEnabled();
   });
 
   it("does not let an incomplete account bypass onboarding", () => {
