@@ -1,20 +1,15 @@
 /**
- * Settings, minimal.
+ * Settings owns reads, while the target editor owns writes.
  *
- * Doc 16 owns the real one: six groups, target history, AI usage, the Apple
- * Health toggle. None of that exists yet. Two things are here because they have
- * to be — both stores require an in-app deletion path, which is the whole
- * reason account deletion appears this early in the build, and deletion is
- * untestable without a screen to trigger it from.
- *
- * The delete confirmation is a panel rather than doc 16's typed `DELETE` field.
- * The timeline copy is doc 16's, because that is the part that matters: the
- * screen names what happens and when, instead of asking "are you sure".
+ * Keeping the current-target request here lets this screen refresh on focus.
+ * Passing saved values through route parameters would couple two routes. It
+ * would also miss changes from deep links or a future second editor.
  */
 
-import { Link, useRouter } from "expo-router";
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ApiError, getCurrentTarget, type TargetVersion } from "@macros/api-client";
+import { Link, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { usePalette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
@@ -28,6 +23,53 @@ export default function SettingsScreen() {
   const [busy, setBusy] = useState<Busy>("none");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [target, setTarget] = useState<TargetVersion | null>(null);
+  const [targetsLoading, setTargetsLoading] = useState(true);
+  const [targetsFailure, setTargetsFailure] = useState(false);
+  const mounted = useRef(true);
+
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
+
+  const loadTargets = useCallback(async (isActive: () => boolean = () => true) => {
+    setTargetsLoading(true);
+    setTargetsFailure(false);
+
+    try {
+      const response = await getCurrentTarget();
+      if (!mounted.current || !isActive()) return;
+      if (response.status !== 200) {
+        throw new Error(`Unexpected current target status: ${response.status}`);
+      }
+      setTarget(response.data);
+    } catch (error) {
+      if (!mounted.current || !isActive()) return;
+      if (error instanceof ApiError && error.status === 404) {
+        setTarget(null);
+      } else {
+        setTargetsFailure(true);
+      }
+    } finally {
+      if (mounted.current && isActive()) setTargetsLoading(false);
+    }
+  }, []);
+
+  // The editor is a separate route. A focus read makes the version saved there
+  // visible when Settings returns, without coupling the two screens through
+  // route parameters or shared draft state.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (session.status === "signedIn") void loadTargets(() => active);
+      return () => {
+        active = false;
+      };
+    }, [loadTargets, session.status]),
+  );
 
   if (session.status !== "signedIn") {
     return null;
@@ -79,14 +121,45 @@ export default function SettingsScreen() {
         <Text style={[styles.meta, { color: palette.secondaryText }]}>Signed in with Apple</Text>
       </View>
 
-      {/* A plain link, deliberately. Doc 16's `7c` row carries the three
-          current numbers plus ADJUST and HISTORY, and MAC-44 builds it. Shipping
-          the full row now would mean a HISTORY control opening nothing. */}
       <View style={[styles.group, { borderColor: palette.hairline }]}>
         <Text style={[styles.groupLabel, { color: palette.dimText }]}>Targets</Text>
-        <Link href="/targets" style={[styles.link, { color: palette.accent }]}>
-          Adjust targets
-        </Link>
+        {targetsLoading ? (
+          <View accessibilityLabel="Loading current targets" style={styles.targetStatus}>
+            <ActivityIndicator color={palette.accent} />
+          </View>
+        ) : targetsFailure ? (
+          <View style={styles.targetStatus}>
+            <Text style={[styles.meta, { color: palette.secondaryText }]}>
+              Current targets did not load.
+            </Text>
+            <Pressable accessibilityRole="button" onPress={() => void loadTargets()}>
+              <Text style={[styles.link, { color: palette.accent }]}>Try again</Text>
+            </Pressable>
+          </View>
+        ) : target ? (
+          <View style={styles.targetMetrics}>
+            <TargetMetric label="KCAL" value={target.calories} color={palette.accent} />
+            <TargetMetric label="PROTEIN" value={target.protein_g} color="#70e6a3" />
+            <TargetMetric label="FIBER" value={target.fiber_g} color="#ad8cff" />
+          </View>
+        ) : (
+          <Text style={[styles.meta, { color: palette.secondaryText }]}>No targets set.</Text>
+        )}
+
+        <View style={styles.targetActions}>
+          <Link
+            href="/targets"
+            style={[styles.targetAction, { color: palette.accent, borderColor: palette.hairline }]}
+          >
+            Adjust
+          </Link>
+          <Link
+            href="/target-history"
+            style={[styles.targetAction, { color: palette.accent, borderColor: palette.hairline }]}
+          >
+            History
+          </Link>
+        </View>
       </View>
 
       <View style={[styles.group, { borderColor: palette.hairline }]}>
@@ -114,9 +187,11 @@ export default function SettingsScreen() {
 
         {confirmingDelete ? (
           <>
-            {/* Doc 16: a timeline, not a warning. The grace period is the
-                answer to "have I just destroyed a year of logging", and the
-                screen should say so before the tap rather than after. */}
+            {/*
+              A timeline replaces a generic warning because the 30-day recovery
+              window changes the decision. If deletion becomes immediate, this
+              sequence must change with the server behavior.
+            */}
             <Text style={[styles.value, { color: palette.text }]}>Delete your account?</Text>
             <Text style={[styles.meta, { color: palette.secondaryText }]}>
               Now: signed out everywhere, and you can no longer log in.
@@ -176,6 +251,23 @@ const styles = StyleSheet.create({
   value: { fontSize: 17, fontWeight: "600" },
   meta: { fontSize: 14, lineHeight: 20 },
   link: { fontSize: 16 },
+  targetStatus: { gap: 8, minHeight: 48, justifyContent: "center" },
+  targetMetrics: { flexDirection: "row", gap: 18, paddingVertical: 10 },
+  targetMetric: { gap: 2 },
+  targetValue: { fontSize: 24, fontWeight: "800" },
+  targetUnit: { color: "#6b6b6b", fontSize: 10, letterSpacing: 0.8 },
+  targetActions: { flexDirection: "row", gap: 10, marginTop: 8 },
+  targetAction: {
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    overflow: "hidden",
+    paddingVertical: 13,
+    textAlign: "center",
+    textTransform: "uppercase",
+  },
   failure: { fontSize: 14, lineHeight: 20 },
   button: {
     alignItems: "center",
@@ -186,3 +278,10 @@ const styles = StyleSheet.create({
   },
   buttonLabel: { fontSize: 16, fontWeight: "600" },
 });
+
+const TargetMetric = ({ label, value, color }: { label: string; value: number; color: string }) => (
+  <View style={styles.targetMetric}>
+    <Text style={[styles.targetValue, { color }]}>{value.toLocaleString()}</Text>
+    <Text style={styles.targetUnit}>{label}</Text>
+  </View>
+);
