@@ -115,6 +115,7 @@ Every pull request that changes user-visible UI includes screenshots before revi
 * Use a live simulator, device, or web render. A design mockup may be labeled as a design reference, but it is not proof of the implementation.
 * Upload review-only screenshots to the GitHub PR description or a PR comment. Do not commit screenshots solely for PR review.
 * If an existing tracked image is reused, embed its existing URL instead of adding a duplicate.
+* After the GitHub attachments are verified, delete that PR's local temporary screenshot files. The PR attachment is the retained review artifact.
 * A non-UI PR states that screenshots are not applicable.
 
 Alex decides when to merge.

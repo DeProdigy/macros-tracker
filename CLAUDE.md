@@ -40,6 +40,8 @@ For every ticket:
 - Upload review-only screenshots to the GitHub PR description or a PR comment.
   Do not commit screenshots only for PR review. Reuse an existing tracked image
   by URL when appropriate.
+- After the GitHub attachments are verified, delete that PR's local temporary
+  screenshot files. The PR attachment is the retained review artifact.
 - A design mockup can be a labeled visual reference. It does not replace a live
   simulator, device, or web capture as proof of the implementation.
 - A non-UI PR states that screenshots are not applicable.
