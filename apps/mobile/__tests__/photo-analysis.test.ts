@@ -21,7 +21,7 @@ const mockFetch = jest.fn<typeof fetch>();
 
 beforeEach(() => {
   jest.clearAllMocks();
-  global.fetch = mockFetch;
+  global.fetch = mockFetch as unknown as typeof fetch;
   mockManipulate.mockResolvedValue({ uri: "file:///compressed.jpg" } as never);
 });
 
