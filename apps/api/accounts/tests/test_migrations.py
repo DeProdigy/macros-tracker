@@ -213,5 +213,14 @@ def test_0006_refuses_a_goal_weight_that_would_convert_out_of_bounds():
         email="tiny@example.com", goal_weight_kg=Decimal("30.00")
     )
 
-    with pytest.raises(RuntimeError, match="outside the new"):
+    try:
+        with pytest.raises(RuntimeError, match="outside the new"):
+            _migrate(AFTER_POUNDS)
+    finally:
+        # The expected exception leaves the shared test schema at 0005. Restore
+        # it just like the `at_0002` fixture does above, or every transactional
+        # test collected after this file sees current model code against an old
+        # database schema. Remove the deliberately invalid row first so the
+        # migration can complete on the second attempt.
+        old_apps.get_model("accounts", "User").objects.filter(email="tiny@example.com").delete()
         _migrate(AFTER_POUNDS)
