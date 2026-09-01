@@ -10,10 +10,11 @@
  * * `onboarding` - Onboarding
  * `manual` - Manual edit
  */
-export type SourceEnum = (typeof SourceEnum)[keyof typeof SourceEnum];
+export type TargetVersionSourceEnum =
+  (typeof TargetVersionSourceEnum)[keyof typeof TargetVersionSourceEnum];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const SourceEnum = {
+export const TargetVersionSourceEnum = {
   onboarding: "onboarding",
   manual: "manual",
 } as const;

@@ -1,71 +1,95 @@
-/**
- * The Today shell.
- *
- * Thin on purpose, and the tests are thin to match. The one thing worth
- * asserting is that it renders the identity the server returned, because that
- * is E2's whole claim: the token in the Keychain still buys an authenticated
- * request.
- */
-
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import type { User } from "@macros/api-client";
 import { render, screen } from "@testing-library/react-native";
 
 import TodayScreen from "../app/(app)/today";
 import { useSession } from "../lib/session";
 
+const mockUseGetDay = jest.fn();
+jest.mock("@macros/api-client", () => ({
+  useGetDay: (...args: unknown[]) => mockUseGetDay(...args),
+}));
 jest.mock("expo-router", () => {
   const { Text } = jest.requireActual<typeof import("react-native")>("react-native");
-
-  return { Link: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text> };
+  return {
+    Link: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text>,
+    router: { push: jest.fn() },
+  };
 });
-
 jest.mock("../lib/session", () => ({ useSession: jest.fn() }));
 
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 
-type Session = ReturnType<typeof useSession>;
-
-const signedInAs = (user: Partial<User>) =>
-  mockUseSession.mockReturnValue({ status: "signedIn", user } as unknown as Session);
-
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUseSession.mockReturnValue({
+    status: "signedIn",
+    timezoneStatus: "ready",
+    user: { timezone: "UTC" },
+  } as never);
+  mockUseGetDay.mockReturnValue({
+    isLoading: false,
+    data: {
+      status: 200,
+      data: {
+        local_date: "2026-08-31",
+        targets: null,
+        calories: "0.00",
+        protein_g: "0.00",
+        fiber_g: "0.00",
+        entries: [],
+      },
+    },
+  });
 });
 
 describe("TodayScreen", () => {
-  it("names the signed-in user", () => {
-    signedInAs({ name: "Alex", email: "alex@example.com" });
-
+  it("shows an empty day and a logging action", () => {
     render(<TodayScreen />);
-
-    expect(screen.getByText(/signed in as alex/i)).toBeTruthy();
-  });
-
-  it("falls back to the email when Apple never supplied a name", () => {
-    // `name` is an empty string rather than null when Apple withheld it on the
-    // first authorization, and it can never be recovered for that user.
-    signedInAs({ name: "", email: "alex@example.com" });
-
-    render(<TodayScreen />);
-
-    expect(screen.getByText(/signed in as alex@example.com/i)).toBeTruthy();
-  });
-
-  it("says logging is not built yet instead of drawing empty rings", () => {
-    signedInAs({ name: "Alex", email: null });
-
-    render(<TodayScreen />);
-
     expect(screen.getByText("Nothing logged yet")).toBeTruthy();
-    expect(screen.getByText(/E4/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "LOG FOOD" })).toBeTruthy();
   });
 
-  it("offers a route to Settings", () => {
-    signedInAs({ name: "Alex", email: null });
+  it("shows totals and entries returned by the day resource", () => {
+    mockUseGetDay.mockReturnValue({
+      isLoading: false,
+      data: {
+        status: 200,
+        data: {
+          local_date: "2026-08-31",
+          targets: null,
+          calories: "240.00",
+          protein_g: "36.00",
+          fiber_g: "4.00",
+          entries: [
+            {
+              id: 1,
+              description: "Greek yogurt",
+              eaten_at: "2026-08-31T16:30:00Z",
+              calories: "240.00",
+              protein_g: "36.00",
+              fiber_g: "4.00",
+              source: "manual",
+              items: [],
+            },
+          ],
+        },
+      },
+    });
+    render(<TodayScreen />);
+    expect(screen.getByText("Greek yogurt")).toBeTruthy();
+    expect(screen.getByText("240.00 kcal")).toBeTruthy();
+    expect(screen.getByText("36.00p · 4.00f")).toBeTruthy();
+  });
+
+  it("shows an error without false zero totals when the day request fails", () => {
+    mockUseGetDay.mockReturnValue({ isError: true, isLoading: false });
 
     render(<TodayScreen />);
 
-    expect(screen.getByText("Settings")).toBeTruthy();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Could not load your day. Reopen the app to try again.",
+    );
+    expect(screen.queryByText("0.00")).toBeNull();
+    expect(screen.queryByText("Nothing logged yet")).toBeNull();
   });
 });

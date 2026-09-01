@@ -229,6 +229,140 @@
                 }
             }
         },
+        "/api/days/{local_date}/": {
+            "get": {
+                "operationId": "getDay",
+                "summary": "Read one local day",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "local_date",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "description": "The phone's local calendar date, YYYY-MM-DD.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "days"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Day"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Invalid local date."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Authentication error."
+                    }
+                }
+            }
+        },
+        "/api/entries/": {
+            "post": {
+                "operationId": "createManualEntry",
+                "summary": "Log one food manually",
+                "tags": [
+                    "entries"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ManualEntryCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ManualEntryCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ManualEntryCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FoodEntry"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Validation error."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Authentication error."
+                    }
+                }
+            }
+        },
         "/api/health/": {
             "get": {
                 "operationId": "health",
@@ -793,6 +927,176 @@
                     ""
                 ]
             },
+            "Day": {
+                "type": "object",
+                "properties": {
+                    "local_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "targets": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DayTarget"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "calories": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,2})?$"
+                    },
+                    "protein_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,2})?$"
+                    },
+                    "fiber_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,2})?$"
+                    },
+                    "entries": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FoodEntry"
+                        }
+                    }
+                },
+                "required": [
+                    "calories",
+                    "entries",
+                    "fiber_g",
+                    "local_date",
+                    "protein_g",
+                    "targets"
+                ]
+            },
+            "DayTarget": {
+                "type": "object",
+                "properties": {
+                    "calories": {
+                        "type": "integer"
+                    },
+                    "protein_g": {
+                        "type": "integer"
+                    },
+                    "fiber_g": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "calories",
+                    "fiber_g",
+                    "protein_g"
+                ]
+            },
+            "FoodEntry": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "source": {
+                        "$ref": "#/components/schemas/FoodEntrySourceEnum"
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "eaten_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "calories": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "protein_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "fiber_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FoodItem"
+                        }
+                    }
+                },
+                "required": [
+                    "calories",
+                    "description",
+                    "eaten_at",
+                    "fiber_g",
+                    "id",
+                    "items",
+                    "protein_g",
+                    "source"
+                ]
+            },
+            "FoodEntrySourceEnum": {
+                "enum": [
+                    "manual",
+                    "photo",
+                    "recent"
+                ],
+                "type": "string",
+                "description": "* `manual` - Manual\n* `photo` - Photo\n* `recent` - Recent"
+            },
+            "FoodItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "portion_label": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "quantity": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$"
+                    },
+                    "calories": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "protein_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "fiber_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "calories",
+                    "fiber_g",
+                    "id",
+                    "name",
+                    "protein_g",
+                    "quantity"
+                ]
+            },
             "GoalEnum": {
                 "enum": [
                     "cut",
@@ -842,6 +1146,70 @@
                 ],
                 "type": "string",
                 "description": "* `ok` - ok\n* `unhealthy` - unhealthy"
+            },
+            "ManualEntryCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "local_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                    },
+                    "eaten_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "item": {
+                        "$ref": "#/components/schemas/ManualItemWriteRequest"
+                    }
+                },
+                "required": [
+                    "eaten_at",
+                    "item",
+                    "local_date",
+                    "timezone"
+                ]
+            },
+            "ManualItemWriteRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "quantity": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$"
+                    },
+                    "calories": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "protein_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "fiber_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "calories",
+                    "fiber_g",
+                    "name",
+                    "protein_g",
+                    "quantity"
+                ]
             },
             "PatchedUserSettingsRequest": {
                 "type": "object",
@@ -1080,14 +1448,6 @@
                 "type": "string",
                 "description": "**Clear it with an empty string, not with `null`.** Every other clearable field here takes `null`; this one is a blank-string column and takes `\"\"`. A form that clears itself by sending `null` everywhere gets a 400 on this field alone.\n\n* `female` - Female\n* `male` - Male"
             },
-            "SourceEnum": {
-                "enum": [
-                    "onboarding",
-                    "manual"
-                ],
-                "type": "string",
-                "description": "* `onboarding` - Onboarding\n* `manual` - Manual edit"
-            },
             "TargetProposal": {
                 "type": "object",
                 "description": "What the formula produced, what it was held to, and why.\n\n`baseline` is kept beside `targets` so doc 15's result screen can show\n`BASELINE 2180 -> SET 2150`. The two are equal for almost everyone, and the\nscreen shows the line only when they differ.\n\nNothing is persisted. The user accepts a proposal by posting it to\n`/api/targets/`, which is where a `TargetVersion` gets created.",
@@ -1216,7 +1576,7 @@
                     "source": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/SourceEnum"
+                                "$ref": "#/components/schemas/TargetVersionSourceEnum"
                             }
                         ],
                         "readOnly": true
@@ -1280,6 +1640,14 @@
                     "fiber_g",
                     "protein_g"
                 ]
+            },
+            "TargetVersionSourceEnum": {
+                "enum": [
+                    "onboarding",
+                    "manual"
+                ],
+                "type": "string",
+                "description": "* `onboarding` - Onboarding\n* `manual` - Manual edit"
             },
             "Targets": {
                 "type": "object",

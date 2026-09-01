@@ -40,6 +40,16 @@ For every ticket:
 - Upload review-only screenshots to the GitHub PR description or a PR comment.
   Do not commit screenshots only for PR review. Reuse an existing tracked image
   by URL when appropriate.
+- After the GitHub attachments are verified, delete that PR's local temporary
+  screenshot files. The PR attachment is the retained review artifact.
+- For authenticated screenshots, prefer the real local API and a local
+  screenshot-only user. If Apple authorization is unavailable in web or the
+  simulator, an agent may add a temporary, uncommitted review-mode session.
+  Keep its user, token, and state local. Never commit or push the bypass, a JWT,
+  production data, or production credentials. Remove the harness immediately
+  after capture, rerun the affected checks, and use `git status` and `git diff`
+  to prove that only intended PR files remain. A fixture-backed screenshot is
+  visual evidence only. Do not describe it as an end-to-end test.
 - A design mockup can be a labeled visual reference. It does not replace a live
   simulator, device, or web capture as proof of the implementation.
 - A non-UI PR states that screenshots are not applicable.

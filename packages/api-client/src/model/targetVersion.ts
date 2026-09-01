@@ -5,7 +5,7 @@
  * Typed contract consumed by apps/mobile via packages/api-client.
  * OpenAPI spec version: 0.1.0
  */
-import type { SourceEnum } from "./sourceEnum";
+import type { TargetVersionSourceEnum } from "./targetVersionSourceEnum";
 
 export interface TargetVersion {
   readonly id: number;
@@ -15,7 +15,7 @@ export interface TargetVersion {
   readonly protein_g: number;
   /** Daily fiber target, in grams. */
   readonly fiber_g: number;
-  readonly source: SourceEnum;
+  readonly source: TargetVersionSourceEnum;
   /** Plain-English explanation of the numbers, shown under WHY THESE NUMBERS on screen 9f. Around 60 words, naming the deficit, the rate, and why protein is set from body weight. Empty for a manual edit. */
   readonly rationale: string;
   readonly effective_from: string;

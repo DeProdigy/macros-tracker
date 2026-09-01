@@ -1,4 +1,4 @@
-import { listTargets, type SourceEnum, type TargetVersion } from "@macros/api-client";
+import { listTargets, type TargetVersion, type TargetVersionSourceEnum } from "@macros/api-client";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -22,7 +22,7 @@ const displayDate = (date: string) =>
 
 // Keep this exhaustive. If the API adds a source, TypeScript makes this screen
 // choose honest copy instead of silently calling the new source Manual.
-const SOURCE_LABELS: Record<SourceEnum, string> = {
+const SOURCE_LABELS: Record<TargetVersionSourceEnum, string> = {
   onboarding: "ONBOARDING",
   manual: "MANUAL",
 };

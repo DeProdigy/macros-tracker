@@ -22,7 +22,14 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CreateManualEntry400,
+  CreateManualEntry401,
+  Day,
+  FoodEntry,
+  GetDay400,
+  GetDay401,
   Health,
+  ManualEntryCreateRequest,
   PatchedUserSettingsRequest,
   Ping,
   PresignUploadRequestRequest,
@@ -395,6 +402,266 @@ export const useRefreshSession = <TError = void, TContext = unknown>(
   TContext
 > => {
   const mutationOptions = getRefreshSessionMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+
+/**
+ * @summary Read one local day
+ */
+export type getDayResponse200 = {
+  data: Day;
+  status: 200;
+};
+
+export type getDayResponse400 = {
+  data: GetDay400;
+  status: 400;
+};
+
+export type getDayResponse401 = {
+  data: GetDay401;
+  status: 401;
+};
+
+export type getDayResponseSuccess = getDayResponse200 & {
+  headers: Headers;
+};
+export type getDayResponseError = (getDayResponse400 | getDayResponse401) & {
+  headers: Headers;
+};
+
+export type getDayResponse = getDayResponseSuccess | getDayResponseError;
+
+export const getGetDayUrl = (localDate: string) => {
+  return `/api/days/${localDate}/`;
+};
+
+export const getDay = async (localDate: string, options?: RequestInit): Promise<getDayResponse> => {
+  return customFetch<getDayResponse>(getGetDayUrl(localDate), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDayQueryKey = (localDate?: string) => {
+  return [`/api/days/${localDate}/`] as const;
+};
+
+export const getGetDayQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDay>>,
+  TError = GetDay400 | GetDay401,
+>(
+  localDate: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDay>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDayQueryKey(localDate);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDay>>> = ({ signal }) =>
+    getDay(localDate, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!localDate, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDay>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetDayQueryResult = NonNullable<Awaited<ReturnType<typeof getDay>>>;
+export type GetDayQueryError = GetDay400 | GetDay401;
+
+export function useGetDay<
+  TData = Awaited<ReturnType<typeof getDay>>,
+  TError = GetDay400 | GetDay401,
+>(
+  localDate: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDay>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDay>>,
+          TError,
+          Awaited<ReturnType<typeof getDay>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetDay<
+  TData = Awaited<ReturnType<typeof getDay>>,
+  TError = GetDay400 | GetDay401,
+>(
+  localDate: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDay>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDay>>,
+          TError,
+          Awaited<ReturnType<typeof getDay>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetDay<
+  TData = Awaited<ReturnType<typeof getDay>>,
+  TError = GetDay400 | GetDay401,
+>(
+  localDate: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDay>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Read one local day
+ */
+
+export function useGetDay<
+  TData = Awaited<ReturnType<typeof getDay>>,
+  TError = GetDay400 | GetDay401,
+>(
+  localDate: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDay>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetDayQueryOptions(localDate, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
+/**
+ * @summary Log one food manually
+ */
+export type createManualEntryResponse201 = {
+  data: FoodEntry;
+  status: 201;
+};
+
+export type createManualEntryResponse400 = {
+  data: CreateManualEntry400;
+  status: 400;
+};
+
+export type createManualEntryResponse401 = {
+  data: CreateManualEntry401;
+  status: 401;
+};
+
+export type createManualEntryResponseSuccess = createManualEntryResponse201 & {
+  headers: Headers;
+};
+export type createManualEntryResponseError = (
+  createManualEntryResponse400 | createManualEntryResponse401
+) & {
+  headers: Headers;
+};
+
+export type createManualEntryResponse =
+  createManualEntryResponseSuccess | createManualEntryResponseError;
+
+export const getCreateManualEntryUrl = () => {
+  return `/api/entries/`;
+};
+
+export const createManualEntry = async (
+  manualEntryCreateRequest: ManualEntryCreateRequest,
+  options?: RequestInit,
+): Promise<createManualEntryResponse> => {
+  return customFetch<createManualEntryResponse>(getCreateManualEntryUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(manualEntryCreateRequest),
+  });
+};
+
+export const getCreateManualEntryMutationOptions = <
+  TError = CreateManualEntry400 | CreateManualEntry401,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createManualEntry>>,
+    TError,
+    { data: ManualEntryCreateRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createManualEntry>>,
+  TError,
+  { data: ManualEntryCreateRequest },
+  TContext
+> => {
+  const mutationKey = ["createManualEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createManualEntry>>,
+    { data: ManualEntryCreateRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createManualEntry(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateManualEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createManualEntry>>
+>;
+export type CreateManualEntryMutationBody = ManualEntryCreateRequest;
+export type CreateManualEntryMutationError = CreateManualEntry400 | CreateManualEntry401;
+
+/**
+ * @summary Log one food manually
+ */
+export const useCreateManualEntry = <
+  TError = CreateManualEntry400 | CreateManualEntry401,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createManualEntry>>,
+      TError,
+      { data: ManualEntryCreateRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createManualEntry>>,
+  TError,
+  { data: ManualEntryCreateRequest },
+  TContext
+> => {
+  const mutationOptions = getCreateManualEntryMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

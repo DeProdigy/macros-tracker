@@ -2,7 +2,7 @@
 linear_id: 71088d12-87a0-4e70-a097-a572e6e4e660
 linear_title: "CANONICAL — AI Delivery Workflow and Vertical Slices"
 linear_url: https://linear.app/hintology/document/canonical-ai-delivery-workflow-and-vertical-slices-9ee8ed45bf0e
-linear_updated_at: 2026-08-31T21:03:22.726Z
+linear_updated_at: 2026-09-01T02:37:34.196Z
 generated: true
 ---
 
@@ -115,7 +115,24 @@ Every pull request that changes user-visible UI includes screenshots before revi
 * Use a live simulator, device, or web render. A design mockup may be labeled as a design reference, but it is not proof of the implementation.
 * Upload review-only screenshots to the GitHub PR description or a PR comment. Do not commit screenshots solely for PR review.
 * If an existing tracked image is reused, embed its existing URL instead of adding a duplicate.
+* After the GitHub attachments are verified, delete that PR's local temporary screenshot files. The PR attachment is the retained review artifact.
 * A non-UI PR states that screenshots are not applicable.
+
+#### Authenticated screenshot procedure
+
+Use the real local API and local database when the target screen needs an authenticated account. Create a screenshot-only local user and seed only the state needed for the review.
+
+Apple authorization is not available in every web or simulator session. When it blocks screenshot capture, an agent can use a temporary review harness with these controls:
+
+1. Keep the harness as an uncommitted working-tree change. A typical harness starts `SessionProvider` with the local screenshot user and supplies a local development token to the API client.
+2. Activate it only with an explicit local environment flag such as `EXPO_PUBLIC_REVIEW_MODE=1` and run it only against localhost.
+3. Never use or expose a production user, production token, production data, Apple credential, or other production secret.
+4. Prefer database-seeded state. Use temporary client fixtures only when the state cannot be reached through the local stack. A fixture-backed image proves presentation only. It is not an end-to-end test.
+5. Capture every required state, upload the files to the PR, and verify that GitHub renders each attachment.
+6. Remove all temporary session, token, and fixture code before the next commit. Rerun TypeScript, lint, and the affected tests. Use `git status` and `git diff` to confirm that only intended PR changes remain.
+7. Stop local review services and delete that PR's temporary screenshot files after upload verification.
+
+Do not add a reusable authentication bypass to production code for screenshot convenience. A future E2E harness must have its own reviewed design and test-only boundary.
 
 Alex decides when to merge.
 

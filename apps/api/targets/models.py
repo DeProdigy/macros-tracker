@@ -14,11 +14,9 @@ class TargetVersionQuerySet(models.QuerySet["TargetVersion"]):
         nothing here enforces that -- MAC-40's create endpoint has to, by
         rejecting a future date. If that ever changes, this method starts
         returning a version that has not begun applying and its name becomes a
-        lie. The honest alternative would be
-        `.filter(effective_from__lte=<the caller's local date>).first()`, which
-        forces every caller to supply a date. Heavier than anything needs today,
-        and the note is here so the trade is visible from this file rather than
-        buried in a serializer validator.
+        lie. Call `effective_on(user, local_date)` when the caller owns a local
+        date. That method excludes future versions and applies the date rule in
+        one place.
 
         Orders explicitly rather than leaning on `Meta.ordering`. This is a
         queryset method, so it is chainable: `TargetVersion.objects
@@ -36,6 +34,25 @@ class TargetVersionQuerySet(models.QuerySet["TargetVersion"]):
         `.latest()` would force every caller to wrap this in a try block.
         """
         return self.for_user(user).order_by("-created_at", "-id").first()
+
+    def effective_on(self, user, local_date) -> "TargetVersion | None":
+        """Return the newest target version that applies to a local date.
+
+        A day captures this row when its first entry creates the `DailyLog`.
+        Empty-day reads use the same query without creating a log. This keeps
+        GET requests read-only and gives both paths one definition of the
+        targets that apply on a date.
+
+        `effective_from` comes before `created_at` in the ordering. A later
+        correction for the same effective date wins. A future target never
+        leaks into an earlier day.
+        """
+        return (
+            self.for_user(user)
+            .filter(effective_from__lte=local_date)
+            .order_by("-effective_from", "-created_at", "-id")
+            .first()
+        )
 
 
 class TargetVersion(models.Model):
