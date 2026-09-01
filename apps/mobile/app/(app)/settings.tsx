@@ -8,7 +8,7 @@
 
 import { ApiError, getCurrentTarget, type TargetVersion } from "@macros/api-client";
 import { Link, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { usePalette } from "@/lib/palette";
@@ -26,6 +26,14 @@ export default function SettingsScreen() {
   const [target, setTarget] = useState<TargetVersion | null>(null);
   const [targetsLoading, setTargetsLoading] = useState(true);
   const [targetsFailure, setTargetsFailure] = useState(false);
+  const mounted = useRef(true);
+
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
 
   const loadTargets = useCallback(async (isActive: () => boolean = () => true) => {
     setTargetsLoading(true);
@@ -33,20 +41,20 @@ export default function SettingsScreen() {
 
     try {
       const response = await getCurrentTarget();
-      if (!isActive()) return;
+      if (!mounted.current || !isActive()) return;
       if (response.status !== 200) {
         throw new Error(`Unexpected current target status: ${response.status}`);
       }
       setTarget(response.data);
     } catch (error) {
-      if (!isActive()) return;
+      if (!mounted.current || !isActive()) return;
       if (error instanceof ApiError && error.status === 404) {
         setTarget(null);
       } else {
         setTargetsFailure(true);
       }
     } finally {
-      if (isActive()) setTargetsLoading(false);
+      if (mounted.current && isActive()) setTargetsLoading(false);
     }
   }, []);
 

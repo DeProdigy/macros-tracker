@@ -67,7 +67,10 @@ export default function TargetHistoryScreen() {
       </Text>
 
       {versions === null && !failed ? (
-        <View accessibilityLabel="Loading target history" style={styles.state}>
+        <View
+          accessibilityLabel="Loading target history"
+          style={[styles.state, { borderColor: palette.hairline }]}
+        >
           <ActivityIndicator color={palette.accent} />
         </View>
       ) : failed ? (
