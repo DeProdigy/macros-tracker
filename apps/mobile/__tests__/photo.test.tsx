@@ -45,6 +45,9 @@ const mockSavePhotoAnalysis = savePhotoAnalysis as jest.MockedFunction<typeof sa
 const mockLibrary = ImagePicker.launchImageLibraryAsync as jest.MockedFunction<
   typeof ImagePicker.launchImageLibraryAsync
 >;
+const mockCamera = ImagePicker.launchCameraAsync as jest.MockedFunction<
+  typeof ImagePicker.launchCameraAsync
+>;
 const mockCameraPermission = ImagePicker.requestCameraPermissionsAsync as jest.MockedFunction<
   typeof ImagePicker.requestCameraPermissionsAsync
 >;
@@ -83,6 +86,7 @@ beforeEach(() => {
     canceled: false,
     assets: [{ uri: "file:///meal.jpg", width: 1200, height: 900 }],
   } as never);
+  mockCamera.mockResolvedValue({ canceled: true } as never);
   mockUploadAndAnalyze.mockResolvedValue(result);
   mockSavePhotoAnalysis.mockResolvedValue({ status: 201 } as never);
   mockInvalidateQueries.mockResolvedValue(undefined);
@@ -125,5 +129,19 @@ describe("PhotoScreen", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: "OPEN SETTINGS" })).toBeTruthy());
     expect(screen.getByRole("button", { name: "CHOOSE LIBRARY" })).toBeTruthy();
+  });
+
+  it("clears the denied banner as soon as camera permission is granted", async () => {
+    mockCameraPermission
+      .mockResolvedValueOnce({ granted: false } as never)
+      .mockResolvedValueOnce({ granted: true } as never);
+    render(<PhotoScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "TAKE PHOTO" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "OPEN SETTINGS" })).toBeTruthy());
+
+    fireEvent.press(screen.getByRole("button", { name: "TAKE PHOTO" }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "OPEN SETTINGS" })).toBeNull());
+    expect(mockCamera).toHaveBeenCalledTimes(1);
   });
 });

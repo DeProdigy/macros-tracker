@@ -3,6 +3,7 @@ import {
   createEntry,
   presignUpload,
   type FoodAnalysisResult,
+  type PresignUploadResponse,
 } from "@macros/api-client";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 
@@ -21,21 +22,23 @@ export async function uploadAndAnalyze(
     format: SaveFormat.JPEG,
   });
   const imageResponse = await fetch(compressed.uri);
+  if (!imageResponse.ok) throw new Error("Could not read compressed photo.");
   const blob = await imageResponse.blob();
   const upload = await presignUpload({ content_type: "image/jpeg", content_length: blob.size });
-  if (upload.status !== 200) throw new Error("Could not prepare photo upload.");
-  const put = await fetch(upload.data.url, {
+  // customFetch throws ApiError for every non-2xx generated response. Orval's
+  // union does not encode that runtime invariant, so narrow only after the call.
+  const uploadData = upload.data as PresignUploadResponse;
+  const put = await fetch(uploadData.url, {
     method: "PUT",
     headers: { "Content-Type": "image/jpeg", "Content-Length": String(blob.size) },
     body: blob,
   });
   if (!put.ok) throw new Error("Could not upload photo.");
   const analysis = await createFoodAnalysis({
-    photo_key: upload.data.key,
+    photo_key: uploadData.key,
     description: description.trim(),
   });
-  if (analysis.status !== 201) throw new Error("Could not analyze photo.");
-  return analysis.data;
+  return analysis.data as FoodAnalysisResult;
 }
 
 export async function savePhotoAnalysis(

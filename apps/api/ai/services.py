@@ -7,6 +7,7 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
+from pydantic import ValidationError as PydanticValidationError
 from rest_framework.exceptions import ValidationError
 
 from accounts.models import User
@@ -248,6 +249,38 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
         raise
     try:
         result = analyze_food(image_url=image_url, description=description)
+    except ProviderOutputError as exc:
+        fail_food_analysis_call(
+            call,
+            category="invalid_model_output",
+            message="Provider returned invalid structured output.",
+            response_payload=exc.payload,
+            raw_response=exc.raw_response,
+            provider_request_id=exc.provider_request_id,
+            input_tokens=exc.input_tokens,
+            output_tokens=exc.output_tokens,
+            usage=exc.usage,
+            estimated_cost_usd=_estimated_cost(exc.input_tokens, exc.output_tokens),
+            billable=True,
+        )
+        raise
+    except PydanticValidationError:
+        # Provider dispatch happened, but the structured response did not match
+        # the provider schema. This is invalid output and remains billable.
+        fail_food_analysis_call(
+            call,
+            category="invalid_model_output",
+            message="Provider returned invalid structured output.",
+            billable=True,
+        )
+        raise
+    except Exception:
+        fail_food_analysis_call(
+            call, category="provider_failure", message="Food analysis provider failed."
+        )
+        raise
+
+    try:
         candidate = {"analysis_id": call.pk, **result.payload}
         items = [
             {
@@ -274,26 +307,6 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
             message="Provider returned invalid structured output.",
             response_payload=candidate if "candidate" in locals() else None,
             billable=True,
-        )
-        raise
-    except ProviderOutputError as exc:
-        fail_food_analysis_call(
-            call,
-            category="invalid_model_output",
-            message="Provider returned invalid structured output.",
-            response_payload=exc.payload,
-            raw_response=exc.raw_response,
-            provider_request_id=exc.provider_request_id,
-            input_tokens=exc.input_tokens,
-            output_tokens=exc.output_tokens,
-            usage=exc.usage,
-            estimated_cost_usd=_estimated_cost(exc.input_tokens, exc.output_tokens),
-            billable=True,
-        )
-        raise
-    except Exception:
-        fail_food_analysis_call(
-            call, category="provider_failure", message="Food analysis provider failed."
         )
         raise
 

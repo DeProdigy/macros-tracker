@@ -1146,7 +1146,7 @@
             },
             "FoodAnalysisQuotaError": {
                 "type": "object",
-                "description": "Stable response shape for MAC-54's future analysis endpoint.",
+                "description": "Stable rolling-quota response for the food analysis endpoint.",
                 "properties": {
                     "code": {
                         "type": "string",

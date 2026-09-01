@@ -40,6 +40,7 @@ export default function PhotoScreen() {
         setPermissionDenied(true);
         return;
       }
+      setPermissionDenied(false);
     }
     const result = camera
       ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 1 })

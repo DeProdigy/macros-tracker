@@ -4,7 +4,7 @@ from .constants import FOOD_ANALYSIS_QUOTA_CODE, ROLLING_WINDOW
 
 
 class FoodAnalysisQuotaErrorSerializer(serializers.Serializer):
-    """Stable response shape for MAC-54's future analysis endpoint."""
+    """Stable rolling-quota response for the food analysis endpoint."""
 
     code = serializers.SerializerMethodField()
     detail = serializers.CharField()

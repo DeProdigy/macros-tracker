@@ -327,6 +327,15 @@ def test_promoted_key_is_the_presigned_key_with_the_prefix_swapped(
     assert promoted.removeprefix("entries/") == key.removeprefix("pending/")
 
 
+def test_analysis_copy_ownership_error_uses_public_request_field(db, monkeypatch):
+    monkeypatch.setattr(services, "_client", lambda: pytest.fail("must not reach storage"))
+
+    with pytest.raises(ValidationError) as caught:
+        services.copy_analysis_object_to_entry(key="analyses/999/abc.jpg", user_id=7)
+
+    assert "analysis_id" in caught.value.detail
+
+
 # --- Download presigning ----------------------------------------------------
 
 

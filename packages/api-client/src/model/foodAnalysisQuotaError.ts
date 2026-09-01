@@ -7,7 +7,7 @@
  */
 
 /**
- * Stable response shape for MAC-54's future analysis endpoint.
+ * Stable rolling-quota response for the food analysis endpoint.
  */
 export interface FoodAnalysisQuotaError {
   readonly code: string;

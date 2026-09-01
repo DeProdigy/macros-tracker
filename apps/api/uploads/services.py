@@ -202,7 +202,7 @@ def copy_analysis_object_to_entry(*, key: str, user_id: int) -> str:
     """Copy a retained analysis image to its future entry key without deleting the source."""
     expected_prefix = f"{ANALYSES_PREFIX}{user_id}/"
     if not key.startswith(expected_prefix):
-        raise ValidationError({"analysis": ["The analysis photo does not belong to this user."]})
+        raise ValidationError({"analysis_id": ["The analysis photo does not belong to this user."]})
     destination = f"{ENTRIES_PREFIX}{key.removeprefix(ANALYSES_PREFIX)}"
     client = _client()
     bucket = settings.R2_BUCKET_NAME

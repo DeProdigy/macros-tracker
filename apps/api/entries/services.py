@@ -114,7 +114,14 @@ def create_photo_entry(
         pk=analysis_id, user=user, status=FoodAnalysisCall.Status.SUCCEEDED
     )
     old_key = str(call.request_payload["photo_key"])
-    entry_key = copy_analysis_object_to_entry(key=old_key, user_id=user.pk)
+    try:
+        entry_key = copy_analysis_object_to_entry(key=old_key, user_id=user.pk)
+    except Exception:
+        # Another save may have committed and removed the analysis source after
+        # this request read its key. Report the stable already-saved result.
+        if FoodEntry.objects.filter(analysis_call_id=analysis_id).exists():
+            raise ValueError("This analysis was already saved.") from None
+        raise
     try:
         entry, committed_old_key = _store_photo_entry(
             user=user,

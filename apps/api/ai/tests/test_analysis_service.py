@@ -139,3 +139,27 @@ def test_incomplete_provider_output_keeps_usage_and_failure_details():
     assert call.provider_request_id == "resp_incomplete"
     assert call.output_tokens == 2048
     assert call.quota_debited_at is not None
+
+
+@pytest.mark.django_db
+def test_internal_provider_type_error_keeps_provider_failure_category():
+    user = User.objects.create_user(email="provider-bug@example.com", timezone="UTC")
+    with (
+        mock.patch(
+            "uploads.services.retain_analysis_object",
+            return_value=f"analyses/{user.pk}/meal.jpg",
+        ),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+        mock.patch("ai.services.analyze_food", side_effect=TypeError("provider bug")),
+        pytest.raises(TypeError, match="provider bug"),
+    ):
+        create_food_analysis(
+            user=user,
+            photo_key=f"pending/{user.pk}/meal.jpg",
+            description="",
+        )
+
+    call = FoodAnalysisCall.objects.get()
+    assert call.status == FoodAnalysisCall.Status.FAILED
+    assert call.failure_category == "provider_failure"
+    assert call.quota_debited_at is None

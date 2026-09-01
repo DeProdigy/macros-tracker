@@ -140,3 +140,42 @@ def test_failed_duplicate_save_does_not_delete_committed_entry_photo():
         )
 
     delete.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_missing_analysis_source_after_concurrent_save_reports_already_saved():
+    user = User.objects.create_user(email="stale-copy@example.com", timezone="UTC")
+    call = FoodAnalysisCall.objects.create(
+        user=user,
+        status=FoodAnalysisCall.Status.SUCCEEDED,
+        started_at=datetime(2026, 9, 1, tzinfo=UTC),
+        completed_at=datetime(2026, 9, 1, tzinfo=UTC),
+        request_payload={"photo_key": f"analyses/{user.pk}/meal.jpg", "description": ""},
+        response_payload={"items": []},
+    )
+    day = DailyLog.objects.create(user=user, local_date=date(2026, 9, 1))
+    FoodEntry.objects.create(
+        daily_log=day,
+        source=FoodEntry.Source.PHOTO,
+        description="Meal",
+        eaten_at=datetime(2026, 9, 1, 17, tzinfo=UTC),
+        calories="1.00",
+        protein_g="1.00",
+        fiber_g="1.00",
+        photo_key=f"entries/{user.pk}/meal.jpg",
+        analysis_call=call,
+    )
+
+    with (
+        mock.patch(
+            "entries.services.copy_analysis_object_to_entry",
+            side_effect=RuntimeError("source disappeared"),
+        ),
+        pytest.raises(ValueError, match="already saved"),
+    ):
+        create_photo_entry(
+            user=user,
+            local_date=date(2026, 9, 1),
+            eaten_at=datetime(2026, 9, 1, 17, tzinfo=UTC),
+            analysis_id=call.pk,
+        )
