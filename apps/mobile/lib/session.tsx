@@ -13,6 +13,7 @@ import {
   deleteCurrentSession,
   deleteCurrentUser,
   getCurrentUser,
+  updateCurrentUser,
   type User,
 } from "@macros/api-client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,9 +26,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { AppState } from "react-native";
 
 import { installApiAuth, setSessionExpiredListener } from "./api-auth";
 import { clearTokens, getRefreshToken, getTokens } from "./auth-storage";
+import { deviceTimezone, type TimezoneSyncStatus } from "./local-day";
 
 // At module load, so the bridge is in place before the first render can fire a
 // request. See installApiAuth for why this is not an effect.
@@ -45,6 +48,8 @@ export type SessionState =
   { status: "loading" } | { status: "signedOut" } | { status: "signedIn"; user: User };
 
 export type Session = SessionState & {
+  /** Whether day-based requests can safely use the cached user timezone. */
+  timezoneStatus: TimezoneSyncStatus;
   /** Adopts the user the sign-in call returned. Tokens are already in the Keychain by then. */
   signIn: (user: User) => void;
   /**
@@ -127,6 +132,7 @@ export const useSession = (): Session => {
 
 export const SessionProvider = ({ children }: { children: ReactNode }) => {
   const [state, setState] = useState<SessionState>({ status: "loading" });
+  const [timezoneStatus, setTimezoneStatus] = useState<TimezoneSyncStatus>("unavailable");
   const queryClient = useQueryClient();
 
   /**
@@ -216,6 +222,64 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // Authentication succeeds before this best-effort synchronization starts.
+  // Food requests need the result, but the user can still reach the app when
+  // timezone detection or the network is unavailable.
+  useEffect(() => {
+    if (state.status !== "signedIn") {
+      setTimezoneStatus("unavailable");
+      return;
+    }
+
+    let active = true;
+    let syncInFlight = false;
+
+    const syncTimezone = async () => {
+      if (syncInFlight) return;
+      syncInFlight = true;
+      setTimezoneStatus("syncing");
+
+      const timezone = deviceTimezone();
+      if (!timezone) {
+        if (active) setTimezoneStatus("unavailable");
+        syncInFlight = false;
+        return;
+      }
+
+      if (timezone === state.user.timezone) {
+        if (active) setTimezoneStatus("ready");
+        syncInFlight = false;
+        return;
+      }
+
+      try {
+        const response = await updateCurrentUser({ timezone });
+        if (!active) return;
+        if (response.status !== 200) {
+          throw new Error(`Unexpected user-update status: ${response.status}`);
+        }
+        setState((current) =>
+          current.status === "signedIn" ? { status: "signedIn", user: response.data } : current,
+        );
+        setTimezoneStatus("ready");
+      } catch {
+        if (active) setTimezoneStatus("unavailable");
+      } finally {
+        syncInFlight = false;
+      }
+    };
+
+    void syncTimezone();
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") void syncTimezone();
+    });
+
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [state.status, state.status === "signedIn" ? state.user.timezone : null]);
+
   const signIn = useCallback((user: User) => setState({ status: "signedIn", user }), []);
 
   const updateUser = useCallback(
@@ -256,8 +320,8 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
   }, [endSession]);
 
   const value = useMemo<Session>(
-    () => ({ ...state, signIn, updateUser, signOut, deleteAccount }),
-    [state, signIn, updateUser, signOut, deleteAccount],
+    () => ({ ...state, timezoneStatus, signIn, updateUser, signOut, deleteAccount }),
+    [state, timezoneStatus, signIn, updateUser, signOut, deleteAccount],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

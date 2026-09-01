@@ -249,6 +249,29 @@ def test_patch_updates_the_timezone(authed_client, user):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("timezone_name", ["America/New_York", "Pacific/Auckland", "UTC"])
+def test_patch_accepts_iana_timezones(authed_client, user, timezone_name):
+    response = authed_client.patch(reverse("users:current"), {"timezone": timezone_name})
+
+    assert response.status_code == status.HTTP_200_OK
+    user.refresh_from_db()
+    assert user.timezone == timezone_name
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("timezone_name", ["-04:00", "+12:00", "Not/A_Timezone"])
+def test_patch_rejects_offsets_and_unknown_timezones(authed_client, user, timezone_name):
+    original = user.timezone
+
+    response = authed_client.patch(reverse("users:current"), {"timezone": timezone_name})
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "timezone" in response.data
+    user.refresh_from_db()
+    assert user.timezone == original
+
+
+@pytest.mark.django_db
 def test_patch_cannot_set_onboarding_completed(authed_client, user):
     """The hole a shared read/write serializer would open.
 

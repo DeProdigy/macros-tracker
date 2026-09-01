@@ -1,5 +1,7 @@
 import { createTarget, getCurrentUser, type Targets, type User } from "@macros/api-client";
 
+import { localIsoDate } from "./local-day";
+
 /** The target row exists, but the client could not refresh its user snapshot. */
 export class TargetSavedButRefreshFailed extends Error {
   constructor() {
@@ -7,12 +9,6 @@ export class TargetSavedButRefreshFailed extends Error {
     this.name = "TargetSavedButRefreshFailed";
   }
 }
-
-/** Format the phone's local calendar date without converting through UTC. */
-export const localIsoDate = (now: Date): string => {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-};
 
 /**
  * Create one append-only target version and return the refreshed user.
