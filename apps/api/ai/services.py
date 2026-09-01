@@ -14,7 +14,7 @@ from accounts.models import User
 from .constants import ROLLING_WINDOW
 from .exceptions import FoodAnalysisQuotaExceeded
 from .models import FoodAnalysisCall
-from .provider import analyze_food
+from .provider import ProviderOutputError, analyze_food
 
 
 @dataclass(frozen=True)
@@ -260,11 +260,18 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
             billable=True,
         )
         raise
-    except ValueError:
+    except ProviderOutputError as exc:
         fail_food_analysis_call(
             call,
             category="invalid_model_output",
             message="Provider returned invalid structured output.",
+            response_payload=exc.payload,
+            raw_response=exc.raw_response,
+            provider_request_id=exc.provider_request_id,
+            input_tokens=exc.input_tokens,
+            output_tokens=exc.output_tokens,
+            usage=exc.usage,
+            estimated_cost_usd=_estimated_cost(exc.input_tokens, exc.output_tokens),
             billable=True,
         )
         raise

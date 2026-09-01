@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from ai.models import FoodAnalysisCall
-from ai.provider import ProviderResult
+from ai.provider import ProviderOutputError, ProviderResult
 from ai.services import create_food_analysis
 
 User = get_user_model()
@@ -55,3 +55,43 @@ def test_service_retains_photo_and_records_validated_provider_result():
     assert result["calories"] == "540.00"
     assert len(result["items"]) == 2
     analyze.assert_called_once_with(image_url="https://signed.invalid", description="two thighs")
+
+
+@pytest.mark.django_db
+def test_incomplete_provider_output_keeps_usage_and_failure_details():
+    user = User.objects.create_user(email="incomplete@example.com", timezone="UTC")
+    error = ProviderOutputError(
+        payload={
+            "status": "incomplete",
+            "incomplete_details": {"reason": "max_output_tokens"},
+            "output": [],
+        },
+        raw_response="",
+        provider_request_id="resp_incomplete",
+        input_tokens=900,
+        output_tokens=2048,
+        usage={"input_tokens": 900, "output_tokens": 2048},
+    )
+    with (
+        mock.patch(
+            "uploads.services.retain_analysis_object",
+            return_value=f"analyses/{user.pk}/meal.jpg",
+        ),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+        mock.patch("ai.services.analyze_food", side_effect=error),
+        pytest.raises(ProviderOutputError),
+    ):
+        create_food_analysis(
+            user=user,
+            photo_key=f"pending/{user.pk}/meal.jpg",
+            description="",
+        )
+
+    call = FoodAnalysisCall.objects.get()
+    assert call.status == FoodAnalysisCall.Status.FAILED
+    assert call.failure_category == "invalid_model_output"
+    assert call.response_payload is not None
+    assert call.response_payload["incomplete_details"]["reason"] == "max_output_tokens"
+    assert call.provider_request_id == "resp_incomplete"
+    assert call.output_tokens == 2048
+    assert call.quota_debited_at is not None

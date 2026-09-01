@@ -33,6 +33,16 @@ class ProviderResult:
     usage: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class ProviderOutputError(Exception):
+    payload: dict[str, Any]
+    raw_response: str
+    provider_request_id: str
+    input_tokens: int | None
+    output_tokens: int | None
+    usage: dict[str, Any]
+
+
 def analyze_food(*, image_url: str, description: str) -> ProviderResult:
     """Call OpenAI through one replaceable provider boundary."""
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -40,6 +50,8 @@ def analyze_food(*, image_url: str, description: str) -> ProviderResult:
     response = client.responses.parse(
         model=settings.OPENAI_FOOD_ANALYSIS_MODEL,
         store=False,
+        reasoning={"effort": "minimal"},
+        max_output_tokens=4096,
         input=[
             {
                 "role": "system",
@@ -60,10 +72,25 @@ def analyze_food(*, image_url: str, description: str) -> ProviderResult:
         text_format=ProviderFoodAnalysis,
     )
     parsed = response.output_parsed
-    if parsed is None:
-        raise ValueError("The provider returned no structured food analysis.")
     usage_obj = response.usage
     usage = usage_obj.model_dump(mode="json") if usage_obj is not None else {}
+    if parsed is None:
+        raise ProviderOutputError(
+            payload={
+                "status": response.status,
+                "incomplete_details": (
+                    response.incomplete_details.model_dump(mode="json")
+                    if response.incomplete_details is not None
+                    else None
+                ),
+                "output": [item.model_dump(mode="json") for item in response.output],
+            },
+            raw_response=response.output_text,
+            provider_request_id=response.id,
+            input_tokens=getattr(usage_obj, "input_tokens", None),
+            output_tokens=getattr(usage_obj, "output_tokens", None),
+            usage=usage,
+        )
     return ProviderResult(
         payload=parsed.model_dump(mode="json"),
         provider_request_id=response.id,
