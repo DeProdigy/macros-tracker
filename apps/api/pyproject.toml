@@ -44,7 +44,7 @@ python_version = "3.12"
 # the DRF plugin does the same for serializers/views.
 plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
 # Only check our code (not the venv); migrations are generated.
-files = ["accounts", "config", "entries", "targets", "uploads", "manage.py"]
+files = ["accounts", "ai", "config", "entries", "targets", "uploads", "manage.py"]
 exclude = ['/migrations/']
 check_untyped_defs = true
 warn_redundant_casts = true

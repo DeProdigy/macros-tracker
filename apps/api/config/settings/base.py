@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "accounts",
     "targets",
     "entries",
+    "ai",
     "uploads",
 ]
 
@@ -167,6 +168,18 @@ R2_ALLOWED_UPLOAD_TYPES = {
     "image/webp": "webp",
     "image/heic": "heic",
 }
+
+# Paid food-analysis safety control (MAC-49).
+#
+# The rows in `ai.FoodAnalysisCall` are the source of truth. This value is only
+# the admission ceiling; there is deliberately no second monthly counter that
+# can drift. A reservation occupies a slot briefly while the request crosses
+# the provider boundary. If the worker dies before dispatch, the timeout gives
+# that capacity back while retaining the audit row.
+FOOD_ANALYSIS_ROLLING_CALL_LIMIT = env.int("FOOD_ANALYSIS_ROLLING_CALL_LIMIT", default=500)
+FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS = env.int(
+    "FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS", default=300
+)
 
 
 # Caching.
