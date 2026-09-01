@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from django.conf import settings
@@ -15,6 +15,8 @@ from .constants import ROLLING_WINDOW
 from .exceptions import FoodAnalysisQuotaExceeded
 from .models import FoodAnalysisCall
 from .provider import ProviderOutputError, analyze_food
+
+TWOPLACES = Decimal("0.01")
 
 
 @dataclass(frozen=True)
@@ -212,6 +214,10 @@ def _estimated_cost(input_tokens: int | None, output_tokens: int | None) -> Deci
     ).quantize(Decimal("0.000001"))
 
 
+def _rounded_macro(value: Any) -> str:
+    return format(Decimal(str(value)).quantize(TWOPLACES, rounding=ROUND_HALF_UP), "f")
+
+
 def create_food_analysis(*, user: User, photo_key: str, description: str) -> dict[str, Any]:
     """Retain an image, call the provider, and return only locally validated output."""
     from uploads.services import presign_download, retain_analysis_object
@@ -243,15 +249,25 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
     try:
         result = analyze_food(image_url=image_url, description=description)
         candidate = {"analysis_id": call.pk, **result.payload}
-        items = candidate["items"]
+        items = [
+            {
+                **item,
+                **{
+                    field: _rounded_macro(item[field])
+                    for field in ("calories", "protein_g", "fiber_g")
+                },
+            }
+            for item in candidate["items"]
+        ]
+        candidate["items"] = items
         candidate.update(
-            calories=sum((Decimal(str(item["calories"])) for item in items), Decimal("0")),
-            protein_g=sum((Decimal(str(item["protein_g"])) for item in items), Decimal("0")),
-            fiber_g=sum((Decimal(str(item["fiber_g"])) for item in items), Decimal("0")),
+            calories=_rounded_macro(sum(Decimal(item["calories"]) for item in items)),
+            protein_g=_rounded_macro(sum(Decimal(item["protein_g"]) for item in items)),
+            fiber_g=_rounded_macro(sum(Decimal(item["fiber_g"]) for item in items)),
         )
         serializer = FoodAnalysisResultSerializer(data=candidate)
         serializer.is_valid(raise_exception=True)
-    except ValidationError:
+    except (InvalidOperation, KeyError, TypeError, ValueError, ValidationError):
         fail_food_analysis_call(
             call,
             category="invalid_model_output",

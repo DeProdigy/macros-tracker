@@ -354,6 +354,10 @@ SPECTACULAR_SETTINGS = {
     # output would show up as phantom diffs and break the MAC-16 drift check.
     "SORT_OPERATIONS": True,
     "SORT_OPERATION_PARAMETERS": True,
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "config.schema_hooks.require_entry_create_body",
+    ],
     # Enums are hoisted into shared components named after the *field*, so a
     # bare `status` ChoiceField becomes `StatusEnum` — a name the next
     # serializer with a `status` field would collide with, forcing one of them

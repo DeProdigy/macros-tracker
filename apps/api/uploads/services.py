@@ -34,6 +34,9 @@ from rest_framework.exceptions import ValidationError
 # The orphan this handles: a client presigns, uploads, then crashes before
 # saving the entry. Without cleanup those objects accumulate forever, silently,
 # on the bill.
+#
+# Retained `analyses/` objects do not have a lifecycle rule or cleanup owner yet.
+# Failed or abandoned analyses remain there until a reconciliation job is added.
 PENDING_PREFIX = "pending/"
 ANALYSES_PREFIX = "analyses/"
 ENTRIES_PREFIX = "entries/"

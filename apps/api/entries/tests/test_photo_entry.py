@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from ai.models import FoodAnalysisCall
-from entries.models import FoodEntry
+from entries.models import DailyLog, FoodEntry
 from entries.services import create_photo_entry
 
 User = get_user_model()
@@ -99,3 +99,44 @@ def test_photo_save_rejects_another_users_analysis():
     assert response.status_code == 400
     assert response.data["analysis_id"]
     assert FoodEntry.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_failed_duplicate_save_does_not_delete_committed_entry_photo():
+    user = User.objects.create_user(email="duplicate@example.com", timezone="UTC")
+    call = FoodAnalysisCall.objects.create(
+        user=user,
+        status=FoodAnalysisCall.Status.SUCCEEDED,
+        started_at=datetime(2026, 9, 1, tzinfo=UTC),
+        completed_at=datetime(2026, 9, 1, tzinfo=UTC),
+        request_payload={"photo_key": f"analyses/{user.pk}/meal.jpg", "description": ""},
+        response_payload={"items": []},
+    )
+    day = DailyLog.objects.create(user=user, local_date=date(2026, 9, 1))
+    entry_key = f"entries/{user.pk}/meal.jpg"
+    FoodEntry.objects.create(
+        daily_log=day,
+        source=FoodEntry.Source.PHOTO,
+        description="Meal",
+        eaten_at=datetime(2026, 9, 1, 17, tzinfo=UTC),
+        calories="1.00",
+        protein_g="1.00",
+        fiber_g="1.00",
+        photo_key=entry_key,
+        analysis_call=call,
+    )
+
+    with (
+        mock.patch("entries.services.copy_analysis_object_to_entry", return_value=entry_key),
+        mock.patch("entries.services._store_photo_entry", side_effect=ValueError("saved")),
+        mock.patch("entries.services.delete_object") as delete,
+        pytest.raises(ValueError, match="saved"),
+    ):
+        create_photo_entry(
+            user=user,
+            local_date=date(2026, 9, 1),
+            eaten_at=datetime(2026, 9, 1, 17, tzinfo=UTC),
+            analysis_id=call.pk,
+        )
+
+    delete.assert_not_called()

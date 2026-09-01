@@ -124,7 +124,13 @@ def create_photo_entry(
             photo_key=entry_key,
         )
     except Exception:
-        delete_object(key=entry_key)
+        # A concurrent save can have committed this deterministic key while this
+        # request waited on the analysis row lock. Never delete that entry's photo.
+        committed = FoodEntry.objects.filter(
+            analysis_call_id=analysis_id, photo_key=entry_key
+        ).exists()
+        if not committed:
+            delete_object(key=entry_key)
         raise
     try:
         delete_object(key=committed_old_key)

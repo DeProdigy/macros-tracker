@@ -58,6 +58,50 @@ def test_service_retains_photo_and_records_validated_provider_result():
 
 
 @pytest.mark.django_db
+def test_service_rounds_three_decimal_provider_values_before_recording_success():
+    user = User.objects.create_user(email="rounding@example.com", timezone="UTC")
+    provider = ProviderResult(
+        payload={
+            "items": [
+                {
+                    "name": "Yogurt",
+                    "portion": "1 cup",
+                    "calories": "123.456",
+                    "protein_g": "10.005",
+                    "fiber_g": "0.333",
+                }
+            ]
+        },
+        provider_request_id="resp_rounding",
+        model="gpt-5-mini-2026-08-01",
+        input_tokens=100,
+        output_tokens=50,
+        usage={"input_tokens": 100, "output_tokens": 50},
+    )
+    with (
+        mock.patch(
+            "uploads.services.retain_analysis_object",
+            return_value=f"analyses/{user.pk}/meal.jpg",
+        ),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+        mock.patch("ai.services.analyze_food", return_value=provider),
+    ):
+        result = create_food_analysis(
+            user=user,
+            photo_key=f"pending/{user.pk}/meal.jpg",
+            description="",
+        )
+
+    call = FoodAnalysisCall.objects.get()
+    assert call.status == FoodAnalysisCall.Status.SUCCEEDED
+    assert result["items"][0]["calories"] == "123.46"
+    assert result["items"][0]["protein_g"] == "10.01"
+    assert result["items"][0]["fiber_g"] == "0.33"
+    assert result["calories"] == "123.46"
+    assert call.response_payload == result
+
+
+@pytest.mark.django_db
 def test_incomplete_provider_output_keeps_usage_and_failure_details():
     user = User.objects.create_user(email="incomplete@example.com", timezone="UTC")
     error = ProviderOutputError(
