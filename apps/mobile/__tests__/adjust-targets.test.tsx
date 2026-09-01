@@ -16,7 +16,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 
 import AdjustTargets from "../app/targets";
 import { useSession } from "../lib/session";
-import { localIsoDate } from "../lib/target-save";
+import { localIsoDate } from "../lib/local-day";
 
 const mockReplace = jest.fn();
 const mockBack = jest.fn();

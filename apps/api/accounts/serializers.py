@@ -6,6 +6,8 @@ OpenAPI schema is precise enough to generate useful client types from. An
 every permission relation into the mobile app's types.
 """
 
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from rest_framework import serializers
 
 from accounts.models import Sex, User
@@ -223,6 +225,16 @@ class UserSettingsSerializer(serializers.ModelSerializer):
                 ),
             },
         }
+
+    def validate_timezone(self, value: str) -> str:
+        """Accept a database-backed IANA name, never a numeric offset."""
+        try:
+            ZoneInfo(value)
+        except (ValueError, ZoneInfoNotFoundError):
+            raise serializers.ValidationError(
+                "Enter an IANA timezone name such as America/New_York."
+            ) from None
+        return value
 
     def validate_dietary_constraints(self, value: str | None) -> str:
         """Accept null and store empty.

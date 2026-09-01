@@ -19,10 +19,9 @@ from targets.models import TargetVersion
 
 # How far past the server's own date a client's calendar date may sit.
 #
-# The client sends `effective_from` because the server cannot work out the user's
-# today: `User.timezone` is "UTC" for everyone until MAC-48 lands, and doc 02
-# already has the client send its own `local_date` for `DailyLog` for the same
-# reason.
+# The client sends `effective_from` because the phone owns the intended calendar
+# day. A stored timezone can lag behind a device change, so the server must not
+# derive the date from its clock and the last synchronized timezone.
 #
 # So "not in the future" cannot be checked exactly. A device in UTC+14 is
 # legitimately a day ahead of the server, and refusing that would break the

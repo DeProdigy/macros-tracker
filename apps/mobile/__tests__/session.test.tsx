@@ -6,20 +6,22 @@
  * the provider settles into, and what it tears down on the way out.
  */
 
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import {
   ApiError,
   deleteCurrentSession,
   deleteCurrentUser,
   getCurrentUser,
+  updateCurrentUser,
   type User,
 } from "@macros/api-client";
 import { act, render, screen, waitFor } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Text } from "react-native";
+import { AppState, Text } from "react-native";
 
 import { setSessionExpiredListener } from "../lib/api-auth";
 import { clearTokens, getRefreshToken, getTokens } from "../lib/auth-storage";
+import { deviceTimezone } from "../lib/local-day";
 import { SessionProvider, useSession } from "../lib/session";
 
 jest.mock("@macros/api-client", () => {
@@ -37,6 +39,7 @@ jest.mock("@macros/api-client", () => {
   return {
     ApiError,
     getCurrentUser: jest.fn(),
+    updateCurrentUser: jest.fn(),
     deleteCurrentSession: jest.fn(),
     deleteCurrentUser: jest.fn(),
   };
@@ -48,6 +51,8 @@ jest.mock("../lib/auth-storage", () => ({
   clearTokens: jest.fn(),
 }));
 
+jest.mock("../lib/local-day", () => ({ deviceTimezone: jest.fn() }));
+
 // The bridge install is a module-load side effect that would reach into
 // expo-secure-store. Captured here instead, so the expiry callback can be
 // fired by hand.
@@ -57,6 +62,7 @@ jest.mock("../lib/api-auth", () => ({
 }));
 
 const mockGetCurrentUser = getCurrentUser as jest.MockedFunction<typeof getCurrentUser>;
+const mockUpdateCurrentUser = updateCurrentUser as jest.MockedFunction<typeof updateCurrentUser>;
 const mockDeleteCurrentSession = deleteCurrentSession as jest.MockedFunction<
   typeof deleteCurrentSession
 >;
@@ -64,11 +70,12 @@ const mockDeleteCurrentUser = deleteCurrentUser as jest.MockedFunction<typeof de
 const mockGetTokens = getTokens as jest.MockedFunction<typeof getTokens>;
 const mockGetRefreshToken = getRefreshToken as jest.MockedFunction<typeof getRefreshToken>;
 const mockClearTokens = clearTokens as jest.MockedFunction<typeof clearTokens>;
+const mockDeviceTimezone = deviceTimezone as jest.MockedFunction<typeof deviceTimezone>;
 const mockSetSessionExpiredListener = setSessionExpiredListener as jest.MockedFunction<
   typeof setSessionExpiredListener
 >;
 
-const user = { id: 1, name: "Alex", onboarding_completed: true } as User;
+const user = { id: 1, name: "Alex", onboarding_completed: true, timezone: "UTC" } as User;
 
 /**
  * Renders the session as text and hands back the live value.
@@ -103,6 +110,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockClearTokens.mockResolvedValue(undefined);
   mockGetRefreshToken.mockResolvedValue("stored-refresh");
+  mockDeviceTimezone.mockReturnValue(null);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe("restoring at launch", () => {
@@ -174,6 +186,100 @@ describe("restoring at launch", () => {
 
     await waitFor(() => expect(screen.getByText("signedOut")).toBeTruthy());
     expect(mockClearTokens).not.toHaveBeenCalled();
+  });
+});
+
+describe("timezone synchronization", () => {
+  beforeEach(() => {
+    mockGetTokens.mockResolvedValue({ access: "a", refresh: "r" });
+    mockGetCurrentUser.mockResolvedValue({ status: 200, data: user } as Awaited<
+      ReturnType<typeof getCurrentUser>
+    >);
+  });
+
+  it("patches a changed device timezone after session restore", async () => {
+    mockDeviceTimezone.mockReturnValue("America/New_York");
+    mockUpdateCurrentUser.mockResolvedValue({
+      status: 200,
+      data: { ...user, timezone: "America/New_York" },
+    } as Awaited<ReturnType<typeof updateCurrentUser>>);
+
+    const { captured } = renderSession();
+
+    await waitFor(() => expect(captured.current?.timezoneStatus).toBe("ready"));
+    expect(mockUpdateCurrentUser).toHaveBeenCalledWith({ timezone: "America/New_York" });
+    expect(captured.current).toMatchObject({
+      status: "signedIn",
+      user: { timezone: "America/New_York" },
+    });
+  });
+
+  it("patches a changed device timezone after a new sign-in", async () => {
+    mockGetTokens.mockResolvedValue(null);
+    mockDeviceTimezone.mockReturnValue("America/New_York");
+    mockUpdateCurrentUser.mockResolvedValue({
+      status: 200,
+      data: { ...user, timezone: "America/New_York" },
+    } as Awaited<ReturnType<typeof updateCurrentUser>>);
+    const { captured } = renderSession();
+    await waitFor(() => expect(captured.current?.status).toBe("signedOut"));
+
+    await act(async () => {
+      captured.current?.signIn(user);
+    });
+
+    await waitFor(() => expect(captured.current?.timezoneStatus).toBe("ready"));
+    expect(mockUpdateCurrentUser).toHaveBeenCalledWith({ timezone: "America/New_York" });
+  });
+
+  it("does not patch when the stored timezone already matches", async () => {
+    mockDeviceTimezone.mockReturnValue("UTC");
+
+    const { captured } = renderSession();
+
+    await waitFor(() => expect(captured.current?.timezoneStatus).toBe("ready"));
+    expect(mockUpdateCurrentUser).not.toHaveBeenCalled();
+  });
+
+  it("keeps authentication and disables day work when synchronization fails", async () => {
+    mockDeviceTimezone.mockReturnValue("Pacific/Auckland");
+    mockUpdateCurrentUser.mockRejectedValue(new TypeError("Network request failed"));
+
+    const { captured } = renderSession();
+
+    await waitFor(() =>
+      expect(mockUpdateCurrentUser).toHaveBeenCalledWith({ timezone: "Pacific/Auckland" }),
+    );
+    await waitFor(() => expect(captured.current?.timezoneStatus).toBe("unavailable"));
+    expect(captured.current?.status).toBe("signedIn");
+  });
+
+  it("syncs a timezone change when the app returns to the foreground", async () => {
+    let appStateListener: ((state: string) => void) | null = null;
+    jest.spyOn(AppState, "addEventListener").mockImplementation((_event, listener) => {
+      appStateListener = listener as (state: string) => void;
+      return { remove: jest.fn() };
+    });
+    mockDeviceTimezone.mockReturnValue("UTC");
+    mockUpdateCurrentUser.mockResolvedValue({
+      status: 200,
+      data: { ...user, timezone: "Pacific/Auckland" },
+    } as Awaited<ReturnType<typeof updateCurrentUser>>);
+    const { captured } = renderSession();
+    await waitFor(() => expect(captured.current?.timezoneStatus).toBe("ready"));
+
+    mockDeviceTimezone.mockReturnValue("Pacific/Auckland");
+    await act(async () => {
+      appStateListener?.("active");
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(mockUpdateCurrentUser).toHaveBeenCalledWith({ timezone: "Pacific/Auckland" }),
+    );
+    await waitFor(() =>
+      expect(captured.current).toMatchObject({ user: { timezone: "Pacific/Auckland" } }),
+    );
   });
 });
 
