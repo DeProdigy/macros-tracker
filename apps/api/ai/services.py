@@ -49,7 +49,9 @@ def rolling_usage(*, user: User, at: datetime | None = None) -> int:
     return _occupying_calls(user=user, at=_now(at)).count()
 
 
-def _retry_at(*, occupying: QuerySet[FoodAnalysisCall], at: datetime) -> datetime:
+def _retry_at(
+    *, occupying: QuerySet[FoodAnalysisCall], at: datetime, used: int, limit: int
+) -> datetime:
     timeout = timedelta(seconds=settings.FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS)
     releases = []
     for call in occupying.only("quota_debited_at", "started_at"):
@@ -57,7 +59,9 @@ def _retry_at(*, occupying: QuerySet[FoodAnalysisCall], at: datetime) -> datetim
             releases.append(call.quota_debited_at + ROLLING_WINDOW)
         else:
             releases.append(call.started_at + timeout)
-    return min(releases, default=at)
+    releases.sort()
+    release_index = used - limit
+    return releases[release_index] if release_index < len(releases) else at
 
 
 @transaction.atomic
@@ -75,7 +79,7 @@ def reserve_food_analysis_call(
         raise FoodAnalysisQuotaExceeded(
             limit=limit,
             used=used,
-            retry_at=_retry_at(occupying=occupying, at=now),
+            retry_at=_retry_at(occupying=occupying, at=now, used=used, limit=limit),
         )
     return FoodAnalysisCall.objects.create(
         user=locked_user,
@@ -85,6 +89,7 @@ def reserve_food_analysis_call(
     )
 
 
+@transaction.atomic
 def mark_provider_called(
     call: FoodAnalysisCall,
     *,
@@ -92,14 +97,23 @@ def mark_provider_called(
     model: str,
     at: datetime | None = None,
 ) -> FoodAnalysisCall:
-    if call.status != FoodAnalysisCall.Status.RESERVED:
+    now = _now(at)
+    User.objects.select_for_update().get(pk=call.user_id)
+    locked_call = FoodAnalysisCall.objects.select_for_update().get(pk=call.pk)
+    if locked_call.status != FoodAnalysisCall.Status.RESERVED:
         raise ValueError("Only a reserved food-analysis call can be dispatched.")
-    if call.provider_called_at is not None:
+    if locked_call.provider_called_at is not None:
         raise ValueError("The food-analysis call was already dispatched.")
+    reservation_cutoff = now - timedelta(seconds=settings.FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS)
+    if locked_call.started_at <= reservation_cutoff:
+        raise ValueError("The food-analysis reservation expired before provider dispatch.")
+    locked_call.provider = provider
+    locked_call.model = model
+    locked_call.provider_called_at = now
+    locked_call.save(update_fields=("provider", "model", "provider_called_at"))
     call.provider = provider
     call.model = model
-    call.provider_called_at = _now(at)
-    call.save(update_fields=("provider", "model", "provider_called_at"))
+    call.provider_called_at = now
     return call
 
 

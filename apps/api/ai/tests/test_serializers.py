@@ -21,3 +21,19 @@ def test_quota_error_has_a_stable_machine_readable_shape():
         "window_days": 30,
         "retry_at": "2026-09-02T12:00:00Z",
     }
+
+
+def test_callers_cannot_override_the_stable_code_or_window():
+    serializer = FoodAnalysisQuotaErrorSerializer(
+        {
+            "code": "different",
+            "detail": "Photo analysis limit reached.",
+            "limit": 500,
+            "used": 500,
+            "window_days": 7,
+            "retry_at": datetime(2026, 9, 2, 12, tzinfo=UTC),
+        }
+    )
+
+    assert serializer.data["code"] == "food_analysis_quota_exceeded"
+    assert serializer.data["window_days"] == 30

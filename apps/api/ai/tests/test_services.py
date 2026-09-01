@@ -1,3 +1,5 @@
+import copy
+import pickle
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from decimal import Decimal
@@ -36,6 +38,17 @@ def test_request_snapshot_refuses_a_presigned_url():
             photo_key="https://r2.example.test/signed?secret=credential",
             description="meal",
         )
+
+
+def test_quota_exception_can_cross_process_boundaries():
+    error = FoodAnalysisQuotaExceeded(
+        limit=500,
+        used=500,
+        retry_at=timezone.now(),
+    )
+
+    assert copy.deepcopy(error) == error
+    assert pickle.loads(pickle.dumps(error)) == error
 
 
 @pytest.fixture
@@ -203,6 +216,55 @@ def test_boundary_rejection_is_typed_and_creates_no_extra_row(user, settings):
     assert caught.value.window_days == 30
     assert caught.value.retry_at == now - timedelta(days=2) + timedelta(days=30)
     assert FoodAnalysisCall.objects.filter(user=user).count() == 2
+
+
+@pytest.mark.django_db
+def test_retry_time_frees_enough_slots_after_limit_is_lowered(user, settings):
+    settings.FOOD_ANALYSIS_ROLLING_CALL_LIMIT = 1
+    now = timezone.now()
+    debit_times = [now - timedelta(days=3), now - timedelta(days=2), now - timedelta(days=1)]
+    for debited_at in debit_times:
+        FoodAnalysisCall.objects.create(
+            user=user,
+            status=FoodAnalysisCall.Status.SUCCEEDED,
+            started_at=debited_at,
+            provider_called_at=debited_at,
+            quota_debited_at=debited_at,
+        )
+
+    with pytest.raises(FoodAnalysisQuotaExceeded) as caught:
+        reserve_food_analysis_call(user=user, request=request(), at=now)
+
+    assert caught.value.used == 3
+    assert caught.value.retry_at == debit_times[-1] + timedelta(days=30)
+
+
+@pytest.mark.django_db
+def test_expired_reservation_cannot_dispatch_after_capacity_is_reused(user, settings):
+    settings.FOOD_ANALYSIS_ROLLING_CALL_LIMIT = 1
+    settings.FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS = 300
+    started = timezone.now()
+    expired = reserve_food_analysis_call(user=user, request=request(), at=started)
+    replacement = reserve_food_analysis_call(
+        user=user,
+        request=request(),
+        at=started + timedelta(seconds=301),
+    )
+
+    with pytest.raises(ValueError, match="expired before provider dispatch"):
+        mark_provider_called(
+            expired,
+            provider="openai",
+            model="food-model",
+            at=started + timedelta(seconds=301),
+        )
+
+    mark_provider_called(
+        replacement,
+        provider="openai",
+        model="food-model",
+        at=started + timedelta(seconds=301),
+    )
 
 
 @pytest.mark.django_db
