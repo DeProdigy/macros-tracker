@@ -44,6 +44,7 @@ urlpatterns = [
     path("api/entries/", include("entries.urls_entries")),
     path("api/days/", include("entries.urls_days")),
     path("api/uploads/", include("uploads.urls")),
+    path("api/analyses/", include("ai.urls")),
     # --- OpenAPI schema ---
     # The committed packages/api-client/openapi.json is generated from the same
     # introspection via `manage.py spectacular`; these routes are for humans.

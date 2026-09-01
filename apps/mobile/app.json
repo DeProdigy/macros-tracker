@@ -41,6 +41,13 @@
       "expo-apple-authentication",
       "expo-font",
       "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Macros Tracker to photograph meals for macro estimates.",
+          "photosPermission": "Allow Macros Tracker to choose meal photos for macro estimates."
+        }
+      ],
       "expo-status-bar",
       "expo-web-browser"
     ],

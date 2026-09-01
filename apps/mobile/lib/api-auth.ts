@@ -14,6 +14,7 @@
 import {
   ApiError,
   configureSession,
+  getCreateFoodAnalysisUrl,
   getCreateSessionUrl,
   getRefreshSessionUrl,
   refreshSession,
@@ -122,15 +123,13 @@ export const installApiAuth = (): void => {
     // written out, so a route rename cannot leave this list quietly stale.
     publicPaths: [getCreateSessionUrl(), getRefreshSessionUrl()],
 
-    // The refresh call opts out of the client-side deadline, and this is the
-    // one genuinely uncomfortable trade in MAC-31.
+    // Refresh and paid analysis opt out of the client-side deadline. Aborting
+    // either request does not cancel server work. A retry can lose a rotated
+    // token or create a second paid model call.
     //
-    // Aborting a refresh does not cancel it. The server may already have
-    // rotated the token and blacklisted the one still sitting in our Keychain,
-    // and we would be throwing away the only copy of its replacement. That is
-    // the self-inflicted logout this whole ticket exists to prevent, so a
-    // 15-second timer is the wrong tool. iOS's own request timeout, around 60
-    // seconds, remains the backstop.
-    untimedPaths: [getRefreshSessionUrl()],
+    // The server can already have rotated a token or dispatched the provider.
+    // A 15-second client timer cannot undo either effect. iOS's request timeout
+    // remains the backstop for these two paths.
+    untimedPaths: [getRefreshSessionUrl(), getCreateFoodAnalysisUrl()],
   });
 };

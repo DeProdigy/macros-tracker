@@ -7,6 +7,7 @@ production.py — import everything from here and override what differs.
 """
 
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import environ
@@ -181,6 +182,15 @@ FOOD_ANALYSIS_ROLLING_CALL_LIMIT = env.int("FOOD_ANALYSIS_ROLLING_CALL_LIMIT", d
 FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS = env.int(
     "FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS", default=300
 )
+OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+OPENAI_FOOD_ANALYSIS_MODEL = env("OPENAI_FOOD_ANALYSIS_MODEL", default="gpt-5-mini")
+# Prices are configuration because provider prices can change independently of a deploy.
+OPENAI_FOOD_INPUT_USD_PER_MILLION = Decimal(
+    env("OPENAI_FOOD_INPUT_USD_PER_MILLION", default="0.25")
+)
+OPENAI_FOOD_OUTPUT_USD_PER_MILLION = Decimal(
+    env("OPENAI_FOOD_OUTPUT_USD_PER_MILLION", default="2.00")
+)
 
 
 # Caching.
@@ -344,6 +354,10 @@ SPECTACULAR_SETTINGS = {
     # output would show up as phantom diffs and break the MAC-16 drift check.
     "SORT_OPERATIONS": True,
     "SORT_OPERATION_PARAMETERS": True,
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "config.schema_hooks.require_entry_create_body",
+    ],
     # Enums are hoisted into shared components named after the *field*, so a
     # bare `status` ChoiceField becomes `StatusEnum` — a name the next
     # serializer with a `status` field would collide with, forcing one of them

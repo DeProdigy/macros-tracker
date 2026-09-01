@@ -5,22 +5,16 @@
  * Typed contract consumed by apps/mobile via packages/api-client.
  * OpenAPI spec version: 0.1.0
  */
-import type { FoodEntrySourceEnum } from "./foodEntrySourceEnum";
-import type { FoodItem } from "./foodItem";
 
-export interface FoodEntry {
-  readonly id: number;
-  source: FoodEntrySourceEnum;
+export interface FoodAnalysisItem {
   /** @maxLength 200 */
-  description: string;
-  eaten_at: string;
+  name: string;
+  /** @maxLength 100 */
+  portion: string;
   /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
   calories: string;
   /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
   protein_g: string;
   /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
   fiber_g: string;
-  /** @nullable */
-  readonly photo_url: string | null;
-  items: FoodItem[];
 }

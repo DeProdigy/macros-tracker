@@ -1,4 +1,4 @@
-import { createManualEntry, getGetDayQueryKey } from "@macros/api-client";
+import { createEntry, getGetDayQueryKey } from "@macros/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useState } from "react";
@@ -40,7 +40,7 @@ export default function LogFoodScreen() {
     setError(null);
     try {
       const context = localDayContext(session.timezoneStatus, session.user.timezone);
-      const response = await createManualEntry({
+      const response = await createEntry({
         ...context,
         eaten_at: new Date().toISOString(),
         item: {
@@ -78,7 +78,9 @@ export default function LogFoodScreen() {
       <Text style={[styles.eyebrow, { color: palette.accent }]}>LOG FOOD</Text>
       <Text style={[styles.title, { color: palette.text }]}>Manual entry</Text>
       <View style={styles.choices}>
-        <Text style={{ color: palette.dimText }}>PHOTO</Text>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/photo")}>
+          <Text style={{ color: palette.accent }}>PHOTO</Text>
+        </Pressable>
         <Text style={{ color: palette.dimText }}>RECENTS</Text>
         <Text style={{ color: palette.accent }}>MANUAL</Text>
       </View>
@@ -113,7 +115,7 @@ export default function LogFoodScreen() {
         <Text style={styles.saveText}>{saving ? "SAVING" : "SAVE FOOD"}</Text>
       </Pressable>
       <Text style={[styles.note, { color: palette.dimText }]}>
-        Photo and Recents arrive in follow-up slices.
+        Recents arrive in a follow-up slice.
       </Text>
     </ScrollView>
   );

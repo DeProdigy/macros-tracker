@@ -28,6 +28,7 @@ jest.mock("@macros/api-client", () => {
     ApiError,
     configureSession: jest.fn(),
     refreshSession: jest.fn(),
+    getCreateFoodAnalysisUrl: () => "/api/analyses/",
     getCreateSessionUrl: () => "/api/auth/sessions/",
     getRefreshSessionUrl: () => "/api/auth/sessions/refresh/",
   };

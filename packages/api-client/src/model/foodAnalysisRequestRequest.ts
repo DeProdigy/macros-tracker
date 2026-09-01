@@ -6,4 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CreateManualEntry400 = { [key: string]: unknown };
+export interface FoodAnalysisRequestRequest {
+  /**
+   * @minLength 1
+   * @maxLength 512
+   */
+  photo_key: string;
+  /** @maxLength 200 */
+  description?: string;
+}

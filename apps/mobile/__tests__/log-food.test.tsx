@@ -9,14 +9,14 @@ const mockCreateManualEntry = jest.fn<(...args: unknown[]) => Promise<{ status: 
 const mockInvalidateQueries = jest.fn<() => Promise<void>>();
 
 jest.mock("@macros/api-client", () => ({
-  createManualEntry: (...args: unknown[]) => mockCreateManualEntry(...args),
+  createEntry: (...args: unknown[]) => mockCreateManualEntry(...args),
   getGetDayQueryKey: (localDate: string) => ["day", localDate],
 }));
 jest.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 jest.mock("expo-router", () => ({
-  router: { back: jest.fn(), replace: jest.fn() },
+  router: { back: jest.fn(), push: jest.fn(), replace: jest.fn() },
 }));
 jest.mock("../lib/local-day", () => {
   class LocalDayUnavailable extends Error {}
@@ -46,6 +46,14 @@ beforeEach(() => {
 });
 
 describe("LogFoodScreen", () => {
+  it("opens the Photo flow", () => {
+    render(<LogFoodScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "PHOTO" }));
+
+    expect(router.push).toHaveBeenCalledWith("/photo");
+  });
+
   it("rejects a form without a name or positive macro", () => {
     render(<LogFoodScreen />);
 

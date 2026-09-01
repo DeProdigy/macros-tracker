@@ -6,6 +6,98 @@
         "description": "Typed contract consumed by apps/mobile via packages/api-client."
     },
     "paths": {
+        "/api/analyses/": {
+            "post": {
+                "operationId": "createFoodAnalysis",
+                "description": "Retains one uploaded meal photo and creates a validated itemized estimate. The request consumes rolling quota only after paid provider work.",
+                "summary": "Create an itemized food analysis",
+                "tags": [
+                    "analyses"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FoodAnalysisRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FoodAnalysisRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FoodAnalysisRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FoodAnalysisResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Validation error."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Authentication error."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FoodAnalysisQuotaError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FoodAnalysisError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/auth/sessions/": {
             "post": {
                 "operationId": "createSession",
@@ -294,8 +386,8 @@
         },
         "/api/entries/": {
             "post": {
-                "operationId": "createManualEntry",
-                "summary": "Log one food manually",
+                "operationId": "createEntry",
+                "summary": "Log one Manual or Photo food entry",
                 "tags": [
                     "entries"
                 ],
@@ -303,17 +395,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/ManualEntryCreateRequest"
+                                "$ref": "#/components/schemas/EntryCreateRequestRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/ManualEntryCreateRequest"
+                                "$ref": "#/components/schemas/EntryCreateRequestRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/ManualEntryCreateRequest"
+                                "$ref": "#/components/schemas/EntryCreateRequestRequest"
                             }
                         }
                     },
@@ -992,6 +1084,157 @@
                     "protein_g"
                 ]
             },
+            "EntryCreateRequestRequest": {
+                "oneOf": [
+                    {
+                        "$ref": "#/components/schemas/ManualEntryCreateRequest"
+                    },
+                    {
+                        "$ref": "#/components/schemas/PhotoEntryCreateRequest"
+                    }
+                ]
+            },
+            "FoodAnalysisError": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "detail"
+                ]
+            },
+            "FoodAnalysisItem": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "portion": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "calories": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "protein_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "fiber_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "calories",
+                    "fiber_g",
+                    "name",
+                    "portion",
+                    "protein_g"
+                ]
+            },
+            "FoodAnalysisQuotaError": {
+                "type": "object",
+                "description": "Stable rolling-quota response for the food analysis endpoint.",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "used": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "window_days": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "retry_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "code",
+                    "detail",
+                    "limit",
+                    "retry_at",
+                    "used",
+                    "window_days"
+                ]
+            },
+            "FoodAnalysisRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "photo_key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                    },
+                    "description": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "photo_key"
+                ]
+            },
+            "FoodAnalysisResult": {
+                "type": "object",
+                "properties": {
+                    "analysis_id": {
+                        "type": "integer"
+                    },
+                    "calories": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,2})?$"
+                    },
+                    "protein_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,2})?$"
+                    },
+                    "fiber_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,2})?$"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FoodAnalysisItem"
+                        }
+                    }
+                },
+                "required": [
+                    "analysis_id",
+                    "calories",
+                    "fiber_g",
+                    "items",
+                    "protein_g"
+                ]
+            },
             "FoodEntry": {
                 "type": "object",
                 "properties": {
@@ -1025,6 +1268,11 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
                     },
+                    "photo_url": {
+                        "type": "string",
+                        "nullable": true,
+                        "readOnly": true
+                    },
                     "items": {
                         "type": "array",
                         "items": {
@@ -1039,6 +1287,7 @@
                     "fiber_g",
                     "id",
                     "items",
+                    "photo_url",
                     "protein_g",
                     "source"
                 ]
@@ -1267,6 +1516,34 @@
                         "maxLength": 500
                     }
                 }
+            },
+            "PhotoEntryCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "local_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                    },
+                    "eaten_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "analysis_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "analysis_id",
+                    "eaten_at",
+                    "local_date",
+                    "timezone"
+                ]
             },
             "Ping": {
                 "type": "object",
