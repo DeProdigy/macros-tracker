@@ -22,8 +22,12 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CreateManualEntry400,
+  CreateManualEntry401,
   Day,
   FoodEntry,
+  GetDay400,
+  GetDay401,
   Health,
   ManualEntryCreateRequest,
   PatchedUserSettingsRequest,
@@ -402,18 +406,21 @@ export const useRefreshSession = <TError = void, TContext = unknown>(
   return useMutation(mutationOptions, queryClient);
 };
 
+/**
+ * @summary Read one local day
+ */
 export type getDayResponse200 = {
   data: Day;
   status: 200;
 };
 
 export type getDayResponse400 = {
-  data: void;
+  data: GetDay400;
   status: 400;
 };
 
 export type getDayResponse401 = {
-  data: void;
+  data: GetDay401;
   status: 401;
 };
 
@@ -441,7 +448,10 @@ export const getGetDayQueryKey = (localDate?: string) => {
   return [`/api/days/${localDate}/`] as const;
 };
 
-export const getGetDayQueryOptions = <TData = Awaited<ReturnType<typeof getDay>>, TError = void>(
+export const getGetDayQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDay>>,
+  TError = GetDay400 | GetDay401,
+>(
   localDate: string,
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDay>>, TError, TData>>;
@@ -463,9 +473,12 @@ export const getGetDayQueryOptions = <TData = Awaited<ReturnType<typeof getDay>>
 };
 
 export type GetDayQueryResult = NonNullable<Awaited<ReturnType<typeof getDay>>>;
-export type GetDayQueryError = void;
+export type GetDayQueryError = GetDay400 | GetDay401;
 
-export function useGetDay<TData = Awaited<ReturnType<typeof getDay>>, TError = void>(
+export function useGetDay<
+  TData = Awaited<ReturnType<typeof getDay>>,
+  TError = GetDay400 | GetDay401,
+>(
   localDate: string,
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDay>>, TError, TData>> &
@@ -481,7 +494,10 @@ export function useGetDay<TData = Awaited<ReturnType<typeof getDay>>, TError = v
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-export function useGetDay<TData = Awaited<ReturnType<typeof getDay>>, TError = void>(
+export function useGetDay<
+  TData = Awaited<ReturnType<typeof getDay>>,
+  TError = GetDay400 | GetDay401,
+>(
   localDate: string,
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDay>>, TError, TData>> &
@@ -497,7 +513,10 @@ export function useGetDay<TData = Awaited<ReturnType<typeof getDay>>, TError = v
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-export function useGetDay<TData = Awaited<ReturnType<typeof getDay>>, TError = void>(
+export function useGetDay<
+  TData = Awaited<ReturnType<typeof getDay>>,
+  TError = GetDay400 | GetDay401,
+>(
   localDate: string,
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDay>>, TError, TData>>;
@@ -505,8 +524,14 @@ export function useGetDay<TData = Awaited<ReturnType<typeof getDay>>, TError = v
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Read one local day
+ */
 
-export function useGetDay<TData = Awaited<ReturnType<typeof getDay>>, TError = void>(
+export function useGetDay<
+  TData = Awaited<ReturnType<typeof getDay>>,
+  TError = GetDay400 | GetDay401,
+>(
   localDate: string,
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDay>>, TError, TData>>;
@@ -525,18 +550,21 @@ export function useGetDay<TData = Awaited<ReturnType<typeof getDay>>, TError = v
   return query;
 }
 
+/**
+ * @summary Log one food manually
+ */
 export type createManualEntryResponse201 = {
   data: FoodEntry;
   status: 201;
 };
 
 export type createManualEntryResponse400 = {
-  data: void;
+  data: CreateManualEntry400;
   status: 400;
 };
 
 export type createManualEntryResponse401 = {
-  data: void;
+  data: CreateManualEntry401;
   status: 401;
 };
 
@@ -568,7 +596,10 @@ export const createManualEntry = async (
   });
 };
 
-export const getCreateManualEntryMutationOptions = <TError = void, TContext = unknown>(options?: {
+export const getCreateManualEntryMutationOptions = <
+  TError = CreateManualEntry400 | CreateManualEntry401,
+  TContext = unknown,
+>(options?: {
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createManualEntry>>,
     TError,
@@ -605,9 +636,15 @@ export type CreateManualEntryMutationResult = NonNullable<
   Awaited<ReturnType<typeof createManualEntry>>
 >;
 export type CreateManualEntryMutationBody = ManualEntryCreateRequest;
-export type CreateManualEntryMutationError = void;
+export type CreateManualEntryMutationError = CreateManualEntry400 | CreateManualEntry401;
 
-export const useCreateManualEntry = <TError = void, TContext = unknown>(
+/**
+ * @summary Log one food manually
+ */
+export const useCreateManualEntry = <
+  TError = CreateManualEntry400 | CreateManualEntry401,
+  TContext = unknown,
+>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof createManualEntry>>,

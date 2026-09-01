@@ -80,4 +80,16 @@ describe("TodayScreen", () => {
     expect(screen.getByText("240.00 kcal")).toBeTruthy();
     expect(screen.getByText("36.00p · 4.00f")).toBeTruthy();
   });
+
+  it("shows an error without false zero totals when the day request fails", () => {
+    mockUseGetDay.mockReturnValue({ isError: true, isLoading: false });
+
+    render(<TodayScreen />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Could not load your day. Reopen the app to try again.",
+    );
+    expect(screen.queryByText("0.00")).toBeNull();
+    expect(screen.queryByText("Nothing logged yet")).toBeNull();
+  });
 });

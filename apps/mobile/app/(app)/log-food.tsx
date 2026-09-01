@@ -25,7 +25,7 @@ export default function LogFoodScreen() {
   if (session.status !== "signedIn") return null;
 
   const save = async () => {
-    const macros = [calories, protein, fiber];
+    const macros = [calories, protein, fiber].map((value) => (value.trim() === "" ? "0" : value));
     if (
       !name.trim() ||
       !validNumber(quantity) ||
@@ -43,7 +43,13 @@ export default function LogFoodScreen() {
       const response = await createManualEntry({
         ...context,
         eaten_at: new Date().toISOString(),
-        item: { name: name.trim(), quantity, calories, protein_g: protein, fiber_g: fiber },
+        item: {
+          name: name.trim(),
+          quantity,
+          calories: macros[0],
+          protein_g: macros[1],
+          fiber_g: macros[2],
+        },
       });
       if (response.status !== 201) throw new Error("Save failed");
       await queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) });

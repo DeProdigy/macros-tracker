@@ -232,13 +232,16 @@
         "/api/days/{local_date}/": {
             "get": {
                 "operationId": "getDay",
+                "summary": "Read one local day",
                 "parameters": [
                     {
                         "in": "path",
                         "name": "local_date",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date"
                         },
+                        "description": "The phone's local calendar date, YYYY-MM-DD.",
                         "required": true
                     }
                 ],
@@ -265,10 +268,26 @@
                         "description": ""
                     },
                     "400": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Invalid local date."
                     },
                     "401": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Authentication error."
                     }
                 }
             }
@@ -276,6 +295,7 @@
         "/api/entries/": {
             "post": {
                 "operationId": "createManualEntry",
+                "summary": "Log one food manually",
                 "tags": [
                     "entries"
                 ],
@@ -319,10 +339,26 @@
                         "description": ""
                     },
                     "400": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Validation error."
                     },
                     "401": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Authentication error."
                     }
                 }
             }

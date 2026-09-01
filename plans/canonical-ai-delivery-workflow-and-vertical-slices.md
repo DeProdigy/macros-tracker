@@ -2,7 +2,7 @@
 linear_id: 71088d12-87a0-4e70-a097-a572e6e4e660
 linear_title: "CANONICAL — AI Delivery Workflow and Vertical Slices"
 linear_url: https://linear.app/hintology/document/canonical-ai-delivery-workflow-and-vertical-slices-9ee8ed45bf0e
-linear_updated_at: 2026-08-31T21:03:22.726Z
+linear_updated_at: 2026-09-01T02:37:34.196Z
 generated: true
 ---
 

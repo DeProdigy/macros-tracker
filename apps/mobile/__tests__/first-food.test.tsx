@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
+import { router } from "expo-router";
 
 import FirstFoodPrompt from "../app/first-food";
 import { useSession } from "../lib/session";
 
 jest.mock("expo-router", () => {
   const { Text } = jest.requireActual<typeof import("react-native")>("react-native");
-  return { Redirect: ({ href }: { href: string }) => <Text>redirect:{href}</Text> };
+  return {
+    Redirect: ({ href }: { href: string }) => <Text>redirect:{href}</Text>,
+    router: { push: jest.fn() },
+  };
 });
 
 jest.mock("../lib/session", () => ({ useSession: jest.fn() }));
@@ -27,6 +31,13 @@ describe("first-food prompt", () => {
 
     expect(screen.getByText("TARGETS SAVED")).toBeTruthy();
     expect(screen.getByRole("button", { name: "LOG YOUR FIRST FOOD" })).toBeEnabled();
+  });
+
+  it("opens the signed-in Log Food route", () => {
+    render(<FirstFoodPrompt />);
+
+    fireEvent.press(screen.getByRole("button", { name: "LOG YOUR FIRST FOOD" }));
+    expect(router.push).toHaveBeenCalledWith("/log-food");
   });
 
   it("does not let an incomplete account bypass onboarding", () => {

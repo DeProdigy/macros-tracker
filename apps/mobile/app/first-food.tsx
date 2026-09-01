@@ -23,7 +23,7 @@ export default function FirstFoodPrompt() {
       </Text>
       <Pressable
         accessibilityRole="button"
-        onPress={() => router.push("./(app)/log-food")}
+        onPress={() => router.push("/log-food")}
         style={[styles.button, { backgroundColor: palette.accent }]}
       >
         <Text style={[styles.buttonLabel, { color: palette.background }]}>LOG YOUR FIRST FOOD</Text>

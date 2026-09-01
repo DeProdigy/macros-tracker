@@ -34,7 +34,6 @@ class Migration(migrations.Migration):
                 ('source', models.CharField(choices=[('manual', 'Manual'), ('photo', 'Photo'), ('recent', 'Recent')], max_length=16)),
                 ('description', models.CharField(max_length=200)),
                 ('eaten_at', models.DateTimeField()),
-                ('photo_key', models.CharField(blank=True, max_length=500)),
                 ('calories', models.DecimalField(decimal_places=2, max_digits=10)),
                 ('protein_g', models.DecimalField(decimal_places=2, max_digits=10)),
                 ('fiber_g', models.DecimalField(decimal_places=2, max_digits=10)),

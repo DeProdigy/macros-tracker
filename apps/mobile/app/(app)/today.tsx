@@ -33,14 +33,21 @@ export default function TodayScreen() {
             Timezone sync is unavailable. Reopen the app to try again.
           </Text>
         ) : null}
-        <View style={styles.totals}>
-          <Metric label="CALORIES" value={day?.calories ?? "0.00"} color={palette.text} />
-          <Metric label="PROTEIN" value={`${day?.protein_g ?? "0.00"} g`} color={palette.text} />
-          <Metric label="FIBER" value={`${day?.fiber_g ?? "0.00"} g`} color={palette.text} />
-        </View>
+        {day ? (
+          <View style={styles.totals}>
+            <Metric label="CALORIES" value={day.calories} color={palette.text} />
+            <Metric label="PROTEIN" value={`${day.protein_g} g`} color={palette.text} />
+            <Metric label="FIBER" value={`${day.fiber_g} g`} color={palette.text} />
+          </View>
+        ) : null}
         <Text style={[styles.section, { color: palette.secondaryText }]}>ENTRIES</Text>
         {dayQuery.isLoading ? (
           <Text style={{ color: palette.secondaryText }}>Loading your day...</Text>
+        ) : null}
+        {dayQuery.isError ? (
+          <Text accessibilityRole="alert" style={[styles.message, { color: palette.error }]}>
+            Could not load your day. Reopen the app to try again.
+          </Text>
         ) : null}
         {day && day.entries.length === 0 ? (
           <View style={styles.empty}>
@@ -72,7 +79,7 @@ export default function TodayScreen() {
       </ScrollView>
       <Pressable
         accessibilityRole="button"
-        onPress={() => router.push("./log-food")}
+        onPress={() => router.push("/log-food")}
         style={[styles.log, { backgroundColor: palette.accent }]}
       >
         <Text style={styles.logText}>LOG FOOD</Text>

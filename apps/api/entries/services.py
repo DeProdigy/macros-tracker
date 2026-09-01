@@ -29,11 +29,7 @@ def _total(value: Decimal, quantity: Decimal) -> Decimal:
 def create_manual_entry(
     *, user: User, local_date: date, eaten_at: datetime, item: ManualItem
 ) -> FoodEntry:
-    target = (
-        TargetVersion.objects.filter(user=user, effective_from__lte=local_date)
-        .order_by("-effective_from", "-created_at", "-id")
-        .first()
-    )
+    target = TargetVersion.objects.effective_on(user, local_date)
     day, _ = DailyLog.objects.get_or_create(
         user=user, local_date=local_date, defaults={"target_version": target}
     )
@@ -46,5 +42,13 @@ def create_manual_entry(
         protein_g=_total(item.protein_g, item.quantity),
         fiber_g=_total(item.fiber_g, item.quantity),
     )
-    FoodItem.objects.create(entry=entry, portion_label="", **item.__dict__)
+    FoodItem.objects.create(
+        entry=entry,
+        portion_label="",
+        name=item.name,
+        quantity=item.quantity,
+        calories=item.calories,
+        protein_g=item.protein_g,
+        fiber_g=item.fiber_g,
+    )
     return entry

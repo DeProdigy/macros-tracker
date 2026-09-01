@@ -1,4 +1,5 @@
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from rest_framework import serializers
 
@@ -30,6 +31,12 @@ class ManualEntryCreateSerializer(serializers.Serializer):
         if value != user.timezone:
             raise serializers.ValidationError("Synchronize the device timezone and try again.")
         return value
+
+    def validate(self, attrs):
+        zone = ZoneInfo(attrs["timezone"])
+        if attrs["eaten_at"].astimezone(zone).date() != attrs["local_date"]:
+            raise serializers.ValidationError("The eaten time is not on the selected local date.")
+        return attrs
 
     def create(self, validated_data):
         item = services.ManualItem(**validated_data.pop("item"))
@@ -77,11 +84,19 @@ class DaySerializer(serializers.Serializer):
     entries = FoodEntrySerializer(many=True)
 
 
-def day_data(day: DailyLog | None, local_date):
+def day_data(day: DailyLog | None, local_date, effective_target=None):
     if day is None:
         return {
             "local_date": local_date,
-            "targets": None,
+            "targets": (
+                {
+                    "calories": effective_target.calories,
+                    "protein_g": effective_target.protein_g,
+                    "fiber_g": effective_target.fiber_g,
+                }
+                if effective_target
+                else None
+            ),
             "calories": Decimal("0"),
             "protein_g": Decimal("0"),
             "fiber_g": Decimal("0"),

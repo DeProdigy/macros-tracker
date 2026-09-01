@@ -8,12 +8,16 @@
 
 export * from "./activityEnum";
 export * from "./blankEnum";
+export * from "./createManualEntry400";
+export * from "./createManualEntry401";
 export * from "./day";
 export * from "./dayTarget";
 export * from "./dayTargets";
 export * from "./foodEntry";
 export * from "./foodEntrySourceEnum";
 export * from "./foodItem";
+export * from "./getDay400";
+export * from "./getDay401";
 export * from "./goalEnum";
 export * from "./health";
 export * from "./healthStatusEnum";
