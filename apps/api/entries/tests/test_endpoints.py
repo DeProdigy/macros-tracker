@@ -92,6 +92,19 @@ def test_manual_save_requires_the_synchronized_timezone():
 
 
 @pytest.mark.django_db
+def test_manual_save_rejects_an_invalid_stored_timezone_instead_of_raising():
+    user = User.objects.create_user(email="alex@example.com", timezone="Not/A-Timezone")
+    invalid = payload()
+    invalid["timezone"] = "Not/A-Timezone"
+
+    response = client_for(user).post(reverse("entry-list"), invalid, format="json")
+
+    assert response.status_code == 400
+    assert response.data["timezone"] == ["Synchronize the device timezone and try again."]
+    assert FoodEntry.objects.count() == 0
+
+
+@pytest.mark.django_db
 def test_manual_save_requires_authentication():
     response = APIClient().post(reverse("entry-list"), payload(), format="json")
 

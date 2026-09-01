@@ -1,5 +1,5 @@
 from decimal import Decimal
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rest_framework import serializers
 
@@ -33,7 +33,12 @@ class ManualEntryCreateSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        zone = ZoneInfo(attrs["timezone"])
+        try:
+            zone = ZoneInfo(attrs["timezone"])
+        except (ValueError, ZoneInfoNotFoundError):
+            raise serializers.ValidationError(
+                {"timezone": "Synchronize the device timezone and try again."}
+            ) from None
         if attrs["eaten_at"].astimezone(zone).date() != attrs["local_date"]:
             raise serializers.ValidationError("The eaten time is not on the selected local date.")
         return attrs
