@@ -14,6 +14,7 @@ DEBUG = False
 # Required — raises ImproperlyConfigured if unset, by design.
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
+OPENAI_API_KEY = env("OPENAI_API_KEY")
 
 # Static files.
 #

@@ -56,6 +56,14 @@ class FoodEntry(models.Model):
     calories = models.DecimalField(max_digits=10, decimal_places=2)
     protein_g = models.DecimalField(max_digits=10, decimal_places=2)
     fiber_g = models.DecimalField(max_digits=10, decimal_places=2)
+    photo_key = models.CharField(max_length=512, blank=True)
+    analysis_call = models.OneToOneField(
+        "ai.FoodAnalysisCall",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="food_entry",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

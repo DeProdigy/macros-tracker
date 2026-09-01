@@ -7,6 +7,7 @@ production.py — import everything from here and override what differs.
 """
 
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import environ
@@ -180,6 +181,15 @@ R2_ALLOWED_UPLOAD_TYPES = {
 FOOD_ANALYSIS_ROLLING_CALL_LIMIT = env.int("FOOD_ANALYSIS_ROLLING_CALL_LIMIT", default=500)
 FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS = env.int(
     "FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS", default=300
+)
+OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+OPENAI_FOOD_ANALYSIS_MODEL = env("OPENAI_FOOD_ANALYSIS_MODEL", default="gpt-5-mini")
+# Prices are configuration because provider prices can change independently of a deploy.
+OPENAI_FOOD_INPUT_USD_PER_MILLION = Decimal(
+    env("OPENAI_FOOD_INPUT_USD_PER_MILLION", default="0.25")
+)
+OPENAI_FOOD_OUTPUT_USD_PER_MILLION = Decimal(
+    env("OPENAI_FOOD_OUTPUT_USD_PER_MILLION", default="2.00")
 )
 
 

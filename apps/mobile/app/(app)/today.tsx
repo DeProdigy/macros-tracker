@@ -1,6 +1,6 @@
 import { useGetDay } from "@macros/api-client";
 import { Link, router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { localIsoDate } from "@/lib/local-day";
 import { usePalette } from "@/lib/palette";
@@ -59,7 +59,14 @@ export default function TodayScreen() {
         ) : null}
         {day?.entries.map((entry) => (
           <View key={entry.id} style={[styles.entry, { borderColor: palette.hairline }]}>
-            <View>
+            {entry.photo_url ? (
+              <Image
+                accessibilityLabel={`${entry.description} meal`}
+                source={{ uri: entry.photo_url }}
+                style={styles.entryPhoto}
+              />
+            ) : null}
+            <View style={styles.entryMain}>
               <Text style={[styles.entryName, { color: palette.text }]}>{entry.description}</Text>
               <Text style={{ color: palette.dimText }}>
                 {new Date(entry.eaten_at).toLocaleTimeString([], {
@@ -120,6 +127,8 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
   },
   entryName: { fontSize: 17, fontWeight: "700" },
+  entryMain: { flex: 1 },
+  entryPhoto: { borderRadius: 8, height: 52, marginRight: 12, width: 52 },
   entryMacros: { alignItems: "flex-end", gap: 4 },
   log: {
     alignItems: "center",

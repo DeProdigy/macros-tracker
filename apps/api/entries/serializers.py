@@ -3,6 +3,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rest_framework import serializers
 
+from ai.models import FoodAnalysisCall
+
 from . import services
 from .models import DailyLog, FoodEntry, FoodItem
 
@@ -51,6 +53,44 @@ class ManualEntryCreateSerializer(serializers.Serializer):
         )
 
 
+class PhotoEntryCreateSerializer(serializers.Serializer):
+    local_date = serializers.DateField()
+    timezone = serializers.CharField(max_length=64)
+    eaten_at = serializers.DateTimeField()
+    analysis_id = serializers.IntegerField(min_value=1)
+
+    def validate(self, attrs):
+        manual = ManualEntryCreateSerializer(context=self.context)
+        manual.validate_timezone(attrs["timezone"])
+        try:
+            zone = ZoneInfo(attrs["timezone"])
+        except (ValueError, ZoneInfoNotFoundError):
+            raise serializers.ValidationError(
+                {"timezone": "Synchronize the device timezone and try again."}
+            ) from None
+        if attrs["eaten_at"].astimezone(zone).date() != attrs["local_date"]:
+            raise serializers.ValidationError("The eaten time is not on the selected local date.")
+        call = FoodAnalysisCall.objects.filter(
+            pk=attrs["analysis_id"],
+            user=self.context["request"].user,
+            status=FoodAnalysisCall.Status.SUCCEEDED,
+        ).first()
+        if call is None or hasattr(call, "food_entry"):
+            raise serializers.ValidationError(
+                {"analysis_id": "Choose a completed analysis that has not been saved."}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop("timezone")
+        try:
+            return services.create_photo_entry(user=self.context["request"].user, **validated_data)
+        except (FoodAnalysisCall.DoesNotExist, ValueError):
+            raise serializers.ValidationError(
+                {"analysis_id": "Choose a completed analysis that has not been saved."}
+            ) from None
+
+
 class FoodItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = FoodItem
@@ -59,6 +99,14 @@ class FoodItemSerializer(serializers.ModelSerializer):
 
 class FoodEntrySerializer(serializers.ModelSerializer):
     items = FoodItemSerializer(many=True)
+    photo_url = serializers.SerializerMethodField()
+
+    def get_photo_url(self, obj) -> str | None:
+        if not obj.photo_key:
+            return None
+        from uploads.services import presign_download
+
+        return presign_download(key=obj.photo_key)
 
     class Meta:
         model = FoodEntry
@@ -70,6 +118,7 @@ class FoodEntrySerializer(serializers.ModelSerializer):
             "calories",
             "protein_g",
             "fiber_g",
+            "photo_url",
             "items",
         )
 

@@ -7,12 +7,14 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from accounts.models import User
 
 from .constants import ROLLING_WINDOW
 from .exceptions import FoodAnalysisQuotaExceeded
 from .models import FoodAnalysisCall
+from .provider import analyze_food
 
 
 @dataclass(frozen=True)
@@ -200,3 +202,86 @@ def fail_food_analysis_call(
     locked_call.save()
     call.refresh_from_db()
     return call
+
+
+def _estimated_cost(input_tokens: int | None, output_tokens: int | None) -> Decimal:
+    million = Decimal("1000000")
+    return (
+        Decimal(input_tokens or 0) * settings.OPENAI_FOOD_INPUT_USD_PER_MILLION / million
+        + Decimal(output_tokens or 0) * settings.OPENAI_FOOD_OUTPUT_USD_PER_MILLION / million
+    ).quantize(Decimal("0.000001"))
+
+
+def create_food_analysis(*, user: User, photo_key: str, description: str) -> dict[str, Any]:
+    """Retain an image, call the provider, and return only locally validated output."""
+    from uploads.services import presign_download, retain_analysis_object
+
+    from .serializers import FoodAnalysisResultSerializer
+
+    call = reserve_food_analysis_call(
+        user=user,
+        request=FoodAnalysisRequestSnapshot(photo_key=photo_key, description=description),
+    )
+    try:
+        retained_key = retain_analysis_object(key=photo_key, user_id=user.pk)
+    except Exception:
+        fail_food_analysis_call(call, category="storage_failure", message="Could not retain image.")
+        raise
+
+    call.request_payload = FoodAnalysisRequestSnapshot(
+        photo_key=retained_key, description=description
+    ).as_json()
+    call.save(update_fields=("request_payload",))
+    try:
+        image_url = presign_download(key=retained_key)
+        mark_provider_called(call, provider="openai", model=settings.OPENAI_FOOD_ANALYSIS_MODEL)
+    except Exception:
+        fail_food_analysis_call(
+            call, category="provider_setup_failure", message="Could not prepare provider input."
+        )
+        raise
+    try:
+        result = analyze_food(image_url=image_url, description=description)
+        candidate = {"analysis_id": call.pk, **result.payload}
+        items = candidate["items"]
+        candidate.update(
+            calories=sum((Decimal(str(item["calories"])) for item in items), Decimal("0")),
+            protein_g=sum((Decimal(str(item["protein_g"])) for item in items), Decimal("0")),
+            fiber_g=sum((Decimal(str(item["fiber_g"])) for item in items), Decimal("0")),
+        )
+        serializer = FoodAnalysisResultSerializer(data=candidate)
+        serializer.is_valid(raise_exception=True)
+    except ValidationError:
+        fail_food_analysis_call(
+            call,
+            category="invalid_model_output",
+            message="Provider returned invalid structured output.",
+            response_payload=candidate if "candidate" in locals() else None,
+            billable=True,
+        )
+        raise
+    except ValueError:
+        fail_food_analysis_call(
+            call,
+            category="invalid_model_output",
+            message="Provider returned invalid structured output.",
+            billable=True,
+        )
+        raise
+    except Exception:
+        fail_food_analysis_call(
+            call, category="provider_failure", message="Food analysis provider failed."
+        )
+        raise
+
+    cost = _estimated_cost(result.input_tokens, result.output_tokens)
+    succeed_food_analysis_call(
+        call,
+        response_payload=serializer.data,
+        provider_request_id=result.provider_request_id,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        usage=result.usage,
+        estimated_cost_usd=cost,
+    )
+    return serializer.data

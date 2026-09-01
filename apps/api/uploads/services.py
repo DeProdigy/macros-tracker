@@ -35,6 +35,7 @@ from rest_framework.exceptions import ValidationError
 # saving the entry. Without cleanup those objects accumulate forever, silently,
 # on the bill.
 PENDING_PREFIX = "pending/"
+ANALYSES_PREFIX = "analyses/"
 ENTRIES_PREFIX = "entries/"
 
 
@@ -175,6 +176,44 @@ def promote_object(*, key: str, user_id: int) -> str:
     client.delete_object(Bucket=bucket, Key=key)
 
     return permanent_key
+
+
+def _transfer_object(*, key: str, destination: str) -> None:
+    client = _client()
+    bucket = settings.R2_BUCKET_NAME
+    client.copy_object(Bucket=bucket, Key=destination, CopySource={"Bucket": bucket, "Key": key})
+    client.delete_object(Bucket=bucket, Key=key)
+
+
+def retain_analysis_object(*, key: str, user_id: int) -> str:
+    """Move an admitted analysis image outside pending lifecycle cleanup."""
+    expected_prefix = f"{PENDING_PREFIX}{user_id}/"
+    if not key.startswith(expected_prefix):
+        raise ValidationError({"photo_key": ["Not a pending upload belonging to this user."]})
+    retained = f"{ANALYSES_PREFIX}{key.removeprefix(PENDING_PREFIX)}"
+    _transfer_object(key=key, destination=retained)
+    return retained
+
+
+def copy_analysis_object_to_entry(*, key: str, user_id: int) -> str:
+    """Copy a retained analysis image to its future entry key without deleting the source."""
+    expected_prefix = f"{ANALYSES_PREFIX}{user_id}/"
+    if not key.startswith(expected_prefix):
+        raise ValidationError({"analysis": ["The analysis photo does not belong to this user."]})
+    destination = f"{ENTRIES_PREFIX}{key.removeprefix(ANALYSES_PREFIX)}"
+    client = _client()
+    bucket = settings.R2_BUCKET_NAME
+    client.copy_object(
+        Bucket=bucket,
+        Key=destination,
+        CopySource={"Bucket": bucket, "Key": key},
+    )
+    return destination
+
+
+def delete_object(*, key: str) -> None:
+    """Delete one exact object key after its durable replacement is committed."""
+    _client().delete_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
 
 
 def presign_download(*, key: str) -> str:

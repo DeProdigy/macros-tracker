@@ -22,14 +22,20 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
-  CreateManualEntry400,
-  CreateManualEntry401,
+  CreateEntry400,
+  CreateEntry401,
+  CreateFoodAnalysis400,
+  CreateFoodAnalysis401,
   Day,
+  EntryCreateRequestRequest,
+  FoodAnalysisError,
+  FoodAnalysisQuotaError,
+  FoodAnalysisRequestRequest,
+  FoodAnalysisResult,
   FoodEntry,
   GetDay400,
   GetDay401,
   Health,
-  ManualEntryCreateRequest,
   PatchedUserSettingsRequest,
   Ping,
   PresignUploadRequestRequest,
@@ -49,6 +55,139 @@ import type {
 import { customFetch } from "../http-client";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * Retains one uploaded meal photo and creates a validated itemized estimate. The request consumes rolling quota only after paid provider work.
+ * @summary Create an itemized food analysis
+ */
+export type createFoodAnalysisResponse201 = {
+  data: FoodAnalysisResult;
+  status: 201;
+};
+
+export type createFoodAnalysisResponse400 = {
+  data: CreateFoodAnalysis400;
+  status: 400;
+};
+
+export type createFoodAnalysisResponse401 = {
+  data: CreateFoodAnalysis401;
+  status: 401;
+};
+
+export type createFoodAnalysisResponse429 = {
+  data: FoodAnalysisQuotaError;
+  status: 429;
+};
+
+export type createFoodAnalysisResponse502 = {
+  data: FoodAnalysisError;
+  status: 502;
+};
+
+export type createFoodAnalysisResponseSuccess = createFoodAnalysisResponse201 & {
+  headers: Headers;
+};
+export type createFoodAnalysisResponseError = (
+  | createFoodAnalysisResponse400
+  | createFoodAnalysisResponse401
+  | createFoodAnalysisResponse429
+  | createFoodAnalysisResponse502
+) & {
+  headers: Headers;
+};
+
+export type createFoodAnalysisResponse =
+  createFoodAnalysisResponseSuccess | createFoodAnalysisResponseError;
+
+export const getCreateFoodAnalysisUrl = () => {
+  return `/api/analyses/`;
+};
+
+export const createFoodAnalysis = async (
+  foodAnalysisRequestRequest: FoodAnalysisRequestRequest,
+  options?: RequestInit,
+): Promise<createFoodAnalysisResponse> => {
+  return customFetch<createFoodAnalysisResponse>(getCreateFoodAnalysisUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(foodAnalysisRequestRequest),
+  });
+};
+
+export const getCreateFoodAnalysisMutationOptions = <
+  TError =
+    CreateFoodAnalysis400 | CreateFoodAnalysis401 | FoodAnalysisQuotaError | FoodAnalysisError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createFoodAnalysis>>,
+    TError,
+    { data: FoodAnalysisRequestRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createFoodAnalysis>>,
+  TError,
+  { data: FoodAnalysisRequestRequest },
+  TContext
+> => {
+  const mutationKey = ["createFoodAnalysis"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createFoodAnalysis>>,
+    { data: FoodAnalysisRequestRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createFoodAnalysis(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateFoodAnalysisMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createFoodAnalysis>>
+>;
+export type CreateFoodAnalysisMutationBody = FoodAnalysisRequestRequest;
+export type CreateFoodAnalysisMutationError =
+  CreateFoodAnalysis400 | CreateFoodAnalysis401 | FoodAnalysisQuotaError | FoodAnalysisError;
+
+/**
+ * @summary Create an itemized food analysis
+ */
+export const useCreateFoodAnalysis = <
+  TError =
+    CreateFoodAnalysis400 | CreateFoodAnalysis401 | FoodAnalysisQuotaError | FoodAnalysisError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createFoodAnalysis>>,
+      TError,
+      { data: FoodAnalysisRequestRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createFoodAnalysis>>,
+  TError,
+  { data: FoodAnalysisRequestRequest },
+  TContext
+> => {
+  const mutationOptions = getCreateFoodAnalysisMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
 
 /**
  * Exchanges a verified Apple identity token for a user and a JWT pair. Creates the account when the Apple subject is unknown, so this one call covers both first-time sign-up and returning login.
@@ -551,69 +690,66 @@ export function useGetDay<
 }
 
 /**
- * @summary Log one food manually
+ * @summary Log one Manual or Photo food entry
  */
-export type createManualEntryResponse201 = {
+export type createEntryResponse201 = {
   data: FoodEntry;
   status: 201;
 };
 
-export type createManualEntryResponse400 = {
-  data: CreateManualEntry400;
+export type createEntryResponse400 = {
+  data: CreateEntry400;
   status: 400;
 };
 
-export type createManualEntryResponse401 = {
-  data: CreateManualEntry401;
+export type createEntryResponse401 = {
+  data: CreateEntry401;
   status: 401;
 };
 
-export type createManualEntryResponseSuccess = createManualEntryResponse201 & {
+export type createEntryResponseSuccess = createEntryResponse201 & {
   headers: Headers;
 };
-export type createManualEntryResponseError = (
-  createManualEntryResponse400 | createManualEntryResponse401
-) & {
+export type createEntryResponseError = (createEntryResponse400 | createEntryResponse401) & {
   headers: Headers;
 };
 
-export type createManualEntryResponse =
-  createManualEntryResponseSuccess | createManualEntryResponseError;
+export type createEntryResponse = createEntryResponseSuccess | createEntryResponseError;
 
-export const getCreateManualEntryUrl = () => {
+export const getCreateEntryUrl = () => {
   return `/api/entries/`;
 };
 
-export const createManualEntry = async (
-  manualEntryCreateRequest: ManualEntryCreateRequest,
+export const createEntry = async (
+  entryCreateRequestRequest: EntryCreateRequestRequest,
   options?: RequestInit,
-): Promise<createManualEntryResponse> => {
-  return customFetch<createManualEntryResponse>(getCreateManualEntryUrl(), {
+): Promise<createEntryResponse> => {
+  return customFetch<createEntryResponse>(getCreateEntryUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(manualEntryCreateRequest),
+    body: JSON.stringify(entryCreateRequestRequest),
   });
 };
 
-export const getCreateManualEntryMutationOptions = <
-  TError = CreateManualEntry400 | CreateManualEntry401,
+export const getCreateEntryMutationOptions = <
+  TError = CreateEntry400 | CreateEntry401,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createManualEntry>>,
+    Awaited<ReturnType<typeof createEntry>>,
     TError,
-    { data: ManualEntryCreateRequest },
+    { data: EntryCreateRequestRequest },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof createManualEntry>>,
+  Awaited<ReturnType<typeof createEntry>>,
   TError,
-  { data: ManualEntryCreateRequest },
+  { data: EntryCreateRequestRequest },
   TContext
 > => {
-  const mutationKey = ["createManualEntry"];
+  const mutationKey = ["createEntry"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
       ? options
@@ -621,47 +757,42 @@ export const getCreateManualEntryMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createManualEntry>>,
-    { data: ManualEntryCreateRequest }
+    Awaited<ReturnType<typeof createEntry>>,
+    { data: EntryCreateRequestRequest }
   > = (props) => {
     const { data } = props ?? {};
 
-    return createManualEntry(data, requestOptions);
+    return createEntry(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type CreateManualEntryMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createManualEntry>>
->;
-export type CreateManualEntryMutationBody = ManualEntryCreateRequest;
-export type CreateManualEntryMutationError = CreateManualEntry400 | CreateManualEntry401;
+export type CreateEntryMutationResult = NonNullable<Awaited<ReturnType<typeof createEntry>>>;
+export type CreateEntryMutationBody = EntryCreateRequestRequest;
+export type CreateEntryMutationError = CreateEntry400 | CreateEntry401;
 
 /**
- * @summary Log one food manually
+ * @summary Log one Manual or Photo food entry
  */
-export const useCreateManualEntry = <
-  TError = CreateManualEntry400 | CreateManualEntry401,
-  TContext = unknown,
->(
+export const useCreateEntry = <TError = CreateEntry400 | CreateEntry401, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof createManualEntry>>,
+      Awaited<ReturnType<typeof createEntry>>,
       TError,
-      { data: ManualEntryCreateRequest },
+      { data: EntryCreateRequestRequest },
       TContext
     >;
     request?: SecondParameter<typeof customFetch>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof createManualEntry>>,
+  Awaited<ReturnType<typeof createEntry>>,
   TError,
-  { data: ManualEntryCreateRequest },
+  { data: EntryCreateRequestRequest },
   TContext
 > => {
-  const mutationOptions = getCreateManualEntryMutationOptions(options);
+  const mutationOptions = getCreateEntryMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };
