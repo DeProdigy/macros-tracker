@@ -174,8 +174,9 @@ R2_ALLOWED_UPLOAD_TYPES = {
 # The rows in `ai.FoodAnalysisCall` are the source of truth. This value is only
 # the admission ceiling; there is deliberately no second monthly counter that
 # can drift. A reservation occupies a slot briefly while the request crosses
-# the provider boundary. If the worker dies before dispatch, the timeout gives
-# that capacity back while retaining the audit row.
+# the provider boundary. If the worker dies before finalizing the row, the
+# timeout gives that capacity back while retaining the audit record. A call
+# already dispatched remains billable when a later worker records its outcome.
 FOOD_ANALYSIS_ROLLING_CALL_LIMIT = env.int("FOOD_ANALYSIS_ROLLING_CALL_LIMIT", default=500)
 FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS = env.int(
     "FOOD_ANALYSIS_RESERVATION_TIMEOUT_SECONDS", default=300

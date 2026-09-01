@@ -149,6 +149,27 @@ def test_a_call_cannot_be_marked_paid_without_provider_dispatch(user):
 
 
 @pytest.mark.django_db
+def test_stale_retry_cannot_overwrite_a_finalized_call(user):
+    call = reserve_food_analysis_call(user=user, request=request())
+    mark_provider_called(call, provider="openai", model="food-model")
+    stale_retry = FoodAnalysisCall.objects.get(pk=call.pk)
+
+    succeed_food_analysis_call(call, response_payload={"items": []})
+
+    with pytest.raises(ValueError, match="Only a reserved food-analysis call can fail"):
+        fail_food_analysis_call(
+            stale_retry,
+            category="late_retry",
+            message="A retried finalizer arrived after success.",
+            billable=True,
+        )
+
+    call.refresh_from_db()
+    assert call.status == FoodAnalysisCall.Status.SUCCEEDED
+    assert call.failure_category == ""
+
+
+@pytest.mark.django_db
 def test_only_the_previous_30_days_count(user):
     now = timezone.now()
     calls = [

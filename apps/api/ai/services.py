@@ -10,10 +10,9 @@ from django.utils import timezone
 
 from accounts.models import User
 
+from .constants import ROLLING_WINDOW
 from .exceptions import FoodAnalysisQuotaExceeded
 from .models import FoodAnalysisCall
-
-ROLLING_WINDOW = timedelta(days=30)
 
 
 @dataclass(frozen=True)
@@ -121,6 +120,7 @@ def _latency_ms(call: FoodAnalysisCall, completed_at: datetime) -> int:
     return max(0, round((completed_at - call.started_at).total_seconds() * 1000))
 
 
+@transaction.atomic
 def succeed_food_analysis_call(
     call: FoodAnalysisCall,
     *,
@@ -133,26 +133,33 @@ def succeed_food_analysis_call(
     estimated_cost_usd: Decimal | None = None,
     at: datetime | None = None,
 ) -> FoodAnalysisCall:
-    if call.status != FoodAnalysisCall.Status.RESERVED or call.provider_called_at is None:
+    User.objects.select_for_update().get(pk=call.user_id)
+    locked_call = FoodAnalysisCall.objects.select_for_update().get(pk=call.pk)
+    if (
+        locked_call.status != FoodAnalysisCall.Status.RESERVED
+        or locked_call.provider_called_at is None
+    ):
         raise ValueError("A successful call must have been dispatched to the provider.")
     completed_at = _now(at)
-    call.status = FoodAnalysisCall.Status.SUCCEEDED
-    call.quota_debited_at = call.provider_called_at or completed_at
-    call.completed_at = completed_at
-    call.latency_ms = _latency_ms(call, completed_at)
-    call.response_payload = response_payload
-    call.raw_response = raw_response
-    call.provider_request_id = provider_request_id
-    call.input_tokens = input_tokens
-    call.output_tokens = output_tokens
-    call.usage = usage or {}
-    call.estimated_cost_usd = estimated_cost_usd
-    call.failure_category = ""
-    call.failure_message = ""
-    call.save()
+    locked_call.status = FoodAnalysisCall.Status.SUCCEEDED
+    locked_call.quota_debited_at = locked_call.provider_called_at
+    locked_call.completed_at = completed_at
+    locked_call.latency_ms = _latency_ms(locked_call, completed_at)
+    locked_call.response_payload = response_payload
+    locked_call.raw_response = raw_response
+    locked_call.provider_request_id = provider_request_id
+    locked_call.input_tokens = input_tokens
+    locked_call.output_tokens = output_tokens
+    locked_call.usage = usage or {}
+    locked_call.estimated_cost_usd = estimated_cost_usd
+    locked_call.failure_category = ""
+    locked_call.failure_message = ""
+    locked_call.save()
+    call.refresh_from_db()
     return call
 
 
+@transaction.atomic
 def fail_food_analysis_call(
     call: FoodAnalysisCall,
     *,
@@ -168,23 +175,28 @@ def fail_food_analysis_call(
     billable: bool = False,
     at: datetime | None = None,
 ) -> FoodAnalysisCall:
-    if call.status != FoodAnalysisCall.Status.RESERVED:
+    User.objects.select_for_update().get(pk=call.user_id)
+    locked_call = FoodAnalysisCall.objects.select_for_update().get(pk=call.pk)
+    if locked_call.status != FoodAnalysisCall.Status.RESERVED:
         raise ValueError("Only a reserved food-analysis call can fail.")
-    if billable and call.provider_called_at is None:
+    if billable and locked_call.provider_called_at is None:
         raise ValueError("A billable failure must have been dispatched to the provider.")
     completed_at = _now(at)
-    call.status = FoodAnalysisCall.Status.FAILED
-    call.quota_debited_at = (call.provider_called_at or completed_at) if billable else None
-    call.completed_at = completed_at
-    call.latency_ms = _latency_ms(call, completed_at)
-    call.response_payload = response_payload
-    call.raw_response = raw_response
-    call.provider_request_id = provider_request_id
-    call.input_tokens = input_tokens
-    call.output_tokens = output_tokens
-    call.usage = usage or {}
-    call.estimated_cost_usd = estimated_cost_usd
-    call.failure_category = category
-    call.failure_message = message[:500]
-    call.save()
+    locked_call.status = FoodAnalysisCall.Status.FAILED
+    locked_call.quota_debited_at = (
+        (locked_call.provider_called_at or completed_at) if billable else None
+    )
+    locked_call.completed_at = completed_at
+    locked_call.latency_ms = _latency_ms(locked_call, completed_at)
+    locked_call.response_payload = response_payload
+    locked_call.raw_response = raw_response
+    locked_call.provider_request_id = provider_request_id
+    locked_call.input_tokens = input_tokens
+    locked_call.output_tokens = output_tokens
+    locked_call.usage = usage or {}
+    locked_call.estimated_cost_usd = estimated_cost_usd
+    locked_call.failure_category = category
+    locked_call.failure_message = message[:500]
+    locked_call.save()
+    call.refresh_from_db()
     return call

@@ -1,14 +1,16 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+from .constants import FOOD_ANALYSIS_QUOTA_CODE, ROLLING_WINDOW
+
 
 @dataclass
 class FoodAnalysisQuotaExceeded(Exception):
     limit: int
     used: int
     retry_at: datetime
-    window_days: int = 30
-    code: str = "food_analysis_quota_exceeded"
+    window_days: int = ROLLING_WINDOW.days
+    code: str = FOOD_ANALYSIS_QUOTA_CODE
 
     def __post_init__(self) -> None:
         # BaseException pickles from `args`. Dataclass-generated initialization
