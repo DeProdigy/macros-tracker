@@ -115,7 +115,7 @@ export default function LogFoodScreen() {
         <Text style={styles.saveText}>{saving ? "SAVING" : "SAVE FOOD"}</Text>
       </Pressable>
       <Text style={[styles.note, { color: palette.dimText }]}>
-        Photo and Recents arrive in follow-up slices.
+        Recents arrive in a follow-up slice.
       </Text>
     </ScrollView>
   );
