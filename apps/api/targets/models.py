@@ -97,11 +97,10 @@ class TargetVersion(models.Model):
     # The calendar date these targets start applying to.
     #
     # **No default, deliberately.** The obvious `timezone.now().date()` would be
-    # wrong: `User.timezone` is "UTC" for everyone until MAC-48 ships, so a
-    # caller in Los Angeles saving at 5pm would get tomorrow's date. Doc 02
-    # already solved this for DailyLog by having the client send its own
-    # `local_date`, and the endpoint in MAC-40 follows that same path. Baking a
-    # server-side default in here would hide a timezone bug inside a column.
+    # wrong because the phone owns the intended calendar day. A stored timezone
+    # can lag behind a device change, so a server-derived date can put the save
+    # on the wrong day. The client supplies the date. A server-side default
+    # would hide that timezone bug inside a column.
     effective_from = models.DateField()
 
     created_at = models.DateTimeField(auto_now_add=True)

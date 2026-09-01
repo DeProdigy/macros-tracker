@@ -184,11 +184,10 @@ def test_an_onboarding_version_keeps_its_rationale(user):
 
 @pytest.mark.django_db
 def test_effective_from_has_no_default_and_must_be_supplied(user):
-    """Deliberate, and the reason is a timezone bug that would otherwise hide in
-    a column. `User.timezone` is "UTC" for everyone until MAC-48 ships, so a
-    server-side `timezone.now().date()` default would hand a caller in Los
-    Angeles tomorrow's date at 5pm. The client sends its own calendar date, the
-    same way doc 02's write path does for DailyLog.
+    """Deliberate, because a default would hide a timezone bug in a column.
+
+    The phone owns the intended calendar day. A stored timezone can lag behind
+    a device change, so the client sends its own calendar date.
     """
     from django.db.utils import IntegrityError
 

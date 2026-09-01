@@ -37,6 +37,8 @@ The session provider starts a best-effort synchronization after authentication s
 
 The Django work uses serializer validation and the standard IANA timezone database. The React Native work uses AppState lifecycle events, a best-effort post-auth synchronization effect, and explicit readiness state for a later vertical slice.
 
+This horizontal ticket uses the safety-control exception. Timezone readiness must exist before the food-entry slice that it guards, so that slice cannot silently assign food to the wrong day.
+
 ## Tests
 
 - Accept valid IANA names such as `America/New_York` and `Pacific/Auckland`.

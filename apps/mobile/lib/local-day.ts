@@ -12,13 +12,11 @@ export class LocalDayUnavailable extends Error {
   }
 }
 
-/** Read the phone's IANA timezone name. An offset is not a safe substitute. */
+/** Read the phone's timezone identifier. The API validates it before storage. */
 export const deviceTimezone = (): string | null => {
   try {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    return (typeof timezone === "string" && timezone.includes("/")) || timezone === "UTC"
-      ? timezone
-      : null;
+    return typeof timezone === "string" && timezone.length > 0 ? timezone : null;
   } catch {
     return null;
   }

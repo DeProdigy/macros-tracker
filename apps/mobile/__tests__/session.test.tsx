@@ -6,7 +6,7 @@
  * the provider settles into, and what it tears down on the way out.
  */
 
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import {
   ApiError,
   deleteCurrentSession,
@@ -111,6 +111,10 @@ beforeEach(() => {
   mockClearTokens.mockResolvedValue(undefined);
   mockGetRefreshToken.mockResolvedValue("stored-refresh");
   mockDeviceTimezone.mockReturnValue(null);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe("restoring at launch", () => {

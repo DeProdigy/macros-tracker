@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe("deviceTimezone", () => {
-  it.each(["America/New_York", "Pacific/Auckland", "UTC"])(
+  it.each(["America/New_York", "Pacific/Auckland", "UTC", "Singapore", "Japan", "EST"])(
     "returns the IANA name %s",
     (timezone) => {
       timezoneSpy(timezone);
@@ -25,9 +25,14 @@ describe("deviceTimezone", () => {
     },
   );
 
-  it.each(["-04:00", "GMT+12", undefined])("refuses an offset or missing name", (timezone) => {
+  it.each(["", undefined])("refuses a missing name", (timezone) => {
     timezoneSpy(timezone);
     expect(deviceTimezone()).toBeNull();
+  });
+
+  it("leaves timezone validation to the API", () => {
+    timezoneSpy("-04:00");
+    expect(deviceTimezone()).toBe("-04:00");
   });
 });
 
