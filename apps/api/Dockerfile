@@ -49,7 +49,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # collectstatic has to import production settings, which by design require
 # DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, and OPENAI_API_KEY rather than using
 # defaults. Their real values are not needed at build time. Static collection
-# reads no secret and serves no request. These throwaway values exist only for
+# reads no secret and serves no request. These values can appear in build logs
+# and image history, so they must stay fake placeholders. They exist only for
 # this RUN command. Docker does not write them into the image environment. The
 # real values come from Railway at runtime.
 #
