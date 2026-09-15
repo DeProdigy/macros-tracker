@@ -24,18 +24,27 @@ import type {
 import type {
   CreateEntry400,
   CreateEntry401,
+  CreateEntryItem400,
+  CreateEntryItem401,
+  CreateEntryItem404,
   CreateFoodAnalysis400,
   CreateFoodAnalysis401,
   Day,
+  DeleteEntryItem401,
+  DeleteEntryItem404,
   EntryCreateRequestRequest,
+  EntryItemConflict,
   FoodAnalysisError,
   FoodAnalysisQuotaError,
   FoodAnalysisRequestRequest,
   FoodAnalysisResult,
   FoodEntry,
+  FoodItem,
+  FoodItemWriteRequest,
   GetDay400,
   GetDay401,
   Health,
+  PatchedFoodItemUpdateRequest,
   PatchedUserSettingsRequest,
   Ping,
   PresignUploadRequestRequest,
@@ -49,6 +58,9 @@ import type {
   TargetProposalRequestRequest,
   TargetVersion,
   TargetVersionCreateRequest,
+  UpdateEntryItem400,
+  UpdateEntryItem401,
+  UpdateEntryItem404,
   User,
 } from "./model";
 
@@ -793,6 +805,374 @@ export const useCreateEntry = <TError = CreateEntry400 | CreateEntry401, TContex
   TContext
 > => {
   const mutationOptions = getCreateEntryMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+
+/**
+ * Adds one item and recalculates the entry and day totals.
+ * @summary Add an item to a food entry
+ */
+export type createEntryItemResponse201 = {
+  data: FoodItem;
+  status: 201;
+};
+
+export type createEntryItemResponse400 = {
+  data: CreateEntryItem400;
+  status: 400;
+};
+
+export type createEntryItemResponse401 = {
+  data: CreateEntryItem401;
+  status: 401;
+};
+
+export type createEntryItemResponse404 = {
+  data: CreateEntryItem404;
+  status: 404;
+};
+
+export type createEntryItemResponseSuccess = createEntryItemResponse201 & {
+  headers: Headers;
+};
+export type createEntryItemResponseError = (
+  createEntryItemResponse400 | createEntryItemResponse401 | createEntryItemResponse404
+) & {
+  headers: Headers;
+};
+
+export type createEntryItemResponse = createEntryItemResponseSuccess | createEntryItemResponseError;
+
+export const getCreateEntryItemUrl = (entryId: number) => {
+  return `/api/entries/${entryId}/items/`;
+};
+
+export const createEntryItem = async (
+  entryId: number,
+  foodItemWriteRequest: FoodItemWriteRequest,
+  options?: RequestInit,
+): Promise<createEntryItemResponse> => {
+  return customFetch<createEntryItemResponse>(getCreateEntryItemUrl(entryId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(foodItemWriteRequest),
+  });
+};
+
+export const getCreateEntryItemMutationOptions = <
+  TError = CreateEntryItem400 | CreateEntryItem401 | CreateEntryItem404,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEntryItem>>,
+    TError,
+    { entryId: number; data: FoodItemWriteRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createEntryItem>>,
+  TError,
+  { entryId: number; data: FoodItemWriteRequest },
+  TContext
+> => {
+  const mutationKey = ["createEntryItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createEntryItem>>,
+    { entryId: number; data: FoodItemWriteRequest }
+  > = (props) => {
+    const { entryId, data } = props ?? {};
+
+    return createEntryItem(entryId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateEntryItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createEntryItem>>
+>;
+export type CreateEntryItemMutationBody = FoodItemWriteRequest;
+export type CreateEntryItemMutationError =
+  CreateEntryItem400 | CreateEntryItem401 | CreateEntryItem404;
+
+/**
+ * @summary Add an item to a food entry
+ */
+export const useCreateEntryItem = <
+  TError = CreateEntryItem400 | CreateEntryItem401 | CreateEntryItem404,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createEntryItem>>,
+      TError,
+      { entryId: number; data: FoodItemWriteRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createEntryItem>>,
+  TError,
+  { entryId: number; data: FoodItemWriteRequest },
+  TContext
+> => {
+  const mutationOptions = getCreateEntryItemMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+
+/**
+ * Partially updates one item and recalculates the entry and day totals.
+ * @summary Correct one item in a food entry
+ */
+export type updateEntryItemResponse200 = {
+  data: FoodItem;
+  status: 200;
+};
+
+export type updateEntryItemResponse400 = {
+  data: UpdateEntryItem400;
+  status: 400;
+};
+
+export type updateEntryItemResponse401 = {
+  data: UpdateEntryItem401;
+  status: 401;
+};
+
+export type updateEntryItemResponse404 = {
+  data: UpdateEntryItem404;
+  status: 404;
+};
+
+export type updateEntryItemResponseSuccess = updateEntryItemResponse200 & {
+  headers: Headers;
+};
+export type updateEntryItemResponseError = (
+  updateEntryItemResponse400 | updateEntryItemResponse401 | updateEntryItemResponse404
+) & {
+  headers: Headers;
+};
+
+export type updateEntryItemResponse = updateEntryItemResponseSuccess | updateEntryItemResponseError;
+
+export const getUpdateEntryItemUrl = (entryId: number, id: number) => {
+  return `/api/entries/${entryId}/items/${id}/`;
+};
+
+export const updateEntryItem = async (
+  entryId: number,
+  id: number,
+  patchedFoodItemUpdateRequest: PatchedFoodItemUpdateRequest,
+  options?: RequestInit,
+): Promise<updateEntryItemResponse> => {
+  return customFetch<updateEntryItemResponse>(getUpdateEntryItemUrl(entryId, id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(patchedFoodItemUpdateRequest),
+  });
+};
+
+export const getUpdateEntryItemMutationOptions = <
+  TError = UpdateEntryItem400 | UpdateEntryItem401 | UpdateEntryItem404,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEntryItem>>,
+    TError,
+    { entryId: number; id: number; data: PatchedFoodItemUpdateRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateEntryItem>>,
+  TError,
+  { entryId: number; id: number; data: PatchedFoodItemUpdateRequest },
+  TContext
+> => {
+  const mutationKey = ["updateEntryItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateEntryItem>>,
+    { entryId: number; id: number; data: PatchedFoodItemUpdateRequest }
+  > = (props) => {
+    const { entryId, id, data } = props ?? {};
+
+    return updateEntryItem(entryId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateEntryItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateEntryItem>>
+>;
+export type UpdateEntryItemMutationBody = PatchedFoodItemUpdateRequest;
+export type UpdateEntryItemMutationError =
+  UpdateEntryItem400 | UpdateEntryItem401 | UpdateEntryItem404;
+
+/**
+ * @summary Correct one item in a food entry
+ */
+export const useUpdateEntryItem = <
+  TError = UpdateEntryItem400 | UpdateEntryItem401 | UpdateEntryItem404,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateEntryItem>>,
+      TError,
+      { entryId: number; id: number; data: PatchedFoodItemUpdateRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateEntryItem>>,
+  TError,
+  { entryId: number; id: number; data: PatchedFoodItemUpdateRequest },
+  TContext
+> => {
+  const mutationOptions = getUpdateEntryItemMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+
+/**
+ * Removes one item and recalculates totals. An entry must retain one item.
+ * @summary Remove one item from a food entry
+ */
+export type deleteEntryItemResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteEntryItemResponse401 = {
+  data: DeleteEntryItem401;
+  status: 401;
+};
+
+export type deleteEntryItemResponse404 = {
+  data: DeleteEntryItem404;
+  status: 404;
+};
+
+export type deleteEntryItemResponse409 = {
+  data: EntryItemConflict;
+  status: 409;
+};
+
+export type deleteEntryItemResponseSuccess = deleteEntryItemResponse204 & {
+  headers: Headers;
+};
+export type deleteEntryItemResponseError = (
+  deleteEntryItemResponse401 | deleteEntryItemResponse404 | deleteEntryItemResponse409
+) & {
+  headers: Headers;
+};
+
+export type deleteEntryItemResponse = deleteEntryItemResponseSuccess | deleteEntryItemResponseError;
+
+export const getDeleteEntryItemUrl = (entryId: number, id: number) => {
+  return `/api/entries/${entryId}/items/${id}/`;
+};
+
+export const deleteEntryItem = async (
+  entryId: number,
+  id: number,
+  options?: RequestInit,
+): Promise<deleteEntryItemResponse> => {
+  return customFetch<deleteEntryItemResponse>(getDeleteEntryItemUrl(entryId, id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteEntryItemMutationOptions = <
+  TError = DeleteEntryItem401 | DeleteEntryItem404 | EntryItemConflict,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteEntryItem>>,
+    TError,
+    { entryId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteEntryItem>>,
+  TError,
+  { entryId: number; id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteEntryItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteEntryItem>>,
+    { entryId: number; id: number }
+  > = (props) => {
+    const { entryId, id } = props ?? {};
+
+    return deleteEntryItem(entryId, id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteEntryItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteEntryItem>>
+>;
+
+export type DeleteEntryItemMutationError =
+  DeleteEntryItem401 | DeleteEntryItem404 | EntryItemConflict;
+
+/**
+ * @summary Remove one item from a food entry
+ */
+export const useDeleteEntryItem = <
+  TError = DeleteEntryItem401 | DeleteEntryItem404 | EntryItemConflict,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteEntryItem>>,
+      TError,
+      { entryId: number; id: number },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteEntryItem>>,
+  TError,
+  { entryId: number; id: number },
+  TContext
+> => {
+  const mutationOptions = getDeleteEntryItemMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

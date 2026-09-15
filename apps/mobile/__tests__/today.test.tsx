@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
+import { router } from "expo-router";
 
 import TodayScreen from "../app/(app)/today";
 import { useSession } from "../lib/session";
@@ -79,6 +80,11 @@ describe("TodayScreen", () => {
     expect(screen.getByText("Greek yogurt")).toBeTruthy();
     expect(screen.getByText("240.00 kcal")).toBeTruthy();
     expect(screen.getByText("36.00p · 4.00f")).toBeTruthy();
+    fireEvent.press(screen.getByRole("button", { name: "Edit Greek yogurt" }));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/entry/[id]",
+      params: { id: 1, date: expect.any(String) },
+    });
   });
 
   it("shows an error without false zero totals when the day request fails", () => {

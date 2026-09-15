@@ -9,6 +9,14 @@ from . import services
 from .models import DailyLog, FoodEntry, FoodItem
 
 
+def validate_positive_macros(attrs, instance=None):
+    fields = ("calories", "protein_g", "fiber_g")
+    values = {field: attrs.get(field, getattr(instance, field, 0)) for field in fields}
+    if not services.has_positive_macros(**values):
+        raise serializers.ValidationError(services.POSITIVE_MACROS_ERROR)
+    return attrs
+
+
 class ManualItemWriteSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     quantity = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal("0.01"))
@@ -17,9 +25,48 @@ class ManualItemWriteSerializer(serializers.Serializer):
     fiber_g = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0"))
 
     def validate(self, attrs):
-        if not any(attrs[field] > 0 for field in ("calories", "protein_g", "fiber_g")):
-            raise serializers.ValidationError("Enter at least one macro value greater than zero.")
-        return attrs
+        return validate_positive_macros(attrs)
+
+
+class FoodItemWriteSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=200)
+    portion_label = serializers.CharField(
+        max_length=100, allow_blank=True, required=False, default=""
+    )
+    quantity = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal("0.01"))
+    calories = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0"))
+    protein_g = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0"))
+    fiber_g = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0"))
+
+    def validate(self, attrs):
+        return validate_positive_macros(attrs)
+
+
+class FoodItemUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=200, required=False)
+    portion_label = serializers.CharField(max_length=100, allow_blank=True, required=False)
+    quantity = serializers.DecimalField(
+        max_digits=8, decimal_places=2, min_value=Decimal("0.01"), required=False
+    )
+    calories = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False
+    )
+    protein_g = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False
+    )
+    fiber_g = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False
+    )
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("Change at least one field.")
+        return validate_positive_macros(attrs, self.instance)
+
+
+class EntryItemConflictSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField()
 
 
 class ManualEntryCreateSerializer(serializers.Serializer):
@@ -58,6 +105,7 @@ class PhotoEntryCreateSerializer(serializers.Serializer):
     timezone = serializers.CharField(max_length=64)
     eaten_at = serializers.DateTimeField()
     analysis_id = serializers.IntegerField(min_value=1)
+    items = FoodItemWriteSerializer(many=True, required=False, allow_empty=False)
 
     def validate(self, attrs):
         manual = ManualEntryCreateSerializer(context=self.context)
@@ -83,8 +131,15 @@ class PhotoEntryCreateSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         validated_data.pop("timezone")
+        corrected_items = [
+            services.EditableItem(**item) for item in validated_data.pop("items", [])
+        ] or None
         try:
-            return services.create_photo_entry(user=self.context["request"].user, **validated_data)
+            return services.create_photo_entry(
+                user=self.context["request"].user,
+                corrected_items=corrected_items,
+                **validated_data,
+            )
         except (FoodAnalysisCall.DoesNotExist, ValueError):
             raise serializers.ValidationError(
                 {"analysis_id": "Choose a completed analysis that has not been saved."}

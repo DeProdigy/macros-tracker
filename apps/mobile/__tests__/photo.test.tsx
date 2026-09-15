@@ -113,13 +113,70 @@ describe("PhotoScreen", () => {
     fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
 
     await waitFor(() => expect(screen.getByText("540.00")).toBeTruthy());
-    expect(screen.getByText("Chicken thigh")).toBeTruthy();
-    expect(screen.getByText("Broccoli")).toBeTruthy();
+    expect(screen.getByDisplayValue("Chicken thigh")).toBeTruthy();
+    expect(screen.getByDisplayValue("Broccoli")).toBeTruthy();
     fireEvent.press(screen.getByRole("button", { name: "SAVE TO TODAY" }));
 
-    await waitFor(() => expect(mockSavePhotoAnalysis).toHaveBeenCalledWith(17, expect.any(Object)));
+    await waitFor(() =>
+      expect(mockSavePhotoAnalysis).toHaveBeenCalledWith(17, expect.any(Object), [
+        {
+          name: "Chicken thigh",
+          portion_label: "2 pieces",
+          quantity: "1.00",
+          calories: "360.00",
+          protein_g: "38.00",
+          fiber_g: "0.00",
+        },
+        {
+          name: "Broccoli",
+          portion_label: "1 cup",
+          quantity: "1.00",
+          calories: "180.00",
+          protein_g: "3.00",
+          fiber_g: "8.00",
+        },
+      ]),
+    );
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["day", "2026-09-01"] });
     expect(router.replace).toHaveBeenCalledWith("/today");
+  });
+
+  it("updates totals and the save payload after correction", async () => {
+    render(<PhotoScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
+    await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
+    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    await waitFor(() => expect(screen.getByDisplayValue("Chicken thigh")).toBeTruthy());
+
+    fireEvent.changeText(screen.getByLabelText("Item 1 quantity"), "2");
+    expect(screen.getByText("900.00")).toBeTruthy();
+    fireEvent.press(screen.getByRole("button", { name: "SAVE TO TODAY" }));
+
+    await waitFor(() =>
+      expect(mockSavePhotoAnalysis).toHaveBeenCalledWith(
+        17,
+        expect.any(Object),
+        expect.arrayContaining([
+          expect.objectContaining({ name: "Chicken thigh", quantity: "2.00" }),
+        ]),
+      ),
+    );
+  });
+
+  it("adds and removes items but keeps one item minimum", async () => {
+    render(<PhotoScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
+    await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
+    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "REMOVE" })).toHaveLength(2));
+
+    fireEvent.press(screen.getAllByRole("button", { name: "REMOVE" })[0]);
+    expect(screen.queryByDisplayValue("Chicken thigh")).toBeNull();
+    expect(screen.getByRole("button", { name: "REMOVE" })).toBeDisabled();
+
+    fireEvent.press(screen.getByRole("button", { name: "ADD MISSED ITEM" }));
+    expect(screen.getByLabelText("Item 2 food name")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "REMOVE" })).toHaveLength(2);
   });
 
   it("offers Library and Settings when camera permission is denied", async () => {

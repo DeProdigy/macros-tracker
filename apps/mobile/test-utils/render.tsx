@@ -20,8 +20,8 @@ import type { ReactElement, ReactNode } from "react";
 export const createTestQueryClient = (): QueryClient =>
   new QueryClient({
     defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { retry: false, gcTime: Infinity },
     },
   });
 

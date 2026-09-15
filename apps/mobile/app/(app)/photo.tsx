@@ -14,6 +14,15 @@ import {
   View,
 } from "react-native";
 
+import { ItemEditor } from "@/components/item-editor";
+import {
+  analysisItemToEditable,
+  emptyEditableItem,
+  type EditableFoodItem,
+  isValidEditableItem,
+  itemTotals,
+  itemWriteRequest,
+} from "@/lib/entry-items";
 import { localDayContext } from "@/lib/local-day";
 import { usePalette } from "@/lib/palette";
 import { savePhotoAnalysis, type SelectedPhoto, uploadAndAnalyze } from "@/lib/photo-analysis";
@@ -26,6 +35,7 @@ export default function PhotoScreen() {
   const [photo, setPhoto] = useState<SelectedPhoto | null>(null);
   const [description, setDescription] = useState("");
   const [analysis, setAnalysis] = useState<FoodAnalysisResult | null>(null);
+  const [items, setItems] = useState<EditableFoodItem[]>([]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -49,6 +59,7 @@ export default function PhotoScreen() {
       const asset = result.assets[0];
       setPhoto({ uri: asset.uri, width: asset.width, height: asset.height });
       setAnalysis(null);
+      setItems([]);
       setPermissionDenied(false);
     }
   };
@@ -58,7 +69,9 @@ export default function PhotoScreen() {
     setWorking(true);
     setError(null);
     try {
-      setAnalysis(await uploadAndAnalyze(photo, description));
+      const result = await uploadAndAnalyze(photo, description);
+      setAnalysis(result);
+      setItems(result.items.map(analysisItemToEditable));
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 429) {
         setError("You reached the rolling photo-analysis limit. Manual entry is still available.");
@@ -72,11 +85,19 @@ export default function PhotoScreen() {
 
   const save = async () => {
     if (!analysis) return;
+    if (!items.every(isValidEditableItem)) {
+      setError("Each item needs a name, positive quantity, and at least one macro value.");
+      return;
+    }
     setWorking(true);
     setError(null);
     try {
       const context = localDayContext(session.timezoneStatus, session.user.timezone);
-      const response = await savePhotoAnalysis(analysis.analysis_id, context);
+      const response = await savePhotoAnalysis(
+        analysis.analysis_id,
+        context,
+        items.map(itemWriteRequest),
+      );
       if (response.status !== 201) throw new Error("Save failed.");
       await queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) });
       router.replace("/today");
@@ -86,6 +107,21 @@ export default function PhotoScreen() {
       setWorking(false);
     }
   };
+
+  const updateItem = (index: number, value: EditableFoodItem) => {
+    setItems((current) => current.map((item, itemIndex) => (itemIndex === index ? value : item)));
+  };
+
+  const removeItem = (index: number) => {
+    if (items.length === 1) {
+      setError("An entry needs at least one item.");
+      return;
+    }
+    setError(null);
+    setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const totals = itemTotals(items);
 
   return (
     <ScrollView
@@ -148,22 +184,29 @@ export default function PhotoScreen() {
       ) : (
         <>
           <View style={styles.totals}>
-            <Metric label="CALORIES" value={analysis.calories} />
-            <Metric label="PROTEIN" value={`${analysis.protein_g}g`} />
-            <Metric label="FIBER" value={`${analysis.fiber_g}g`} />
+            <Metric label="CALORIES" value={totals.calories} />
+            <Metric label="PROTEIN" value={`${totals.protein_g}g`} />
+            <Metric label="FIBER" value={`${totals.fiber_g}g`} />
           </View>
-          {analysis.items.map((item, index) => (
-            <View
-              key={`${item.name}-${index}`}
-              style={[styles.item, { borderColor: palette.hairline }]}
-            >
-              <Text style={[styles.itemName, { color: palette.text }]}>{item.name}</Text>
-              <Text style={{ color: palette.secondaryText }}>{item.portion}</Text>
-              <Text style={{ color: palette.dimText }}>
-                {item.calories} kcal · {item.protein_g}g protein · {item.fiber_g}g fiber
-              </Text>
-            </View>
+          {items.map((item, index) => (
+            <ItemEditor
+              key={item.clientId}
+              label={`Item ${index + 1}`}
+              value={item}
+              onChange={(value) => updateItem(index, value)}
+              onRemove={() => removeItem(index)}
+              removeDisabled={items.length === 1}
+            />
           ))}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              setItems((current) => [...current, emptyEditableItem(`new-${Date.now()}`)])
+            }
+            style={[styles.add, { borderColor: palette.accent }]}
+          >
+            <Text style={{ color: palette.accent, fontWeight: "800" }}>ADD MISSED ITEM</Text>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             disabled={working}
@@ -174,7 +217,10 @@ export default function PhotoScreen() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            onPress={() => setAnalysis(null)}
+            onPress={() => {
+              setAnalysis(null);
+              setItems([]);
+            }}
             style={styles.link}
           >
             <Text style={{ color: palette.accent }}>CHOOSE ANOTHER PHOTO</Text>
@@ -249,8 +295,13 @@ const styles = StyleSheet.create({
   metric: { backgroundColor: "#17191b", borderRadius: 10, flex: 1, padding: 12 },
   metricValue: { color: "#f5f7f8", fontSize: 22, fontWeight: "900" },
   metricLabel: { color: "#8b8f94", fontSize: 10, fontWeight: "800", marginTop: 4 },
-  item: { borderBottomWidth: 1, paddingVertical: 16 },
-  itemName: { fontSize: 18, fontWeight: "800", marginBottom: 4 },
+  add: {
+    alignItems: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 50,
+  },
   link: { alignItems: "center", minHeight: 48, justifyContent: "center" },
   error: { fontSize: 14, lineHeight: 20, marginBottom: 12, marginTop: 18 },
 });
