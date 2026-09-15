@@ -199,7 +199,7 @@ def test_day_list_returns_only_owned_nonempty_days_in_the_requested_month():
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("month", ["202609", "2026-13", "not-a-month"])
+@pytest.mark.parametrize("month", ["202609", "2026-13", "9999-12", "not-a-month"])
 def test_day_list_rejects_invalid_months(month):
     user = User.objects.create_user(email=f"{month}@example.com", timezone="UTC")
 

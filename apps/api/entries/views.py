@@ -389,13 +389,13 @@ class DayListView(APIView):
             if not re.fullmatch(r"\d{4}-\d{2}", month):
                 raise ValueError
             start = date.fromisoformat(f"{month}-01")
+            end = (
+                date(start.year + 1, 1, 1)
+                if start.month == 12
+                else date(start.year, start.month + 1, 1)
+            )
         except ValueError:
             return Response({"month": ["Enter a month in YYYY-MM format."]}, status=400)
-        end = (
-            date(start.year + 1, 1, 1)
-            if start.month == 12
-            else date(start.year, start.month + 1, 1)
-        )
         local_dates = (
             DailyLog.objects.filter(
                 user=cast(User, request.user),
