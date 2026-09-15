@@ -387,7 +387,8 @@
         "/api/entries/": {
             "post": {
                 "operationId": "createEntry",
-                "summary": "Log one Manual or Photo food entry",
+                "description": "Creates a new food event. Manual requests provide one item, Photo requests reference a completed analysis, and Recent requests reference one item from the authenticated user's history. Recent creation copies that snapshot and never changes the old entry.",
+                "summary": "Log one Manual, Photo, or Recent food entry",
                 "tags": [
                     "entries"
                 ],
@@ -396,6 +397,18 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/EntryCreateRequestRequest"
+                            },
+                            "examples": {
+                                "Re-logOneRecentFood": {
+                                    "value": {
+                                        "local_date": "2026-09-15",
+                                        "timezone": "America/New_York",
+                                        "eaten_at": "2026-09-15T12:30:00-04:00",
+                                        "recent_item_id": 42,
+                                        "quantity": "1.50"
+                                    },
+                                    "summary": "Re-log one recent food"
+                                }
                             }
                         },
                         "application/x-www-form-urlencoded": {
@@ -715,6 +728,80 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/foods/": {
+            "get": {
+                "operationId": "getFoods",
+                "description": "Returns the authenticated user's previously logged items newest-first. Foods are distinct by normalized name and portion label, and each result keeps the newest matching item's per-unit macros. The response contains at most 100 foods. Manual, Photo, and Recent items all participate.",
+                "summary": "List distinct foods from entry history",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Case-insensitive match against food name or portion label.",
+                        "examples": {
+                            "Yogurt": {
+                                "value": "yogurt"
+                            }
+                        }
+                    }
+                ],
+                "tags": [
+                    "foods"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/RecentFood"
+                                    }
+                                },
+                                "examples": {
+                                    "RecentFoods": {
+                                        "value": [
+                                            {
+                                                "id": 42,
+                                                "name": "Greek yogurt",
+                                                "portion_label": "1 cup",
+                                                "calories": "120.00",
+                                                "protein_g": "18.00",
+                                                "fiber_g": "2.00"
+                                            }
+                                        ],
+                                        "summary": "Recent foods"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Authentication error."
                     }
                 }
             }
@@ -1355,6 +1442,9 @@
                     },
                     {
                         "$ref": "#/components/schemas/PhotoEntryCreateRequest"
+                    },
+                    {
+                        "$ref": "#/components/schemas/RecentEntryCreateRequest"
                     }
                 ]
             },
@@ -1977,6 +2067,79 @@
                     "key",
                     "max_bytes",
                     "url"
+                ]
+            },
+            "RecentEntryCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "local_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                    },
+                    "eaten_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "recent_item_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "quantity": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "eaten_at",
+                    "local_date",
+                    "quantity",
+                    "recent_item_id",
+                    "timezone"
+                ]
+            },
+            "RecentFood": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "portion_label": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "calories": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "protein_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "fiber_g": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "calories",
+                    "fiber_g",
+                    "id",
+                    "name",
+                    "protein_g"
                 ]
             },
             "Session": {

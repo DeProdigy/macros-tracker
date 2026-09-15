@@ -7,5 +7,7 @@
  */
 import type { ManualEntryCreateRequest } from "./manualEntryCreateRequest";
 import type { PhotoEntryCreateRequest } from "./photoEntryCreateRequest";
+import type { RecentEntryCreateRequest } from "./recentEntryCreateRequest";
 
-export type EntryCreateRequestRequest = ManualEntryCreateRequest | PhotoEntryCreateRequest;
+export type EntryCreateRequestRequest =
+  ManualEntryCreateRequest | PhotoEntryCreateRequest | RecentEntryCreateRequest;

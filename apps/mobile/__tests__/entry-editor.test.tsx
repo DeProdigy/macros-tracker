@@ -31,7 +31,7 @@ jest.mock("../lib/session", () => ({ useSession: jest.fn() }));
 
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 
-const dayQueryResult = () => ({
+const dayQueryResult = (source = "photo") => ({
   isLoading: false,
   data: {
     status: 200,
@@ -44,7 +44,7 @@ const dayQueryResult = () => ({
       entries: [
         {
           id: 7,
-          source: "photo",
+          source,
           description: "Lunch",
           eaten_at: "2026-09-01T17:00:00Z",
           calories: "280.00",
@@ -91,6 +91,16 @@ beforeEach(() => {
 });
 
 describe("EntryEditorScreen", () => {
+  it("renders and edits a no-photo Recent entry", () => {
+    mockUseGetDay.mockReturnValue(dayQueryResult("recent"));
+
+    render(<EntryEditorScreen />);
+
+    expect(screen.getByText("Lunch")).toBeTruthy();
+    expect(screen.getByLabelText("Item 1 food name").props.value).toBe("Chicken");
+    expect(screen.getByText("280.00")).toBeTruthy();
+  });
+
   it("saves an edited item through the item mutation", async () => {
     render(<EntryEditorScreen />);
 

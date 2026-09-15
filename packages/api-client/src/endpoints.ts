@@ -43,12 +43,15 @@ import type {
   FoodItemWriteRequest,
   GetDay400,
   GetDay401,
+  GetFoods401,
+  GetFoodsParams,
   Health,
   PatchedFoodItemUpdateRequest,
   PatchedUserSettingsRequest,
   Ping,
   PresignUploadRequestRequest,
   PresignUploadResponse,
+  RecentFood,
   Session,
   SessionCreateRequest,
   SessionDeleteRequest,
@@ -702,7 +705,8 @@ export function useGetDay<
 }
 
 /**
- * @summary Log one Manual or Photo food entry
+ * Creates a new food event. Manual requests provide one item, Photo requests reference a completed analysis, and Recent requests reference one item from the authenticated user's history. Recent creation copies that snapshot and never changes the old entry.
+ * @summary Log one Manual, Photo, or Recent food entry
  */
 export type createEntryResponse201 = {
   data: FoodEntry;
@@ -785,7 +789,7 @@ export type CreateEntryMutationBody = EntryCreateRequestRequest;
 export type CreateEntryMutationError = CreateEntry400 | CreateEntry401;
 
 /**
- * @summary Log one Manual or Photo food entry
+ * @summary Log one Manual, Photo, or Recent food entry
  */
 export const useCreateEntry = <TError = CreateEntry400 | CreateEntry401, TContext = unknown>(
   options?: {
@@ -1176,6 +1180,147 @@ export const useDeleteEntryItem = <
 
   return useMutation(mutationOptions, queryClient);
 };
+
+/**
+ * Returns the authenticated user's previously logged items newest-first. Foods are distinct by normalized name and portion label, and each result keeps the newest matching item's per-unit macros. The response contains at most 100 foods. Manual, Photo, and Recent items all participate.
+ * @summary List distinct foods from entry history
+ */
+export type getFoodsResponse200 = {
+  data: RecentFood[];
+  status: 200;
+};
+
+export type getFoodsResponse401 = {
+  data: GetFoods401;
+  status: 401;
+};
+
+export type getFoodsResponseSuccess = getFoodsResponse200 & {
+  headers: Headers;
+};
+export type getFoodsResponseError = getFoodsResponse401 & {
+  headers: Headers;
+};
+
+export type getFoodsResponse = getFoodsResponseSuccess | getFoodsResponseError;
+
+export const getGetFoodsUrl = (params?: GetFoodsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/foods/?${stringifiedParams}` : `/api/foods/`;
+};
+
+export const getFoods = async (
+  params?: GetFoodsParams,
+  options?: RequestInit,
+): Promise<getFoodsResponse> => {
+  return customFetch<getFoodsResponse>(getGetFoodsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFoodsQueryKey = (params?: GetFoodsParams) => {
+  return [`/api/foods/`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetFoodsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFoods>>,
+  TError = GetFoods401,
+>(
+  params?: GetFoodsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getFoods>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFoodsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getFoods>>> = ({ signal }) =>
+    getFoods(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFoods>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetFoodsQueryResult = NonNullable<Awaited<ReturnType<typeof getFoods>>>;
+export type GetFoodsQueryError = GetFoods401;
+
+export function useGetFoods<TData = Awaited<ReturnType<typeof getFoods>>, TError = GetFoods401>(
+  params: undefined | GetFoodsParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getFoods>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getFoods>>,
+          TError,
+          Awaited<ReturnType<typeof getFoods>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetFoods<TData = Awaited<ReturnType<typeof getFoods>>, TError = GetFoods401>(
+  params?: GetFoodsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getFoods>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getFoods>>,
+          TError,
+          Awaited<ReturnType<typeof getFoods>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetFoods<TData = Awaited<ReturnType<typeof getFoods>>, TError = GetFoods401>(
+  params?: GetFoodsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getFoods>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary List distinct foods from entry history
+ */
+
+export function useGetFoods<TData = Awaited<ReturnType<typeof getFoods>>, TError = GetFoods401>(
+  params?: GetFoodsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getFoods>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetFoodsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
 
 /**
  * Reports whether the API can serve traffic. Unlike `/api/ping/`, this executes a real query against the database and returns HTTP 503 if that query fails, so an orchestrator can pull the instance out of rotation. Requires no authentication.
