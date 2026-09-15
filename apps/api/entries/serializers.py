@@ -69,31 +69,32 @@ class EntryItemConflictSerializer(serializers.Serializer):
     detail = serializers.CharField()
 
 
-def validate_entry_timing(attrs, context):
-    user = context["request"].user
-    if attrs["timezone"] != user.timezone:
-        raise serializers.ValidationError(
-            {"timezone": "Synchronize the device timezone and try again."}
-        )
-    try:
-        zone = ZoneInfo(attrs["timezone"])
-    except (ValueError, ZoneInfoNotFoundError):
-        raise serializers.ValidationError(
-            {"timezone": "Synchronize the device timezone and try again."}
-        ) from None
-    if attrs["eaten_at"].astimezone(zone).date() != attrs["local_date"]:
-        raise serializers.ValidationError("The eaten time is not on the selected local date.")
-    return attrs
-
-
-class ManualEntryCreateSerializer(serializers.Serializer):
+class EntryTimingSerializer(serializers.Serializer):
     local_date = serializers.DateField()
     timezone = serializers.CharField(max_length=64)
     eaten_at = serializers.DateTimeField()
-    item = ManualItemWriteSerializer()
+
+    def validate_timezone(self, value):
+        user = self.context["request"].user
+        if value != user.timezone:
+            raise serializers.ValidationError("Synchronize the device timezone and try again.")
+        try:
+            ZoneInfo(value)
+        except (ValueError, ZoneInfoNotFoundError):
+            raise serializers.ValidationError(
+                "Synchronize the device timezone and try again."
+            ) from None
+        return value
 
     def validate(self, attrs):
-        return validate_entry_timing(attrs, self.context)
+        zone = ZoneInfo(attrs["timezone"])
+        if attrs["eaten_at"].astimezone(zone).date() != attrs["local_date"]:
+            raise serializers.ValidationError("The eaten time is not on the selected local date.")
+        return attrs
+
+
+class ManualEntryCreateSerializer(EntryTimingSerializer):
+    item = ManualItemWriteSerializer()
 
     def create(self, validated_data):
         item = services.ManualItem(**validated_data.pop("item"))
@@ -103,15 +104,12 @@ class ManualEntryCreateSerializer(serializers.Serializer):
         )
 
 
-class PhotoEntryCreateSerializer(serializers.Serializer):
-    local_date = serializers.DateField()
-    timezone = serializers.CharField(max_length=64)
-    eaten_at = serializers.DateTimeField()
+class PhotoEntryCreateSerializer(EntryTimingSerializer):
     analysis_id = serializers.IntegerField(min_value=1)
     items = FoodItemWriteSerializer(many=True, required=False, allow_empty=False)
 
     def validate(self, attrs):
-        validate_entry_timing(attrs, self.context)
+        attrs = super().validate(attrs)
         call = FoodAnalysisCall.objects.filter(
             pk=attrs["analysis_id"],
             user=self.context["request"].user,
@@ -140,15 +138,14 @@ class PhotoEntryCreateSerializer(serializers.Serializer):
             ) from None
 
 
-class RecentEntryCreateSerializer(serializers.Serializer):
-    local_date = serializers.DateField()
-    timezone = serializers.CharField(max_length=64)
-    eaten_at = serializers.DateTimeField()
+class RecentEntryCreateSerializer(EntryTimingSerializer):
     recent_item_id = serializers.IntegerField(min_value=1)
-    quantity = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal("0.01"))
-
-    def validate(self, attrs):
-        return validate_entry_timing(attrs, self.context)
+    quantity = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        max_value=Decimal("999999.99"),
+    )
 
     def create(self, validated_data):
         validated_data.pop("timezone")
@@ -158,6 +155,8 @@ class RecentEntryCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"recent_item_id": ["Choose a food from your Recents."]}
             ) from None
+        except ValueError as exc:
+            raise serializers.ValidationError({"quantity": [str(exc)]}) from None
 
 
 class RecentFoodSerializer(serializers.ModelSerializer):

@@ -105,6 +105,21 @@ def test_manual_save_rejects_an_invalid_stored_timezone_instead_of_raising():
 
 
 @pytest.mark.django_db
+def test_manual_save_reports_timezone_and_field_errors_together():
+    user = User.objects.create_user(email="all-errors@example.com", timezone="America/New_York")
+    invalid = payload()
+    invalid["timezone"] = "UTC"
+    invalid["eaten_at"] = "not-a-date"
+
+    response = client_for(user).post(reverse("entry-list"), invalid, format="json")
+
+    assert response.status_code == 400
+    assert response.data["timezone"] == ["Synchronize the device timezone and try again."]
+    assert "eaten_at" in response.data
+    assert FoodEntry.objects.count() == 0
+
+
+@pytest.mark.django_db
 def test_manual_save_requires_authentication():
     response = APIClient().post(reverse("entry-list"), payload(), format="json")
 

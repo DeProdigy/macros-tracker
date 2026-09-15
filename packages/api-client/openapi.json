@@ -735,7 +735,7 @@
         "/api/foods/": {
             "get": {
                 "operationId": "getFoods",
-                "description": "Returns the authenticated user's previously logged items newest-first. Foods are distinct by normalized name and portion label, and each result keeps the newest matching item's per-unit macros. Manual, Photo, and Recent items all participate.",
+                "description": "Returns the authenticated user's previously logged items newest-first. Foods are distinct by normalized name and portion label, and each result keeps the newest matching item's per-unit macros. The response contains at most 100 foods. Manual, Photo, and Recent items all participate.",
                 "summary": "List distinct foods from entry history",
                 "parameters": [
                     {
@@ -776,16 +776,14 @@
                                 "examples": {
                                     "RecentFoods": {
                                         "value": [
-                                            [
-                                                {
-                                                    "id": 42,
-                                                    "name": "Greek yogurt",
-                                                    "portion_label": "1 cup",
-                                                    "calories": "120.00",
-                                                    "protein_g": "18.00",
-                                                    "fiber_g": "2.00"
-                                                }
-                                            ]
+                                            {
+                                                "id": 42,
+                                                "name": "Greek yogurt",
+                                                "portion_label": "1 cup",
+                                                "calories": "120.00",
+                                                "protein_g": "18.00",
+                                                "fiber_g": "2.00"
+                                            }
                                         ],
                                         "summary": "Recent foods"
                                     }

@@ -1,4 +1,5 @@
 import {
+  ApiError,
   createEntry,
   getGetDayQueryKey,
   getGetFoodsQueryKey,
@@ -12,15 +13,16 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 
 import {
   type EditableFoodItem,
+  isValidMacroValue,
+  isValidQuantityValue,
   isValidEditableItem,
   itemTotals,
   itemWriteRequest,
+  stepQuantity,
 } from "@/lib/entry-items";
 import { LocalDayUnavailable, localDayContext } from "@/lib/local-day";
 import { usePalette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
-
-const validNumber = (value: string) => /^\d+(?:\.\d{1,2})?$/.test(value);
 
 type LogMode = "manual" | "recents";
 
@@ -75,9 +77,8 @@ export default function LogFoodScreen() {
     const macros = [calories, protein, fiber].map((value) => (value.trim() === "" ? "0" : value));
     if (
       !name.trim() ||
-      !validNumber(quantity) ||
-      Number(quantity) <= 0 ||
-      macros.some((value) => !validNumber(value)) ||
+      !isValidQuantityValue(quantity) ||
+      macros.some((value) => !isValidMacroValue(value)) ||
       !macros.some((value) => Number(value) > 0)
     ) {
       setError("Enter a name, a positive quantity, and at least one macro value.");
@@ -99,7 +100,10 @@ export default function LogFoodScreen() {
         },
       });
       if (response.status !== 201) throw new Error("Save failed");
-      await queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) }),
+        queryClient.invalidateQueries({ queryKey: getGetFoodsQueryKey(), refetchType: "none" }),
+      ]);
       router.replace("/today");
     } catch (caught) {
       setError(
@@ -130,14 +134,26 @@ export default function LogFoodScreen() {
       if (response.status !== 201) throw new Error("Save failed");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) }),
-        queryClient.invalidateQueries({ queryKey: getGetFoodsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetFoodsQueryKey(), refetchType: "none" }),
       ]);
       router.replace("/today");
     } catch (caught) {
+      const missingRecentFood =
+        caught instanceof ApiError &&
+        caught.status === 400 &&
+        typeof caught.body === "object" &&
+        caught.body !== null &&
+        "recent_item_id" in caught.body;
+      if (missingRecentFood) {
+        setSelectedFood(null);
+        await queryClient.invalidateQueries({ queryKey: getGetFoodsQueryKey() });
+      }
       setError(
         caught instanceof LocalDayUnavailable
           ? "Sync your timezone and try again."
-          : "Could not log this recent food. Try again.",
+          : missingRecentFood
+            ? "That recent food is no longer available."
+            : "Could not log this recent food. Try again.",
       );
     } finally {
       setSaving(false);
@@ -267,9 +283,7 @@ export default function LogFoodScreen() {
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel="Decrease quantity"
-                        onPress={() =>
-                          setRecentQuantity(String(Math.max(0.01, Number(recentQuantity || 0) - 1)))
-                        }
+                        onPress={() => setRecentQuantity(stepQuantity(recentQuantity, -1))}
                         style={[styles.stepper, { borderColor: palette.hairline }]}
                       >
                         <Text style={[styles.stepperText, { color: palette.text }]}>−</Text>
@@ -287,7 +301,7 @@ export default function LogFoodScreen() {
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel="Increase quantity"
-                        onPress={() => setRecentQuantity(String(Number(recentQuantity || 0) + 1))}
+                        onPress={() => setRecentQuantity(stepQuantity(recentQuantity, 1))}
                         style={[styles.stepper, { borderColor: palette.hairline }]}
                       >
                         <Text style={[styles.stepperText, { color: palette.text }]}>+</Text>
@@ -309,6 +323,7 @@ export default function LogFoodScreen() {
               </View>
             );
           })}
+          {error && !selectedFood ? <ErrorMessage message={error} color={palette.error} /> : null}
         </>
       )}
     </ScrollView>

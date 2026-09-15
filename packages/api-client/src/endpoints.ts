@@ -1182,7 +1182,7 @@ export const useDeleteEntryItem = <
 };
 
 /**
- * Returns the authenticated user's previously logged items newest-first. Foods are distinct by normalized name and portion label, and each result keeps the newest matching item's per-unit macros. Manual, Photo, and Recent items all participate.
+ * Returns the authenticated user's previously logged items newest-first. Foods are distinct by normalized name and portion label, and each result keeps the newest matching item's per-unit macros. The response contains at most 100 foods. Manual, Photo, and Recent items all participate.
  * @summary List distinct foods from entry history
  */
 export type getFoodsResponse200 = {

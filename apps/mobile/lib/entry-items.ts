@@ -58,7 +58,26 @@ export const emptyEditableItem = (clientId: string): EditableFoodItem => ({
   fiber_g: "",
 });
 
-const validNumber = (value: string) => /^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(value);
+const decimalPattern = /^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/;
+const maximumQuantityHundredths = 99_999_999n;
+const maximumMacroHundredths = 9_999_999_999n;
+
+const parseHundredths = (value: string): bigint | null => {
+  if (!decimalPattern.test(value)) return null;
+  const withLeadingZero = value.startsWith(".") ? `0${value}` : value;
+  const [whole, fraction = ""] = withLeadingZero.split(".");
+  return BigInt(whole || "0") * 100n + BigInt(fraction.padEnd(2, "0"));
+};
+
+export const isValidQuantityValue = (value: string): boolean => {
+  const hundredths = parseHundredths(value);
+  return hundredths !== null && hundredths > 0n && hundredths <= maximumQuantityHundredths;
+};
+
+export const isValidMacroValue = (value: string): boolean => {
+  const hundredths = parseHundredths(value);
+  return hundredths !== null && hundredths >= 0n && hundredths <= maximumMacroHundredths;
+};
 
 const normalizeDecimal = (value: string, fallback = "0"): string => {
   const trimmed = value.trim() || fallback;
@@ -73,9 +92,8 @@ export const isValidEditableItem = (item: EditableFoodItem): boolean => {
   );
   return (
     item.name.trim().length > 0 &&
-    validNumber(item.quantity) &&
-    Number(item.quantity) > 0 &&
-    macros.every(validNumber) &&
+    isValidQuantityValue(item.quantity) &&
+    macros.every(isValidMacroValue) &&
     macros.some((value) => Number(value) > 0)
   );
 };
@@ -112,15 +130,21 @@ export const itemUpdateRequest = (
 };
 
 const decimalHundredths = (value: string): bigint => {
-  if (!validNumber(value)) return 0n;
-  const [whole, fraction = ""] = value.split(".");
-  return BigInt(whole || "0") * 100n + BigInt(fraction.padEnd(2, "0"));
+  return parseHundredths(value) ?? 0n;
 };
 
 const formatHundredths = (value: bigint): string => {
   const whole = value / 100n;
   const fraction = (value % 100n).toString().padStart(2, "0");
   return `${whole}.${fraction}`;
+};
+
+export const stepQuantity = (value: string, direction: -1 | 1): string => {
+  const current = parseHundredths(value) ?? 0n;
+  const next = current + BigInt(direction) * 100n;
+  const clamped =
+    next < 1n ? 1n : next > maximumQuantityHundredths ? maximumQuantityHundredths : next;
+  return formatHundredths(clamped);
 };
 
 export const itemTotals = (items: EditableFoodItem[]) => {

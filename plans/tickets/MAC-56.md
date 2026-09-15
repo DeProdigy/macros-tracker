@@ -26,7 +26,8 @@ Add an authenticated `GET /api/foods/?search=` collection endpoint. It reads the
 historical `FoodItem` rows newest-first by entry eaten time, then entry and item identifiers for
 stable ties. It normalizes trimmed, case-folded name and portion-label values to collapse matching
 items, retaining the newest row's macro snapshot. The optional query searches names and portion
-labels case-insensitively. Different portions of the same food remain separate choices.
+labels case-insensitively. Different portions of the same food remain separate choices. The endpoint
+stops after 100 distinct results and loads only the fields in the response.
 
 Extend `POST /api/entries/` with a Recent request variant containing `recent_item_id`, quantity,
 local date, timezone, and eaten time. The service loads that item through the authenticated user's
@@ -36,10 +37,11 @@ entry and item remain unchanged, and invalid or cross-user identifiers receive a
 error without exposing another user's data.
 
 Enable the existing Recents choice on the Log Food screen rather than adding a new route. The view
-will show loading, error, empty, search-result, selected-item, and save-error states. Selecting an
+shows loading, error, empty, search-result, selected-item, and save-error states. Selecting an
 item starts at quantity one; quantity edits use the existing exact decimal helpers so the displayed
 preview matches the server's saved totals. A successful save invalidates both the day and recent-food
-queries and returns to Today. A failed save preserves the search, selection, and quantity.
+queries without waiting for a Recents refetch. It then returns to Today. A failed save preserves the
+search, selection, and quantity. A deleted source clears the selection and refreshes Recents.
 
 Debounce the trimmed search term for 300 milliseconds before changing the generated query key. This
 keeps search server-owned and case-insensitive without issuing one request for every keystroke.

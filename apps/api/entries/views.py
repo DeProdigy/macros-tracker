@@ -75,6 +75,11 @@ class EntryListCreateView(APIView):
         ],
     )
     def post(self, request: Request) -> Response:
+        source_fields = [
+            field for field in ("item", "analysis_id", "recent_item_id") if field in request.data
+        ]
+        if len(source_fields) != 1:
+            raise ValidationError({"non_field_errors": ["Provide exactly one entry source."]})
         serializer_class: (
             type[ManualEntryCreateSerializer]
             | type[PhotoEntryCreateSerializer]
@@ -99,7 +104,8 @@ class FoodListView(APIView):
         description=(
             "Returns the authenticated user's previously logged items newest-first. Foods are "
             "distinct by normalized name and portion label, and each result keeps the newest "
-            "matching item's per-unit macros. Manual, Photo, and Recent items all participate."
+            "matching item's per-unit macros. The response contains at most 100 foods. Manual, "
+            "Photo, and Recent items all participate."
         ),
         tags=["foods"],
         parameters=[
@@ -119,16 +125,14 @@ class FoodListView(APIView):
         examples=[
             OpenApiExample(
                 "Recent foods",
-                value=[
-                    {
-                        "id": 42,
-                        "name": "Greek yogurt",
-                        "portion_label": "1 cup",
-                        "calories": "120.00",
-                        "protein_g": "18.00",
-                        "fiber_g": "2.00",
-                    }
-                ],
+                value={
+                    "id": 42,
+                    "name": "Greek yogurt",
+                    "portion_label": "1 cup",
+                    "calories": "120.00",
+                    "protein_g": "18.00",
+                    "fiber_g": "2.00",
+                },
                 response_only=True,
                 status_codes=["200"],
             )

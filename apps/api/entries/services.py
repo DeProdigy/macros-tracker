@@ -16,6 +16,8 @@ from uploads.services import copy_analysis_object_to_entry, delete_object
 from .models import DailyLog, FoodEntry, FoodItem
 
 TWOPLACES = Decimal("0.01")
+MAX_ENTRY_TOTAL = Decimal("99999999.99")
+RECENT_FOOD_LIMIT = 100
 POSITIVE_MACROS_ERROR = "Enter at least one macro value greater than zero."
 logger = logging.getLogger(__name__)
 
@@ -40,10 +42,17 @@ class EditableItem:
 
 
 class ItemWithMacros(Protocol):
-    quantity: Decimal
-    calories: Decimal
-    protein_g: Decimal
-    fiber_g: Decimal
+    @property
+    def quantity(self) -> Decimal: ...
+
+    @property
+    def calories(self) -> Decimal: ...
+
+    @property
+    def protein_g(self) -> Decimal: ...
+
+    @property
+    def fiber_g(self) -> Decimal: ...
 
 
 class EntryRequiresOneItem(Exception):
@@ -111,15 +120,19 @@ def recent_foods(*, user: User, search: str = "") -> list[FoodItem]:
         items = items.filter(
             Q(name__icontains=normalized_search) | Q(portion_label__icontains=normalized_search)
         )
-    ordered_items = items.order_by("-entry__eaten_at", "-entry_id", "-id")
+    ordered_items = items.only(
+        "id", "name", "portion_label", "calories", "protein_g", "fiber_g"
+    ).order_by("-entry__eaten_at", "-entry_id", "-id")
     distinct_items: list[FoodItem] = []
     seen: set[tuple[str, str]] = set()
-    for item in ordered_items:
+    for item in ordered_items.iterator(chunk_size=RECENT_FOOD_LIMIT):
         key = (item.name.strip().casefold(), item.portion_label.strip().casefold())
         if key in seen:
             continue
         seen.add(key)
         distinct_items.append(item)
+        if len(distinct_items) == RECENT_FOOD_LIMIT:
+            break
     return distinct_items
 
 
@@ -132,9 +145,21 @@ def create_recent_entry(
     recent_item_id: int,
     quantity: Decimal,
 ) -> FoodEntry:
-    source_item = FoodItem.objects.select_for_update().get(
-        pk=recent_item_id, entry__daily_log__user=user
+    source_item = FoodItem.objects.get(pk=recent_item_id, entry__daily_log__user=user)
+    totals = entry_totals(
+        [
+            EditableItem(
+                name=source_item.name,
+                portion_label=source_item.portion_label,
+                quantity=quantity,
+                calories=source_item.calories,
+                protein_g=source_item.protein_g,
+                fiber_g=source_item.fiber_g,
+            )
+        ]
     )
+    if any(total > MAX_ENTRY_TOTAL for total in totals):
+        raise ValueError("Quantity makes macro totals too large.")
     target = TargetVersion.objects.effective_on(user, local_date)
     day, _ = DailyLog.objects.get_or_create(
         user=user, local_date=local_date, defaults={"target_version": target}

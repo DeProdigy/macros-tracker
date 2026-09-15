@@ -123,6 +123,20 @@ def test_food_list_requires_authentication():
 
 
 @pytest.mark.django_db
+def test_food_list_returns_at_most_one_hundred_distinct_items():
+    user = User.objects.create_user(email="limited@example.com", timezone="UTC")
+    for index in range(101):
+        create_item(user, name=f"Food {index}")
+
+    response = client_for(user).get(reverse("food-list"))
+
+    assert response.status_code == 200
+    assert len(response.data) == 100
+    assert response.data[0]["name"] == "Food 100"
+    assert response.data[-1]["name"] == "Food 1"
+
+
+@pytest.mark.django_db
 def test_recent_save_copies_the_item_into_a_new_entry_without_ai_or_photo_storage():
     user = User.objects.create_user(email="relog@example.com", timezone="America/New_York")
     source = create_item(user)
@@ -203,6 +217,39 @@ def test_recent_save_rejects_invalid_quantity_and_local_timing():
 
     assert invalid_quantity.status_code == 400
     assert invalid_date.status_code == 400
+    assert FoodEntry.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_recent_save_rejects_a_quantity_that_overflows_entry_totals():
+    user = User.objects.create_user(email="overflow@example.com", timezone="America/New_York")
+    source = create_item(user)
+
+    response = client_for(user).post(
+        reverse("entry-list"),
+        recent_payload(source.pk, quantity="999999.99"),
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert response.data["quantity"] == ["Quantity makes macro totals too large."]
+    assert FoodEntry.objects.count() == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("extra_source", [{"item": {}}, {"analysis_id": 1}])
+def test_recent_save_rejects_mixed_entry_sources(extra_source):
+    user = User.objects.create_user(email="mixed@example.com", timezone="America/New_York")
+    source = create_item(user)
+
+    response = client_for(user).post(
+        reverse("entry-list"),
+        recent_payload(source.pk, **extra_source),
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert response.data["non_field_errors"] == ["Provide exactly one entry source."]
     assert FoodEntry.objects.count() == 1
 
 

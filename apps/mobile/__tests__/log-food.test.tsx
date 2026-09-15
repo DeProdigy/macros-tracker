@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
 
+import { ApiError } from "@macros/api-client";
+
 import LogFoodScreen from "../app/(app)/log-food";
 import { useSession } from "../lib/session";
 
@@ -38,12 +40,24 @@ const mockUseGetFoods = jest.fn<(...args: unknown[]) => typeof mockFoodsQuery>(
   () => mockFoodsQuery,
 );
 
-jest.mock("@macros/api-client", () => ({
-  createEntry: (...args: unknown[]) => mockCreateEntry(...args),
-  getGetDayQueryKey: (localDate: string) => ["day", localDate],
-  getGetFoodsQueryKey: () => ["foods"],
-  useGetFoods: (...args: unknown[]) => mockUseGetFoods(...args),
-}));
+jest.mock("@macros/api-client", () => {
+  class FakeApiError extends Error {
+    status: number;
+    body: unknown;
+    constructor(status: number, body: unknown) {
+      super("failed");
+      this.status = status;
+      this.body = body;
+    }
+  }
+  return {
+    ApiError: FakeApiError,
+    createEntry: (...args: unknown[]) => mockCreateEntry(...args),
+    getGetDayQueryKey: (localDate: string) => ["day", localDate],
+    getGetFoodsQueryKey: () => ["foods"],
+    useGetFoods: (...args: unknown[]) => mockUseGetFoods(...args),
+  };
+});
 jest.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
@@ -142,6 +156,10 @@ describe("LogFoodScreen", () => {
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ["day", "2026-08-31"],
     });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["foods"],
+      refetchType: "none",
+    });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/today"));
   });
 
@@ -220,8 +238,27 @@ describe("LogFoodScreen", () => {
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ["day", "2026-08-31"],
     });
-    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["foods"] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["foods"],
+      refetchType: "none",
+    });
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/today"));
+  });
+
+  it("steps a fractional Recent quantity without floating point drift", () => {
+    render(<LogFoodScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "RECENTS" }));
+    fireEvent.press(screen.getByRole("button", { name: "Select Greek yogurt" }));
+    fireEvent.changeText(screen.getByLabelText("Recent quantity"), "2.3");
+
+    fireEvent.press(screen.getByRole("button", { name: "Decrease quantity" }));
+    expect(screen.getByDisplayValue("1.30")).toBeTruthy();
+    expect(screen.getByLabelText("Macro preview")).toHaveTextContent(
+      "156.00 kcal · 23.40p · 2.60f",
+    );
+
+    fireEvent.press(screen.getByRole("button", { name: "Increase quantity" }));
+    expect(screen.getByDisplayValue("2.30")).toBeTruthy();
   });
 
   it("keeps the selected Recent and quantity when saving fails", async () => {
@@ -240,6 +277,25 @@ describe("LogFoodScreen", () => {
     );
     expect(screen.getByDisplayValue("2.25")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Collapse Greek yogurt" })).toBeTruthy();
+  });
+
+  it("removes a selected Recent when the API says it no longer exists", async () => {
+    mockCreateEntry.mockRejectedValue(
+      new ApiError(400, { recent_item_id: ["Choose a food from your Recents."] }),
+    );
+    render(<LogFoodScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "RECENTS" }));
+    fireEvent.press(screen.getByRole("button", { name: "Select Greek yogurt" }));
+
+    fireEvent.press(screen.getByRole("button", { name: "LOG AGAIN" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "That recent food is no longer available.",
+      ),
+    );
+    expect(screen.queryByLabelText("Recent quantity")).toBeNull();
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["foods"] });
   });
 
   it("shows the empty Recents state", () => {

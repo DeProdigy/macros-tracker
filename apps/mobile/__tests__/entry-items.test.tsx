@@ -4,9 +4,11 @@ import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import {
+  isValidEditableItem,
   itemTotals,
   itemUpdateRequest,
   itemWriteRequest,
+  stepQuantity,
   useEntryItemMutations,
 } from "../lib/entry-items";
 import { createTestQueryClient } from "../test-utils/render";
@@ -93,6 +95,29 @@ it("normalizes decimal-pad shorthand and sends only changed PATCH fields", () =>
     fiber_g: "2.00",
   });
   expect(itemUpdateRequest(item, original)).toEqual({ protein_g: "0.50" });
+});
+
+it("steps quantities with exact hundredths and clamps invalid values", () => {
+  expect(stepQuantity("2.3", -1)).toBe("1.30");
+  expect(stepQuantity("1.1", -1)).toBe("0.10");
+  expect(stepQuantity("1.", 1)).toBe("2.00");
+  expect(stepQuantity("not-a-number", -1)).toBe("0.01");
+  expect(stepQuantity("not-a-number", 1)).toBe("1.00");
+  expect(stepQuantity("999999.99", 1)).toBe("999999.99");
+});
+
+it("rejects quantities that exceed the API decimal field", () => {
+  expect(
+    isValidEditableItem({
+      clientId: "large-item",
+      name: "Large item",
+      portion_label: "",
+      quantity: "1000000.00",
+      calories: "1.00",
+      protein_g: "0.00",
+      fiber_g: "0.00",
+    }),
+  ).toBe(false);
 });
 
 it("updates cached entry and day totals immediately, then restores them on failure", async () => {
