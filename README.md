@@ -99,10 +99,8 @@ Python suite — the Django app isn't a pnpm workspace). So "everything" is:
 pnpm pre-pr
 ```
 
-The pre-PR gate starts the Docker Postgres service if needed, checks generated
-API-client drift, and runs the same Python and Node checks as CI. It deliberately
-uses `pytest --create-db`, so it is slower than a normal local test run but also
-verifies every migration against a fresh test database.
+The pre-PR gate starts Docker Postgres if needed, checks generated API-client
+drift, runs the Python and Node checks, and checks the branch for whitespace errors.
 
 See [`apps/mobile/README.md`](./apps/mobile/README.md) and
 [`apps/api/README.md`](./apps/api/README.md) for per-app details.
