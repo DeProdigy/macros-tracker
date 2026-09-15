@@ -10,6 +10,7 @@
     "check-types": "turbo run check-types",
     "test": "turbo run test",
     "generate:api": "turbo run generate:api",
+    "pre-pr": "node scripts/pre-pr.mjs",
     "sync:plans": "node --env-file-if-exists=.env scripts/sync-plans.mjs"
   },
   "devDependencies": {

@@ -25,6 +25,8 @@ This is a learning project. The owner is levelling up React Native and Django
 by reviewing plans and code rather than writing it.
 
 For every ticket:
+- Before implementation, assign the Linear ticket to the current user and move
+  it to **In Progress**
 - Produce a full implementation plan BEFORE writing code
 - Plan must cover: files touched, approach, alternatives rejected,
   Django/RN concepts in play, blast radius, what's deliberately unhandled,
@@ -33,6 +35,7 @@ For every ticket:
 - Save the approved plan to `plans/tickets/MAC-NN.md` and commit it
 - In the PR description, call out anything the owner should look at closely
   and anything you were unsure about
+- Run `pnpm pre-pr` successfully before opening the pull request
 - Every PR that changes user-visible UI includes live screenshots before
   review. Capture each new or materially changed primary state. Include before
   and after images when an existing screen changes materially. Include relevant

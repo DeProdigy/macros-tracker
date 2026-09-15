@@ -81,6 +81,7 @@ All tasks are orchestrated by Turborepo from the repo root:
 | `pnpm test`         | Run **JS** test suites (mobile jest)     |
 | `pnpm format`       | Format with Prettier                     |
 | `pnpm format:check` | Check formatting without writing         |
+| `pnpm pre-pr`       | Run the complete local pre-PR gate       |
 
 ## Testing
 
@@ -95,9 +96,11 @@ Root-level `pnpm test` covers the **JS** packages only (turbo doesn't run the
 Python suite — the Django app isn't a pnpm workspace). So "everything" is:
 
 ```bash
-pnpm test                       # mobile
-(cd apps/api && uv run pytest)  # backend
+pnpm pre-pr
 ```
+
+The pre-PR gate starts Docker Postgres if needed, checks generated API-client
+drift, runs the Python and Node checks, and checks the branch for whitespace errors.
 
 See [`apps/mobile/README.md`](./apps/mobile/README.md) and
 [`apps/api/README.md`](./apps/api/README.md) for per-app details.
