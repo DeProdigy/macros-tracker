@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import LogFoodScreen from "../app/(app)/log-food";
@@ -67,6 +67,7 @@ function fillRequiredFields() {
 }
 
 beforeEach(() => {
+  jest.useRealTimers();
   jest.clearAllMocks();
   mockUseSession.mockReturnValue({
     status: "signedIn",
@@ -177,11 +178,18 @@ describe("LogFoodScreen", () => {
     expect(mockCreateEntry).not.toHaveBeenCalled();
   });
 
-  it("loads Recents and sends case-insensitive search to the API", () => {
+  it("debounces case-insensitive Recents search before calling the API", () => {
+    jest.useFakeTimers();
     render(<LogFoodScreen />);
 
     fireEvent.press(screen.getByRole("button", { name: "RECENTS" }));
+    fireEvent.changeText(screen.getByLabelText("Search recent foods"), " YOG ");
     fireEvent.changeText(screen.getByLabelText("Search recent foods"), " YOGURT ");
+
+    expect(mockUseGetFoods).not.toHaveBeenCalledWith({ search: "YOGURT" }, expect.anything());
+    act(() => jest.advanceTimersByTime(299));
+    expect(mockUseGetFoods).not.toHaveBeenCalledWith({ search: "YOGURT" }, expect.anything());
+    act(() => jest.advanceTimersByTime(1));
 
     expect(mockUseGetFoods).toHaveBeenLastCalledWith(
       { search: "YOGURT" },

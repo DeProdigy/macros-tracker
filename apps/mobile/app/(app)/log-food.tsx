@@ -7,7 +7,7 @@ import {
 } from "@macros/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
@@ -46,13 +46,19 @@ export default function LogFoodScreen() {
   const [protein, setProtein] = useState("");
   const [fiber, setFiber] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedFood, setSelectedFood] = useState<RecentFood | null>(null);
   const [recentQuantity, setRecentQuantity] = useState("1");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const foodsQuery = useGetFoods(search.trim() ? { search: search.trim() } : undefined, {
+  const foodsQuery = useGetFoods(debouncedSearch ? { search: debouncedSearch } : undefined, {
     query: { enabled: session.status === "signedIn" && mode === "recents" },
   });
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   if (session.status !== "signedIn") return null;
 

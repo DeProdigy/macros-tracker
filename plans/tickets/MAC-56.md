@@ -41,6 +41,9 @@ item starts at quantity one; quantity edits use the existing exact decimal helpe
 preview matches the server's saved totals. A successful save invalidates both the day and recent-food
 queries and returns to Today. A failed save preserves the search, selection, and quantity.
 
+Debounce the trimmed search term for 300 milliseconds before changing the generated query key. This
+keeps search server-owned and case-insensitive without issuing one request for every keystroke.
+
 Keep Today and Entry Detail source-agnostic. Their existing nullable-photo behavior should already
 support Recent and Manual entries, so add explicit regression tests and only change production UI if
 those tests reveal a no-photo rendering defect.
@@ -68,6 +71,7 @@ examples, regenerate the client, and consume only generated request types and ho
 - Ordered projection and normalized composite keys implement newest-wins distinct Recents.
 - Serializer request variants keep Manual, Photo, and Recent creation explicit under one resource.
 - React Query keys and invalidation keep the day and Recents list synchronized after creation.
+- A short client debounce reduces superseded search requests while preserving server-side filtering.
 - Integer-backed decimal helpers keep quantity previews aligned with persisted macro totals.
 
 ## Blast radius
