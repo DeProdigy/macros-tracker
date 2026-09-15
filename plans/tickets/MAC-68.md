@@ -2,29 +2,30 @@
 
 ## User outcome
 
-A contributor can run one command before opening a pull request and get the same backend,
-frontend, schema-drift, migration, and whitespace checks that protect the repository in CI.
+A contributor can run one command before opening a pull request and get the complete backend,
+frontend, schema-drift, migration, and whitespace checks required by the repository workflow.
 
 ## Files touched
 
 - `scripts/pre-pr.mjs`: orchestrate the complete local gate and stop on the first failure.
 - `package.json`: expose the gate as `pnpm pre-pr`.
-- `README.md`: list the command and explain its fresh-database cost.
+- `README.md`: list the command and summarize the checks it runs.
 - `CLAUDE.md`: require the Linear pickup and pre-PR steps in the canonical workflow.
 - `AGENTS.md`: direct Codex to the existing repository instructions without duplicating them.
 
 ## Approach
 
 Use a small Node script so the command works from the repository root without shell-specific
-subshell syntax. It starts the existing Docker Postgres service idempotently, regenerates the API
-client, runs the Python and Node CI checks, and finishes with `git diff --check`.
+subshell syntax. It starts the existing Docker Postgres service idempotently and waits for its
+healthcheck, regenerates the API client, runs the Python and Node checks, and finishes by checking
+the branch diff from `origin/main` for whitespace errors.
 
-Hash the generated client before and after regeneration. This catches drift even when generated
-files already have unrelated working-tree changes, which a plain `git diff --exit-code` cannot
-distinguish locally.
+Use the same generated-client diff sequence as CI: regenerate, add intent-to-add entries for new
+files, and run `git diff --exit-code -- packages/api-client`. Generated files already staged for the
+next commit remain valid, while regenerated unstaged drift fails the gate.
 
 Run pytest with `--create-db` to match CI's clean migration path. This is slower than the default
-reused local test database, so the README calls out the tradeoff explicitly.
+reused local test database, so the script explains the reason next to the flag.
 
 ## Alternatives rejected
 
@@ -36,15 +37,15 @@ reused local test database, so the README calls out the tradeoff explicitly.
 ## Concepts in play
 
 - Node's `spawnSync` preserves each tool's live output and exit status.
-- A content digest detects generator side effects independently of Git staging state.
+- Git's working-tree diff detects regenerated client changes against the staged baseline.
 - Fail-fast sequencing keeps the first actionable error visible.
-- An idempotent Docker Compose start avoids taking ownership of an already-running database.
+- Docker Compose waits for the existing database healthcheck before later commands use it.
 
 ## Blast radius
 
 The command is opt-in and changes no runtime application behavior. It can start the local database
-container and recreate the Django test database. It never stops containers or changes development
-data.
+container, add intent-to-add index entries for new generated files, and recreate the Django test
+database. It never stops containers or changes development data.
 
 ## Deliberately unhandled
 
