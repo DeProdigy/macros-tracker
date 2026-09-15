@@ -42,6 +42,7 @@ urlpatterns = [
     # stays self-contained as more of them appear.
     path("api/targets/", include("targets.urls")),
     path("api/entries/", include("entries.urls_entries")),
+    path("api/foods/", include("entries.urls_foods")),
     path("api/days/", include("entries.urls_days")),
     path("api/uploads/", include("uploads.urls")),
     path("api/analyses/", include("ai.urls")),

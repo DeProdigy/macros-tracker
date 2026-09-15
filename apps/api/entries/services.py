@@ -6,6 +6,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Protocol
 
 from django.db import transaction
+from django.db.models import Q
 
 from accounts.models import User
 from ai.models import FoodAnalysisCall
@@ -99,6 +100,62 @@ def create_manual_entry(
         calories=item.calories,
         protein_g=item.protein_g,
         fiber_g=item.fiber_g,
+    )
+    return recalculate_entry_totals(entry)
+
+
+def recent_foods(*, user: User, search: str = "") -> list[FoodItem]:
+    items = FoodItem.objects.filter(entry__daily_log__user=user)
+    normalized_search = search.strip()
+    if normalized_search:
+        items = items.filter(
+            Q(name__icontains=normalized_search) | Q(portion_label__icontains=normalized_search)
+        )
+    ordered_items = items.order_by("-entry__eaten_at", "-entry_id", "-id")
+    distinct_items: list[FoodItem] = []
+    seen: set[tuple[str, str]] = set()
+    for item in ordered_items:
+        key = (item.name.strip().casefold(), item.portion_label.strip().casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        distinct_items.append(item)
+    return distinct_items
+
+
+@transaction.atomic
+def create_recent_entry(
+    *,
+    user: User,
+    local_date: date,
+    eaten_at: datetime,
+    recent_item_id: int,
+    quantity: Decimal,
+) -> FoodEntry:
+    source_item = FoodItem.objects.select_for_update().get(
+        pk=recent_item_id, entry__daily_log__user=user
+    )
+    target = TargetVersion.objects.effective_on(user, local_date)
+    day, _ = DailyLog.objects.get_or_create(
+        user=user, local_date=local_date, defaults={"target_version": target}
+    )
+    entry = FoodEntry.objects.create(
+        daily_log=day,
+        source=FoodEntry.Source.RECENT,
+        description=source_item.name,
+        eaten_at=eaten_at,
+        calories=Decimal("0"),
+        protein_g=Decimal("0"),
+        fiber_g=Decimal("0"),
+    )
+    FoodItem.objects.create(
+        entry=entry,
+        name=source_item.name,
+        portion_label=source_item.portion_label,
+        quantity=quantity,
+        calories=source_item.calories,
+        protein_g=source_item.protein_g,
+        fiber_g=source_item.fiber_g,
     )
     return recalculate_entry_totals(entry)
 

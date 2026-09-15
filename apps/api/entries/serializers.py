@@ -69,28 +69,31 @@ class EntryItemConflictSerializer(serializers.Serializer):
     detail = serializers.CharField()
 
 
+def validate_entry_timing(attrs, context):
+    user = context["request"].user
+    if attrs["timezone"] != user.timezone:
+        raise serializers.ValidationError(
+            {"timezone": "Synchronize the device timezone and try again."}
+        )
+    try:
+        zone = ZoneInfo(attrs["timezone"])
+    except (ValueError, ZoneInfoNotFoundError):
+        raise serializers.ValidationError(
+            {"timezone": "Synchronize the device timezone and try again."}
+        ) from None
+    if attrs["eaten_at"].astimezone(zone).date() != attrs["local_date"]:
+        raise serializers.ValidationError("The eaten time is not on the selected local date.")
+    return attrs
+
+
 class ManualEntryCreateSerializer(serializers.Serializer):
     local_date = serializers.DateField()
     timezone = serializers.CharField(max_length=64)
     eaten_at = serializers.DateTimeField()
     item = ManualItemWriteSerializer()
 
-    def validate_timezone(self, value: str) -> str:
-        user = self.context["request"].user
-        if value != user.timezone:
-            raise serializers.ValidationError("Synchronize the device timezone and try again.")
-        return value
-
     def validate(self, attrs):
-        try:
-            zone = ZoneInfo(attrs["timezone"])
-        except (ValueError, ZoneInfoNotFoundError):
-            raise serializers.ValidationError(
-                {"timezone": "Synchronize the device timezone and try again."}
-            ) from None
-        if attrs["eaten_at"].astimezone(zone).date() != attrs["local_date"]:
-            raise serializers.ValidationError("The eaten time is not on the selected local date.")
-        return attrs
+        return validate_entry_timing(attrs, self.context)
 
     def create(self, validated_data):
         item = services.ManualItem(**validated_data.pop("item"))
@@ -108,16 +111,7 @@ class PhotoEntryCreateSerializer(serializers.Serializer):
     items = FoodItemWriteSerializer(many=True, required=False, allow_empty=False)
 
     def validate(self, attrs):
-        manual = ManualEntryCreateSerializer(context=self.context)
-        manual.validate_timezone(attrs["timezone"])
-        try:
-            zone = ZoneInfo(attrs["timezone"])
-        except (ValueError, ZoneInfoNotFoundError):
-            raise serializers.ValidationError(
-                {"timezone": "Synchronize the device timezone and try again."}
-            ) from None
-        if attrs["eaten_at"].astimezone(zone).date() != attrs["local_date"]:
-            raise serializers.ValidationError("The eaten time is not on the selected local date.")
+        validate_entry_timing(attrs, self.context)
         call = FoodAnalysisCall.objects.filter(
             pk=attrs["analysis_id"],
             user=self.context["request"].user,
@@ -144,6 +138,32 @@ class PhotoEntryCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"analysis_id": "Choose a completed analysis that has not been saved."}
             ) from None
+
+
+class RecentEntryCreateSerializer(serializers.Serializer):
+    local_date = serializers.DateField()
+    timezone = serializers.CharField(max_length=64)
+    eaten_at = serializers.DateTimeField()
+    recent_item_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal("0.01"))
+
+    def validate(self, attrs):
+        return validate_entry_timing(attrs, self.context)
+
+    def create(self, validated_data):
+        validated_data.pop("timezone")
+        try:
+            return services.create_recent_entry(user=self.context["request"].user, **validated_data)
+        except FoodItem.DoesNotExist:
+            raise serializers.ValidationError(
+                {"recent_item_id": ["Choose a food from your Recents."]}
+            ) from None
+
+
+class RecentFoodSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FoodItem
+        fields = ("id", "name", "portion_label", "calories", "protein_g", "fiber_g")
 
 
 class FoodItemSerializer(serializers.ModelSerializer):

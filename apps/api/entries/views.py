@@ -4,6 +4,7 @@ from typing import cast
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
+    OpenApiExample,
     OpenApiParameter,
     OpenApiResponse,
     PolymorphicProxySerializer,
@@ -29,6 +30,8 @@ from .serializers import (
     FoodItemWriteSerializer,
     ManualEntryCreateSerializer,
     PhotoEntryCreateSerializer,
+    RecentEntryCreateSerializer,
+    RecentFoodSerializer,
     day_data,
 )
 
@@ -36,11 +39,20 @@ from .serializers import (
 class EntryListCreateView(APIView):
     @extend_schema(
         operation_id="createEntry",
-        summary="Log one Manual or Photo food entry",
+        summary="Log one Manual, Photo, or Recent food entry",
+        description=(
+            "Creates a new food event. Manual requests provide one item, Photo requests reference "
+            "a completed analysis, and Recent requests reference one item from the authenticated "
+            "user's history. Recent creation copies that snapshot and never changes the old entry."
+        ),
         tags=["entries"],
         request=PolymorphicProxySerializer(
             component_name="EntryCreateRequest",
-            serializers=[ManualEntryCreateSerializer, PhotoEntryCreateSerializer],
+            serializers=[
+                ManualEntryCreateSerializer,
+                PhotoEntryCreateSerializer,
+                RecentEntryCreateSerializer,
+            ],
             resource_type_field_name=None,
         ),
         responses={
@@ -48,17 +60,85 @@ class EntryListCreateView(APIView):
             400: OpenApiResponse(OpenApiTypes.OBJECT, description="Validation error."),
             401: OpenApiResponse(OpenApiTypes.OBJECT, description="Authentication error."),
         },
+        examples=[
+            OpenApiExample(
+                "Re-log one recent food",
+                value={
+                    "local_date": "2026-09-15",
+                    "timezone": "America/New_York",
+                    "eaten_at": "2026-09-15T12:30:00-04:00",
+                    "recent_item_id": 42,
+                    "quantity": "1.50",
+                },
+                request_only=True,
+            )
+        ],
     )
     def post(self, request: Request) -> Response:
-        serializer_class = (
-            PhotoEntryCreateSerializer
-            if "analysis_id" in request.data
-            else ManualEntryCreateSerializer
+        serializer_class: (
+            type[ManualEntryCreateSerializer]
+            | type[PhotoEntryCreateSerializer]
+            | type[RecentEntryCreateSerializer]
         )
+        if "analysis_id" in request.data:
+            serializer_class = PhotoEntryCreateSerializer
+        elif "recent_item_id" in request.data:
+            serializer_class = RecentEntryCreateSerializer
+        else:
+            serializer_class = ManualEntryCreateSerializer
         serializer = serializer_class(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         entry = serializer.save()
         return Response(FoodEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class FoodListView(APIView):
+    @extend_schema(
+        operation_id="getFoods",
+        summary="List distinct foods from entry history",
+        description=(
+            "Returns the authenticated user's previously logged items newest-first. Foods are "
+            "distinct by normalized name and portion label, and each result keeps the newest "
+            "matching item's per-unit macros. Manual, Photo, and Recent items all participate."
+        ),
+        tags=["foods"],
+        parameters=[
+            OpenApiParameter(
+                "search",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                required=False,
+                description="Case-insensitive match against food name or portion label.",
+                examples=[OpenApiExample("Yogurt", value="yogurt")],
+            )
+        ],
+        responses={
+            200: RecentFoodSerializer(many=True),
+            401: OpenApiResponse(OpenApiTypes.OBJECT, description="Authentication error."),
+        },
+        examples=[
+            OpenApiExample(
+                "Recent foods",
+                value=[
+                    {
+                        "id": 42,
+                        "name": "Greek yogurt",
+                        "portion_label": "1 cup",
+                        "calories": "120.00",
+                        "protein_g": "18.00",
+                        "fiber_g": "2.00",
+                    }
+                ],
+                response_only=True,
+                status_codes=["200"],
+            )
+        ],
+    )
+    def get(self, request: Request) -> Response:
+        foods = services.recent_foods(
+            user=cast(User, request.user), search=request.query_params.get("search", "")
+        )
+        return Response(RecentFoodSerializer(foods, many=True).data)
 
 
 class EntryItemListCreateView(APIView):

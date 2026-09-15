@@ -87,6 +87,40 @@ describe("TodayScreen", () => {
     });
   });
 
+  it("renders a Recent entry without a photo placeholder", () => {
+    mockUseGetDay.mockReturnValue({
+      isLoading: false,
+      data: {
+        status: 200,
+        data: {
+          local_date: "2026-08-31",
+          targets: null,
+          calories: "180.00",
+          protein_g: "27.00",
+          fiber_g: "3.00",
+          entries: [
+            {
+              id: 2,
+              description: "Greek yogurt",
+              eaten_at: "2026-08-31T16:30:00Z",
+              calories: "180.00",
+              protein_g: "27.00",
+              fiber_g: "3.00",
+              source: "recent",
+              photo_url: null,
+              items: [],
+            },
+          ],
+        },
+      },
+    });
+
+    render(<TodayScreen />);
+
+    expect(screen.getByRole("button", { name: "Edit Greek yogurt" })).toBeTruthy();
+    expect(screen.queryByLabelText("Greek yogurt meal")).toBeNull();
+  });
+
   it("shows an error without false zero totals when the day request fails", () => {
     mockUseGetDay.mockReturnValue({ isError: true, isLoading: false });
 
