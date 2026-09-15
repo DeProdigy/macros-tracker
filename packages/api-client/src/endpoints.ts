@@ -30,6 +30,8 @@ import type {
   CreateFoodAnalysis400,
   CreateFoodAnalysis401,
   Day,
+  DeleteEntry401,
+  DeleteEntry404,
   DeleteEntryItem401,
   DeleteEntryItem404,
   EntryCreateRequestRequest,
@@ -43,9 +45,15 @@ import type {
   FoodItemWriteRequest,
   GetDay400,
   GetDay401,
+  GetDays400,
+  GetDays401,
+  GetDaysParams,
+  GetEntry401,
+  GetEntry404,
   GetFoods401,
   GetFoodsParams,
   Health,
+  LoggedDay,
   PatchedFoodItemUpdateRequest,
   PatchedUserSettingsRequest,
   Ping,
@@ -559,6 +567,164 @@ export const useRefreshSession = <TError = void, TContext = unknown>(
 
   return useMutation(mutationOptions, queryClient);
 };
+
+/**
+ * Returns the authenticated user's local dates with entries in one calendar month. The month query uses YYYY-MM.
+ * @summary List days that contain entries
+ */
+export type getDaysResponse200 = {
+  data: LoggedDay[];
+  status: 200;
+};
+
+export type getDaysResponse400 = {
+  data: GetDays400;
+  status: 400;
+};
+
+export type getDaysResponse401 = {
+  data: GetDays401;
+  status: 401;
+};
+
+export type getDaysResponseSuccess = getDaysResponse200 & {
+  headers: Headers;
+};
+export type getDaysResponseError = (getDaysResponse400 | getDaysResponse401) & {
+  headers: Headers;
+};
+
+export type getDaysResponse = getDaysResponseSuccess | getDaysResponseError;
+
+export const getGetDaysUrl = (params: GetDaysParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/days/?${stringifiedParams}` : `/api/days/`;
+};
+
+export const getDays = async (
+  params: GetDaysParams,
+  options?: RequestInit,
+): Promise<getDaysResponse> => {
+  return customFetch<getDaysResponse>(getGetDaysUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDaysQueryKey = (params?: GetDaysParams) => {
+  return [`/api/days/`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetDaysQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDays>>,
+  TError = GetDays400 | GetDays401,
+>(
+  params: GetDaysParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDays>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDaysQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDays>>> = ({ signal }) =>
+    getDays(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDays>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetDaysQueryResult = NonNullable<Awaited<ReturnType<typeof getDays>>>;
+export type GetDaysQueryError = GetDays400 | GetDays401;
+
+export function useGetDays<
+  TData = Awaited<ReturnType<typeof getDays>>,
+  TError = GetDays400 | GetDays401,
+>(
+  params: GetDaysParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDays>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDays>>,
+          TError,
+          Awaited<ReturnType<typeof getDays>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetDays<
+  TData = Awaited<ReturnType<typeof getDays>>,
+  TError = GetDays400 | GetDays401,
+>(
+  params: GetDaysParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDays>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDays>>,
+          TError,
+          Awaited<ReturnType<typeof getDays>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetDays<
+  TData = Awaited<ReturnType<typeof getDays>>,
+  TError = GetDays400 | GetDays401,
+>(
+  params: GetDaysParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDays>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary List days that contain entries
+ */
+
+export function useGetDays<
+  TData = Awaited<ReturnType<typeof getDays>>,
+  TError = GetDays400 | GetDays401,
+>(
+  params: GetDaysParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getDays>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetDaysQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
 
 /**
  * @summary Read one local day
@@ -1177,6 +1343,252 @@ export const useDeleteEntryItem = <
   TContext
 > => {
   const mutationOptions = getDeleteEntryItemMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+
+/**
+ * Returns one complete entry from the authenticated user's history.
+ * @summary Read one food entry
+ */
+export type getEntryResponse200 = {
+  data: FoodEntry;
+  status: 200;
+};
+
+export type getEntryResponse401 = {
+  data: GetEntry401;
+  status: 401;
+};
+
+export type getEntryResponse404 = {
+  data: GetEntry404;
+  status: 404;
+};
+
+export type getEntryResponseSuccess = getEntryResponse200 & {
+  headers: Headers;
+};
+export type getEntryResponseError = (getEntryResponse401 | getEntryResponse404) & {
+  headers: Headers;
+};
+
+export type getEntryResponse = getEntryResponseSuccess | getEntryResponseError;
+
+export const getGetEntryUrl = (id: number) => {
+  return `/api/entries/${id}/`;
+};
+
+export const getEntry = async (id: number, options?: RequestInit): Promise<getEntryResponse> => {
+  return customFetch<getEntryResponse>(getGetEntryUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetEntryQueryKey = (id?: number) => {
+  return [`/api/entries/${id}/`] as const;
+};
+
+export const getGetEntryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEntry>>,
+  TError = GetEntry401 | GetEntry404,
+>(
+  id: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getEntry>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetEntryQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getEntry>>> = ({ signal }) =>
+    getEntry(id, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!id, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEntry>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetEntryQueryResult = NonNullable<Awaited<ReturnType<typeof getEntry>>>;
+export type GetEntryQueryError = GetEntry401 | GetEntry404;
+
+export function useGetEntry<
+  TData = Awaited<ReturnType<typeof getEntry>>,
+  TError = GetEntry401 | GetEntry404,
+>(
+  id: number,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getEntry>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getEntry>>,
+          TError,
+          Awaited<ReturnType<typeof getEntry>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetEntry<
+  TData = Awaited<ReturnType<typeof getEntry>>,
+  TError = GetEntry401 | GetEntry404,
+>(
+  id: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getEntry>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getEntry>>,
+          TError,
+          Awaited<ReturnType<typeof getEntry>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetEntry<
+  TData = Awaited<ReturnType<typeof getEntry>>,
+  TError = GetEntry401 | GetEntry404,
+>(
+  id: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getEntry>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Read one food entry
+ */
+
+export function useGetEntry<
+  TData = Awaited<ReturnType<typeof getEntry>>,
+  TError = GetEntry401 | GetEntry404,
+>(
+  id: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getEntry>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetEntryQueryOptions(id, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
+/**
+ * Deletes one owned entry and its items. The service removes an unreferenced retained photo after the database commit.
+ * @summary Delete one food entry
+ */
+export type deleteEntryResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteEntryResponse401 = {
+  data: DeleteEntry401;
+  status: 401;
+};
+
+export type deleteEntryResponse404 = {
+  data: DeleteEntry404;
+  status: 404;
+};
+
+export type deleteEntryResponseSuccess = deleteEntryResponse204 & {
+  headers: Headers;
+};
+export type deleteEntryResponseError = (deleteEntryResponse401 | deleteEntryResponse404) & {
+  headers: Headers;
+};
+
+export type deleteEntryResponse = deleteEntryResponseSuccess | deleteEntryResponseError;
+
+export const getDeleteEntryUrl = (id: number) => {
+  return `/api/entries/${id}/`;
+};
+
+export const deleteEntry = async (
+  id: number,
+  options?: RequestInit,
+): Promise<deleteEntryResponse> => {
+  return customFetch<deleteEntryResponse>(getDeleteEntryUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteEntryMutationOptions = <
+  TError = DeleteEntry401 | DeleteEntry404,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteEntry>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteEntry>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEntry>>, { id: number }> = (
+    props,
+  ) => {
+    const { id } = props ?? {};
+
+    return deleteEntry(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteEntryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEntry>>>;
+
+export type DeleteEntryMutationError = DeleteEntry401 | DeleteEntry404;
+
+/**
+ * @summary Delete one food entry
+ */
+export const useDeleteEntry = <TError = DeleteEntry401 | DeleteEntry404, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteEntry>>,
+      TError,
+      { id: number },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<Awaited<ReturnType<typeof deleteEntry>>, TError, { id: number }, TContext> => {
+  const mutationOptions = getDeleteEntryMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

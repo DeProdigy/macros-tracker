@@ -8,6 +8,10 @@
 import type { ManualEntryCreateRequest } from "./manualEntryCreateRequest";
 import type { PhotoEntryCreateRequest } from "./photoEntryCreateRequest";
 import type { RecentEntryCreateRequest } from "./recentEntryCreateRequest";
+import type { EntryCopyCreateRequest } from "./entryCopyCreateRequest";
 
 export type EntryCreateRequestRequest =
-  ManualEntryCreateRequest | PhotoEntryCreateRequest | RecentEntryCreateRequest;
+  | ManualEntryCreateRequest
+  | PhotoEntryCreateRequest
+  | RecentEntryCreateRequest
+  | EntryCopyCreateRequest;

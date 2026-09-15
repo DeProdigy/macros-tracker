@@ -23,11 +23,13 @@ from . import services
 from .models import DailyLog, FoodEntry, FoodItem
 from .serializers import (
     DaySerializer,
+    EntryCopyCreateSerializer,
     EntryItemConflictSerializer,
     FoodEntrySerializer,
     FoodItemSerializer,
     FoodItemUpdateSerializer,
     FoodItemWriteSerializer,
+    LoggedDaySerializer,
     ManualEntryCreateSerializer,
     PhotoEntryCreateSerializer,
     RecentEntryCreateSerializer,
@@ -52,6 +54,7 @@ class EntryListCreateView(APIView):
                 ManualEntryCreateSerializer,
                 PhotoEntryCreateSerializer,
                 RecentEntryCreateSerializer,
+                EntryCopyCreateSerializer,
             ],
             resource_type_field_name=None,
         ),
@@ -76,7 +79,9 @@ class EntryListCreateView(APIView):
     )
     def post(self, request: Request) -> Response:
         source_fields = [
-            field for field in ("item", "analysis_id", "recent_item_id") if field in request.data
+            field
+            for field in ("item", "analysis_id", "recent_item_id", "source_entry_id")
+            if field in request.data
         ]
         if len(source_fields) != 1:
             raise ValidationError({"non_field_errors": ["Provide exactly one entry source."]})
@@ -84,17 +89,83 @@ class EntryListCreateView(APIView):
             type[ManualEntryCreateSerializer]
             | type[PhotoEntryCreateSerializer]
             | type[RecentEntryCreateSerializer]
+            | type[EntryCopyCreateSerializer]
         )
         if "analysis_id" in request.data:
             serializer_class = PhotoEntryCreateSerializer
         elif "recent_item_id" in request.data:
             serializer_class = RecentEntryCreateSerializer
+        elif "source_entry_id" in request.data:
+            serializer_class = EntryCopyCreateSerializer
         else:
             serializer_class = ManualEntryCreateSerializer
         serializer = serializer_class(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         entry = serializer.save()
         return Response(FoodEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class EntryDetailView(APIView):
+    def _entry(self, request: Request, pk: int) -> FoodEntry:
+        try:
+            return FoodEntry.objects.prefetch_related("items").get(
+                pk=pk, daily_log__user=cast(User, request.user)
+            )
+        except FoodEntry.DoesNotExist:
+            raise NotFound from None
+
+    @extend_schema(
+        operation_id="getEntry",
+        summary="Read one food entry",
+        description="Returns one complete entry from the authenticated user's history.",
+        tags=["entries"],
+        responses={
+            200: FoodEntrySerializer,
+            401: OpenApiResponse(OpenApiTypes.OBJECT, description="Authentication error."),
+            404: OpenApiResponse(OpenApiTypes.OBJECT, description="Entry not found."),
+        },
+        examples=[
+            OpenApiExample(
+                "Manual entry",
+                value={
+                    "id": 42,
+                    "source": "manual",
+                    "description": "Greek yogurt",
+                    "eaten_at": "2026-09-15T12:30:00-04:00",
+                    "calories": "120.00",
+                    "protein_g": "18.00",
+                    "fiber_g": "2.00",
+                    "photo_url": None,
+                    "items": [],
+                },
+                response_only=True,
+                status_codes=["200"],
+            )
+        ],
+    )
+    def get(self, request: Request, pk: int) -> Response:
+        return Response(FoodEntrySerializer(self._entry(request, pk)).data)
+
+    @extend_schema(
+        operation_id="deleteEntry",
+        summary="Delete one food entry",
+        description=(
+            "Deletes one owned entry and its items. The service removes an unreferenced retained "
+            "photo after the database commit."
+        ),
+        tags=["entries"],
+        responses={
+            204: None,
+            401: OpenApiResponse(OpenApiTypes.OBJECT, description="Authentication error."),
+            404: OpenApiResponse(OpenApiTypes.OBJECT, description="Entry not found."),
+        },
+    )
+    def delete(self, request: Request, pk: int) -> Response:
+        try:
+            services.delete_entry(user=cast(User, request.user), entry_id=pk)
+        except FoodEntry.DoesNotExist:
+            raise NotFound from None
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class FoodListView(APIView):
@@ -277,3 +348,65 @@ class DayDetailView(APIView):
         if day is None:
             effective_target = TargetVersion.objects.effective_on(cast(User, request.user), parsed)
         return Response(DaySerializer(day_data(day, parsed, effective_target)).data)
+
+
+class DayListView(APIView):
+    @extend_schema(
+        operation_id="getDays",
+        summary="List days that contain entries",
+        description=(
+            "Returns the authenticated user's local dates with entries in one calendar month. "
+            "The month query uses YYYY-MM."
+        ),
+        tags=["days"],
+        parameters=[
+            OpenApiParameter(
+                "month",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                required=True,
+                description="Calendar month in YYYY-MM format.",
+                examples=[OpenApiExample("September 2026", value="2026-09")],
+            )
+        ],
+        responses={
+            200: LoggedDaySerializer(many=True),
+            400: OpenApiResponse(OpenApiTypes.OBJECT, description="Invalid month."),
+            401: OpenApiResponse(OpenApiTypes.OBJECT, description="Authentication error."),
+        },
+        examples=[
+            OpenApiExample(
+                "Logged days",
+                value={"local_date": "2026-09-15"},
+                response_only=True,
+                status_codes=["200"],
+            )
+        ],
+    )
+    def get(self, request: Request) -> Response:
+        month = request.query_params.get("month", "")
+        try:
+            if not re.fullmatch(r"\d{4}-\d{2}", month):
+                raise ValueError
+            start = date.fromisoformat(f"{month}-01")
+            end = (
+                date(start.year + 1, 1, 1)
+                if start.month == 12
+                else date(start.year, start.month + 1, 1)
+            )
+        except ValueError:
+            return Response({"month": ["Enter a month in YYYY-MM format."]}, status=400)
+        local_dates = (
+            DailyLog.objects.filter(
+                user=cast(User, request.user),
+                local_date__gte=start,
+                local_date__lt=end,
+                entries__isnull=False,
+            )
+            .values_list("local_date", flat=True)
+            .distinct()
+            .order_by("local_date")
+        )
+        return Response(
+            LoggedDaySerializer([{"local_date": value} for value in local_dates], many=True).data
+        )

@@ -186,6 +186,48 @@ def create_recent_entry(
 
 
 @transaction.atomic
+def create_copied_entry(
+    *,
+    user: User,
+    local_date: date,
+    eaten_at: datetime,
+    source_entry_id: int,
+) -> FoodEntry:
+    source_entry = FoodEntry.objects.prefetch_related("items").get(
+        pk=source_entry_id, daily_log__user=user
+    )
+    source_items = list(source_entry.items.all())
+    target = TargetVersion.objects.effective_on(user, local_date)
+    day, _ = DailyLog.objects.get_or_create(
+        user=user, local_date=local_date, defaults={"target_version": target}
+    )
+    entry = FoodEntry.objects.create(
+        daily_log=day,
+        source=FoodEntry.Source.RECENT,
+        description=source_entry.description,
+        eaten_at=eaten_at,
+        calories=Decimal("0"),
+        protein_g=Decimal("0"),
+        fiber_g=Decimal("0"),
+    )
+    FoodItem.objects.bulk_create(
+        [
+            FoodItem(
+                entry=entry,
+                name=item.name,
+                portion_label=item.portion_label,
+                quantity=item.quantity,
+                calories=item.calories,
+                protein_g=item.protein_g,
+                fiber_g=item.fiber_g,
+            )
+            for item in source_items
+        ]
+    )
+    return recalculate_entry_totals(entry)
+
+
+@transaction.atomic
 def _store_photo_entry(
     *,
     user: User,
@@ -349,3 +391,21 @@ def delete_entry_item(*, user: User, entry_id: int, item_id: int) -> None:
         raise EntryRequiresOneItem
     item.delete()
     recalculate_entry_totals(entry)
+
+
+def _delete_unreferenced_photo(photo_key: str) -> None:
+    if FoodEntry.objects.filter(photo_key=photo_key).exists():
+        return
+    try:
+        delete_object(key=photo_key)
+    except Exception:
+        logger.exception("Could not delete an unreferenced entry photo object.")
+
+
+@transaction.atomic
+def delete_entry(*, user: User, entry_id: int) -> None:
+    entry = _locked_entry(user=user, entry_id=entry_id)
+    photo_key = entry.photo_key
+    entry.delete()
+    if photo_key:
+        transaction.on_commit(lambda: _delete_unreferenced_photo(photo_key))

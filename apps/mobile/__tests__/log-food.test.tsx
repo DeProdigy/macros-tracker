@@ -63,12 +63,19 @@ jest.mock("@tanstack/react-query", () => ({
 }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn(), replace: jest.fn() },
+  useLocalSearchParams: () => ({ date: "2026-08-31" }),
 }));
 jest.mock("../lib/local-day", () => {
   class LocalDayUnavailable extends Error {}
   return {
+    entryTimingForDate: jest.fn(() => ({
+      eaten_at: "2026-08-31T16:30:00Z",
+      local_date: "2026-08-31",
+      timezone: "UTC",
+    })),
+    localIsoDate: () => "2026-09-15",
     LocalDayUnavailable,
-    localDayContext: jest.fn(() => ({ local_date: "2026-08-31", timezone: "UTC" })),
+    parseLocalIsoDate: () => new Date(2026, 7, 31),
   };
 });
 jest.mock("../lib/session", () => ({ useSession: jest.fn() }));
@@ -122,7 +129,10 @@ describe("LogFoodScreen", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "PHOTO" }));
 
-    expect(router.push).toHaveBeenCalledWith("/photo");
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/photo",
+      params: { date: "2026-08-31" },
+    });
   });
 
   it("rejects a form without a name or positive macro", () => {
@@ -160,7 +170,12 @@ describe("LogFoodScreen", () => {
       queryKey: ["foods"],
       refetchType: "none",
     });
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/today"));
+    await waitFor(() =>
+      expect(router.replace).toHaveBeenCalledWith({
+        pathname: "/today",
+        params: { date: "2026-08-31" },
+      }),
+    );
   });
 
   it("keeps the input when the save fails", async () => {
@@ -178,11 +193,11 @@ describe("LogFoodScreen", () => {
   });
 
   it("explains when the local day is unavailable", async () => {
-    const { LocalDayUnavailable, localDayContext } = jest.requireMock("../lib/local-day") as {
+    const { LocalDayUnavailable, entryTimingForDate } = jest.requireMock("../lib/local-day") as {
       LocalDayUnavailable: new () => Error;
-      localDayContext: jest.Mock;
+      entryTimingForDate: jest.Mock;
     };
-    localDayContext.mockImplementationOnce(() => {
+    entryTimingForDate.mockImplementationOnce(() => {
       throw new LocalDayUnavailable();
     });
     render(<LogFoodScreen />);
@@ -242,7 +257,12 @@ describe("LogFoodScreen", () => {
       queryKey: ["foods"],
       refetchType: "none",
     });
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/today"));
+    await waitFor(() =>
+      expect(router.replace).toHaveBeenCalledWith({
+        pathname: "/today",
+        params: { date: "2026-08-31" },
+      }),
+    );
   });
 
   it("steps a fractional Recent quantity without floating point drift", () => {

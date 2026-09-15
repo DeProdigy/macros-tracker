@@ -1,15 +1,25 @@
 import { useGetDay } from "@macros/api-client";
-import { Link, router } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { localIsoDate } from "@/lib/local-day";
+import { DayPicker } from "@/components/day-picker";
+import { localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
 import { usePalette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
 
 export default function TodayScreen() {
   const session = useSession();
   const palette = usePalette();
-  const localDate = localIsoDate(new Date());
+  const params = useLocalSearchParams<{ date?: string | string[] }>();
+  const today = localIsoDate(new Date());
+  const requestedDate = Array.isArray(params.date) ? params.date[0] : params.date;
+  const localDate =
+    requestedDate && parseLocalIsoDate(requestedDate) && requestedDate <= today
+      ? requestedDate
+      : today;
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const selectedDay = parseLocalIsoDate(localDate)!;
   const dayQuery = useGetDay(localDate, {
     query: { enabled: session.status === "signedIn" && session.timezoneStatus === "ready" },
   });
@@ -21,8 +31,24 @@ export default function TodayScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <View>
-            <Text style={[styles.title, { color: palette.text }]}>Today</Text>
-            <Text style={[styles.date, { color: palette.secondaryText }]}>{localDate}</Text>
+            <Text style={[styles.title, { color: palette.text }]}>
+              {localDate === today
+                ? "Today"
+                : selectedDay.toLocaleDateString([], { weekday: "long" })}
+            </Text>
+            <Pressable
+              accessibilityLabel="Choose day"
+              accessibilityRole="button"
+              onPress={() => setPickerVisible(true)}
+            >
+              <Text style={[styles.date, { color: palette.accent }]}>
+                {selectedDay.toLocaleDateString([], {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </Text>
+            </Pressable>
           </View>
           <Link href="/settings" style={{ color: palette.accent }}>
             Settings
@@ -94,11 +120,21 @@ export default function TodayScreen() {
       </ScrollView>
       <Pressable
         accessibilityRole="button"
-        onPress={() => router.push("/log-food")}
+        onPress={() => router.push({ pathname: "/log-food", params: { date: localDate } })}
         style={[styles.log, { backgroundColor: palette.accent }]}
       >
         <Text style={styles.logText}>LOG FOOD</Text>
       </Pressable>
+      <DayPicker
+        enabled={session.timezoneStatus === "ready"}
+        onClose={() => setPickerVisible(false)}
+        onSelect={(date) => {
+          setPickerVisible(false);
+          router.replace({ pathname: "/today", params: { date } });
+        }}
+        selectedDate={localDate}
+        visible={pickerVisible}
+      />
     </View>
   );
 }

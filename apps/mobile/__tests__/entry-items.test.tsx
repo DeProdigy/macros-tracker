@@ -18,6 +18,7 @@ jest.mock("@macros/api-client", () => ({
   createEntryItem: jest.fn(),
   deleteEntryItem: jest.fn(),
   getGetDayQueryKey: (date: string) => ["day", date],
+  getGetEntryQueryKey: (id: number) => ["entry", id],
   updateEntryItem: (...args: unknown[]) => mockUpdateEntryItem(...args),
 }));
 
