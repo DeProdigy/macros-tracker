@@ -108,6 +108,14 @@ describe("EntryEditorScreen", () => {
     );
   });
 
+  it("does not send an update when the item is unchanged", () => {
+    render(<EntryEditorScreen />);
+
+    fireEvent.press(screen.getAllByRole("button", { name: "SAVE CHANGES" })[0]);
+
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
   it("keeps an unsaved item draft when another query result arrives", () => {
     const { rerender } = render(<EntryEditorScreen />);
 

@@ -168,6 +168,7 @@ function SavedItemEditor({
   }, [dirty, item, serverValueKey]);
 
   const save = async () => {
+    if (!dirty) return;
     if (!isValidEditableItem(value)) {
       setValidationError(true);
       return;
