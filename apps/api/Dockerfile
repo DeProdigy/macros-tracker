@@ -47,16 +47,17 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DJANGO_SETTINGS_MODULE=config.settings.production
 
 # collectstatic has to import production settings, which by design require
-# DJANGO_SECRET_KEY and DJANGO_ALLOWED_HOSTS rather than falling back to
-# defaults. Neither real value exists at build time, and neither affects the
-# output — collecting static files reads no secret and serves no request. These
-# throwaway values exist only for the length of this RUN: they are scoped to the
-# command, never written into the image's environment, and the real values come
-# from Railway at runtime.
+# DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, and OPENAI_API_KEY rather than using
+# defaults. Their real values are not needed at build time. Static collection
+# reads no secret and serves no request. These values can appear in build logs
+# and image history, so they must stay fake placeholders. They exist only for
+# this RUN command. Docker does not write them into the image environment. The
+# real values come from Railway at runtime.
 #
 # --noinput because there is no TTY to answer the overwrite prompt.
 RUN DJANGO_SECRET_KEY="build-time-only-not-a-real-secret" \
     DJANGO_ALLOWED_HOSTS="localhost" \
+    OPENAI_API_KEY="build-time-only-not-a-real-key" \
     python manage.py collectstatic --noinput
 
 # Documentation only — Railway injects $PORT and routes to it regardless.
