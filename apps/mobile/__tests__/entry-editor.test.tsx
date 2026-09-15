@@ -10,6 +10,7 @@ const mockCreateEntry = jest.fn<(...args: unknown[]) => Promise<{ status: number
 const mockDeleteEntry = jest.fn<(...args: unknown[]) => Promise<{ status: number }>>();
 const mockInvalidateQueries = jest.fn<() => Promise<void>>();
 const mockRemoveQueries = jest.fn();
+const mockParams = jest.fn(() => ({ id: "7", date: "2026-09-01" }));
 const mockUpdate = jest.fn<() => Promise<void>>();
 const mockCreate = jest.fn<() => Promise<void>>();
 const mockRemove = jest.fn<() => Promise<void>>();
@@ -30,7 +31,7 @@ jest.mock("@tanstack/react-query", () => ({
 }));
 jest.mock("expo-router", () => ({
   router: { replace: jest.fn() },
-  useLocalSearchParams: () => ({ id: "7", date: "2026-09-01" }),
+  useLocalSearchParams: () => mockParams(),
 }));
 jest.mock("../lib/local-day", () => ({
   entryTimingForDate: () => ({
@@ -39,6 +40,7 @@ jest.mock("../lib/local-day", () => ({
     timezone: "UTC",
   }),
   localIsoDate: () => "2026-09-15",
+  parseLocalIsoDate: (value: string) => (value === "not-a-date" ? null : new Date(2026, 8, 1)),
 }));
 jest.mock("../lib/entry-items", () => {
   const actual = jest.requireActual<typeof import("../lib/entry-items")>("../lib/entry-items");
@@ -106,6 +108,7 @@ beforeEach(() => {
   mockDeleteEntry.mockResolvedValue({ status: 204 });
   mockInvalidateQueries.mockResolvedValue(undefined);
   mockUseGetEntry.mockReturnValue(entryQueryResult());
+  mockParams.mockReturnValue({ id: "7", date: "2026-09-01" });
 });
 
 describe("EntryEditorScreen", () => {
@@ -210,6 +213,18 @@ describe("EntryEditorScreen", () => {
     expect(router.replace).toHaveBeenCalledWith({
       pathname: "/today",
       params: { date: "2026-09-01" },
+    });
+  });
+
+  it("falls back to Today when the source date is invalid", () => {
+    mockParams.mockReturnValue({ id: "7", date: "not-a-date" });
+    render(<EntryEditorScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "BACK TO TODAY" }));
+
+    expect(router.replace).toHaveBeenCalledWith({
+      pathname: "/today",
+      params: { date: "2026-09-15" },
     });
   });
 });

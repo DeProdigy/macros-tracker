@@ -20,7 +20,7 @@ import {
   isValidEditableItem,
   useEntryItemMutations,
 } from "@/lib/entry-items";
-import { entryTimingForDate, localIsoDate } from "@/lib/local-day";
+import { entryTimingForDate, localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
 import { usePalette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
 
@@ -28,9 +28,18 @@ export default function EntryEditorScreen() {
   const palette = usePalette();
   const session = useSession();
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ id: string; date: string }>();
-  const entryId = Number(params.id);
-  const localDate = params.date ?? "";
+  const params = useLocalSearchParams<{
+    id: string | string[];
+    date?: string | string[];
+  }>();
+  const idValue = Array.isArray(params.id) ? params.id[0] : params.id;
+  const requestedDate = Array.isArray(params.date) ? params.date[0] : params.date;
+  const today = localIsoDate(new Date());
+  const entryId = Number(idValue);
+  const localDate =
+    requestedDate && parseLocalIsoDate(requestedDate) && requestedDate <= today
+      ? requestedDate
+      : today;
   const entryQuery = useGetEntry(entryId, {
     query: {
       enabled: session.status === "signedIn" && Number.isInteger(entryId) && entryId > 0,
@@ -44,8 +53,6 @@ export default function EntryEditorScreen() {
 
   if (session.status !== "signedIn") return null;
   const entry = entryQuery.data?.status === 200 ? entryQuery.data.data : null;
-  const today = localIsoDate(new Date());
-
   const returnToDay = (date: string) => router.replace({ pathname: "/today", params: { date } });
 
   const logAgain = async () => {

@@ -394,6 +394,8 @@ def delete_entry_item(*, user: User, entry_id: int, item_id: int) -> None:
 
 
 def _delete_unreferenced_photo(photo_key: str) -> None:
+    if FoodEntry.objects.filter(photo_key=photo_key).exists():
+        return
     try:
         delete_object(key=photo_key)
     except Exception:
@@ -405,5 +407,5 @@ def delete_entry(*, user: User, entry_id: int) -> None:
     entry = _locked_entry(user=user, entry_id=entry_id)
     photo_key = entry.photo_key
     entry.delete()
-    if photo_key and not FoodEntry.objects.filter(photo_key=photo_key).exists():
+    if photo_key:
         transaction.on_commit(lambda: _delete_unreferenced_photo(photo_key))

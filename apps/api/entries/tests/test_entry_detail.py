@@ -158,19 +158,19 @@ def test_delete_entry_updates_day_totals_and_removes_an_unreferenced_photo(
 
 
 @pytest.mark.django_db
-def test_delete_entry_keeps_a_photo_referenced_by_another_entry(
+def test_delete_entry_rechecks_photo_references_after_commit(
     django_capture_on_commit_callbacks,
 ):
     user = User.objects.create_user(email="shared-photo@example.com", timezone="UTC")
     photo_key = f"entries/{user.pk}/shared.jpg"
     first = create_entry(user, photo_key=photo_key, description="First")
-    second = create_entry(user, photo_key=photo_key, description="Second")
 
     with (
         patch("entries.services.delete_object") as delete_photo,
         django_capture_on_commit_callbacks(execute=True),
     ):
         response = client_for(user).delete(reverse("entry-detail", args=[first.pk]))
+        second = create_entry(user, photo_key=photo_key, description="Second")
 
     assert response.status_code == 204
     assert FoodEntry.objects.filter(pk=second.pk, photo_key=photo_key).exists()
