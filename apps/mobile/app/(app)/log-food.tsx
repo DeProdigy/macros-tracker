@@ -7,7 +7,7 @@ import {
   useGetFoods,
 } from "@macros/api-client";
 import { useQueryClient } from "@tanstack/react-query";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -20,7 +20,12 @@ import {
   itemWriteRequest,
   stepQuantity,
 } from "@/lib/entry-items";
-import { LocalDayUnavailable, localDayContext } from "@/lib/local-day";
+import {
+  entryTimingForDate,
+  localIsoDate,
+  LocalDayUnavailable,
+  parseLocalIsoDate,
+} from "@/lib/local-day";
 import { usePalette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
 
@@ -41,6 +46,13 @@ export default function LogFoodScreen() {
   const palette = usePalette();
   const session = useSession();
   const queryClient = useQueryClient();
+  const params = useLocalSearchParams<{ date?: string | string[] }>();
+  const today = localIsoDate(new Date());
+  const requestedDate = Array.isArray(params.date) ? params.date[0] : params.date;
+  const localDate =
+    requestedDate && parseLocalIsoDate(requestedDate) && requestedDate <= today
+      ? requestedDate
+      : today;
   const [mode, setMode] = useState<LogMode>("manual");
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -87,10 +99,9 @@ export default function LogFoodScreen() {
     setSaving(true);
     setError(null);
     try {
-      const context = localDayContext(session.timezoneStatus, session.user.timezone);
+      const context = entryTimingForDate(session.timezoneStatus, session.user.timezone, localDate);
       const response = await createEntry({
         ...context,
-        eaten_at: new Date().toISOString(),
         item: {
           name: name.trim(),
           quantity,
@@ -104,7 +115,7 @@ export default function LogFoodScreen() {
         queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) }),
         queryClient.invalidateQueries({ queryKey: getGetFoodsQueryKey(), refetchType: "none" }),
       ]);
-      router.replace("/today");
+      router.replace({ pathname: "/today", params: { date: localDate } });
     } catch (caught) {
       setError(
         caught instanceof LocalDayUnavailable
@@ -124,10 +135,9 @@ export default function LogFoodScreen() {
     setSaving(true);
     setError(null);
     try {
-      const context = localDayContext(session.timezoneStatus, session.user.timezone);
+      const context = entryTimingForDate(session.timezoneStatus, session.user.timezone, localDate);
       const response = await createEntry({
         ...context,
-        eaten_at: new Date().toISOString(),
         recent_item_id: selectedFood!.id,
         quantity: itemWriteRequest(selectedItem).quantity,
       });
@@ -136,7 +146,7 @@ export default function LogFoodScreen() {
         queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) }),
         queryClient.invalidateQueries({ queryKey: getGetFoodsQueryKey(), refetchType: "none" }),
       ]);
-      router.replace("/today");
+      router.replace({ pathname: "/today", params: { date: localDate } });
     } catch (caught) {
       const missingRecentFood =
         caught instanceof ApiError &&
@@ -173,7 +183,11 @@ export default function LogFoodScreen() {
       <Text style={[styles.eyebrow, { color: palette.accent }]}>LOG FOOD</Text>
       <Text style={[styles.title, { color: palette.text }]}>Log food</Text>
       <View style={styles.choices}>
-        <Choice label="PHOTO" onPress={() => router.push("/photo")} active={false} />
+        <Choice
+          label="PHOTO"
+          onPress={() => router.push({ pathname: "/photo", params: { date: localDate } })}
+          active={false}
+        />
         <Choice label="RECENTS" onPress={() => switchMode("recents")} active={mode === "recents"} />
         <Choice label="MANUAL" onPress={() => switchMode("manual")} active={mode === "manual"} />
       </View>

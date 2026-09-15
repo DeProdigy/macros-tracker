@@ -29,9 +29,16 @@ jest.mock("expo-image-picker", () => ({
 }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), replace: jest.fn() },
+  useLocalSearchParams: () => ({ date: "2026-09-01" }),
 }));
 jest.mock("../lib/local-day", () => ({
-  localDayContext: () => ({ local_date: "2026-09-01", timezone: "UTC" }),
+  entryTimingForDate: () => ({
+    eaten_at: "2026-09-01T16:30:00Z",
+    local_date: "2026-09-01",
+    timezone: "UTC",
+  }),
+  localIsoDate: () => "2026-09-15",
+  parseLocalIsoDate: () => new Date(2026, 8, 1),
 }));
 jest.mock("../lib/photo-analysis", () => ({
   uploadAndAnalyze: jest.fn(),
@@ -115,7 +122,7 @@ describe("PhotoScreen", () => {
     await waitFor(() => expect(screen.getByText("540.00")).toBeTruthy());
     expect(screen.getByDisplayValue("Chicken thigh")).toBeTruthy();
     expect(screen.getByDisplayValue("Broccoli")).toBeTruthy();
-    fireEvent.press(screen.getByRole("button", { name: "SAVE TO TODAY" }));
+    fireEvent.press(screen.getByRole("button", { name: "SAVE TO THIS DAY" }));
 
     await waitFor(() =>
       expect(mockSavePhotoAnalysis).toHaveBeenCalledWith(17, expect.any(Object), [
@@ -138,7 +145,10 @@ describe("PhotoScreen", () => {
       ]),
     );
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["day", "2026-09-01"] });
-    expect(router.replace).toHaveBeenCalledWith("/today");
+    expect(router.replace).toHaveBeenCalledWith({
+      pathname: "/today",
+      params: { date: "2026-09-01" },
+    });
   });
 
   it("updates totals and the save payload after correction", async () => {
@@ -150,7 +160,7 @@ describe("PhotoScreen", () => {
 
     fireEvent.changeText(screen.getByLabelText("Item 1 quantity"), "2");
     expect(screen.getByText("900.00")).toBeTruthy();
-    fireEvent.press(screen.getByRole("button", { name: "SAVE TO TODAY" }));
+    fireEvent.press(screen.getByRole("button", { name: "SAVE TO THIS DAY" }));
 
     await waitFor(() =>
       expect(mockSavePhotoAnalysis).toHaveBeenCalledWith(

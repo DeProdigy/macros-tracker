@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, jest } from "@jest/globals";
 
 import {
   deviceTimezone,
+  entryTimingForDate,
   localDayContext,
   localIsoDate,
   LocalDayUnavailable,
+  parseLocalIsoDate,
 } from "../lib/local-day";
 
 const timezoneSpy = (timezone: string | undefined) =>
@@ -66,4 +68,29 @@ describe("local dates", () => {
       expect(() => localDayContext(status, "UTC")).toThrow(LocalDayUnavailable);
     },
   );
+
+  it("parses valid local dates and rejects impossible dates", () => {
+    expect(localIsoDate(parseLocalIsoDate("2026-09-01")!)).toBe("2026-09-01");
+    expect(parseLocalIsoDate("2026-02-30")).toBeNull();
+    expect(parseLocalIsoDate("09/01/2026")).toBeNull();
+  });
+
+  it("combines a selected past date with the current local clock time", () => {
+    const now = new Date(2026, 8, 15, 14, 30, 45, 123);
+    const expected = new Date(2026, 8, 1, 14, 30, 45, 123);
+
+    expect(entryTimingForDate("ready", "America/New_York", "2026-09-01", now)).toEqual({
+      eaten_at: expected.toISOString(),
+      local_date: "2026-09-01",
+      timezone: "America/New_York",
+    });
+  });
+
+  it("refuses future and invalid selected dates", () => {
+    const now = new Date(2026, 8, 15, 12);
+    expect(() => entryTimingForDate("ready", "UTC", "2026-09-16", now)).toThrow(
+      LocalDayUnavailable,
+    );
+    expect(() => entryTimingForDate("ready", "UTC", "bad-date", now)).toThrow(LocalDayUnavailable);
+  });
 });

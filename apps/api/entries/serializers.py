@@ -159,6 +159,19 @@ class RecentEntryCreateSerializer(EntryTimingSerializer):
             raise serializers.ValidationError({"quantity": [str(exc)]}) from None
 
 
+class EntryCopyCreateSerializer(EntryTimingSerializer):
+    source_entry_id = serializers.IntegerField(min_value=1)
+
+    def create(self, validated_data):
+        validated_data.pop("timezone")
+        try:
+            return services.create_copied_entry(user=self.context["request"].user, **validated_data)
+        except FoodEntry.DoesNotExist:
+            raise serializers.ValidationError(
+                {"source_entry_id": ["Choose an entry from your history."]}
+            ) from None
+
+
 class RecentFoodSerializer(serializers.ModelSerializer):
     class Meta:
         model = FoodItem
@@ -201,6 +214,10 @@ class DayTargetSerializer(serializers.Serializer):
     calories = serializers.IntegerField()
     protein_g = serializers.IntegerField()
     fiber_g = serializers.IntegerField()
+
+
+class LoggedDaySerializer(serializers.Serializer):
+    local_date = serializers.DateField()
 
 
 class DaySerializer(serializers.Serializer):

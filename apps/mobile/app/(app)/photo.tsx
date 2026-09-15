@@ -1,7 +1,7 @@
 import { ApiError, getGetDayQueryKey, type FoodAnalysisResult } from "@macros/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
   Image,
@@ -23,7 +23,7 @@ import {
   itemTotals,
   itemWriteRequest,
 } from "@/lib/entry-items";
-import { localDayContext } from "@/lib/local-day";
+import { entryTimingForDate, localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
 import { usePalette } from "@/lib/palette";
 import { savePhotoAnalysis, type SelectedPhoto, uploadAndAnalyze } from "@/lib/photo-analysis";
 import { useSession } from "@/lib/session";
@@ -32,6 +32,13 @@ export default function PhotoScreen() {
   const palette = usePalette();
   const session = useSession();
   const queryClient = useQueryClient();
+  const params = useLocalSearchParams<{ date?: string | string[] }>();
+  const today = localIsoDate(new Date());
+  const requestedDate = Array.isArray(params.date) ? params.date[0] : params.date;
+  const localDate =
+    requestedDate && parseLocalIsoDate(requestedDate) && requestedDate <= today
+      ? requestedDate
+      : today;
   const [photo, setPhoto] = useState<SelectedPhoto | null>(null);
   const [description, setDescription] = useState("");
   const [analysis, setAnalysis] = useState<FoodAnalysisResult | null>(null);
@@ -92,7 +99,7 @@ export default function PhotoScreen() {
     setWorking(true);
     setError(null);
     try {
-      const context = localDayContext(session.timezoneStatus, session.user.timezone);
+      const context = entryTimingForDate(session.timezoneStatus, session.user.timezone, localDate);
       const response = await savePhotoAnalysis(
         analysis.analysis_id,
         context,
@@ -100,7 +107,7 @@ export default function PhotoScreen() {
       );
       if (response.status !== 201) throw new Error("Save failed.");
       await queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) });
-      router.replace("/today");
+      router.replace({ pathname: "/today", params: { date: localDate } });
     } catch {
       setError("Could not save this photo entry. Try again.");
     } finally {
@@ -213,7 +220,9 @@ export default function PhotoScreen() {
             onPress={() => void save()}
             style={[styles.primary, { backgroundColor: palette.accent }]}
           >
-            <Text style={styles.primaryText}>{working ? "SAVING" : "SAVE TO TODAY"}</Text>
+            <Text style={styles.primaryText}>
+              {working ? "SAVING" : localDate === today ? "SAVE TO TODAY" : "SAVE TO THIS DAY"}
+            </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -232,7 +241,10 @@ export default function PhotoScreen() {
           <Text accessibilityRole="alert" style={[styles.error, { color: palette.error }]}>
             {error}
           </Text>
-          <Pressable accessibilityRole="button" onPress={() => router.replace("/log-food")}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.replace({ pathname: "/log-food", params: { date: localDate } })}
+          >
             <Text style={{ color: palette.accent }}>USE MANUAL</Text>
           </Pressable>
         </View>

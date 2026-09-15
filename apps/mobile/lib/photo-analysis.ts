@@ -44,12 +44,11 @@ export async function uploadAndAnalyze(
 
 export async function savePhotoAnalysis(
   analysisId: number,
-  context: { local_date: string; timezone: string },
+  timing: { eaten_at: string; local_date: string; timezone: string },
   items: FoodItemWriteRequest[],
 ) {
   return createEntry({
-    ...context,
-    eaten_at: new Date().toISOString(),
+    ...timing,
     analysis_id: analysisId,
     items,
   });

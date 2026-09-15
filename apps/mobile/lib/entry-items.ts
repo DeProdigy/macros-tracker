@@ -2,6 +2,7 @@ import {
   createEntryItem,
   deleteEntryItem,
   getGetDayQueryKey,
+  getGetEntryQueryKey,
   type Day,
   type FoodAnalysisItem,
   type FoodEntry,
@@ -191,6 +192,7 @@ type MutationContext = { previous?: getDayResponse };
 export function useEntryItemMutations(localDate: string, entryId: number) {
   const queryClient = useQueryClient();
   const queryKey = getGetDayQueryKey(localDate);
+  const entryQueryKey = getGetEntryQueryKey(entryId);
   const prepare = async (change: (entry: FoodEntry) => FoodItem[]): Promise<MutationContext> => {
     await queryClient.cancelQueries({ queryKey });
     const previous = queryClient.getQueryData<getDayResponse>(queryKey);
@@ -202,7 +204,11 @@ export function useEntryItemMutations(localDate: string, entryId: number) {
   const restore = (_error: Error, _variables: unknown, context?: MutationContext) => {
     if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
   };
-  const settle = () => queryClient.invalidateQueries({ queryKey });
+  const settle = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey }),
+      queryClient.invalidateQueries({ queryKey: entryQueryKey }),
+    ]);
 
   const create = useMutation({
     mutationFn: (item: EditableFoodItem) => createEntryItem(entryId, itemWriteRequest(item)),

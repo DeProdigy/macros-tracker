@@ -6,14 +6,17 @@ import TodayScreen from "../app/(app)/today";
 import { useSession } from "../lib/session";
 
 const mockUseGetDay = jest.fn();
+const mockUseGetDays = jest.fn();
 jest.mock("@macros/api-client", () => ({
   useGetDay: (...args: unknown[]) => mockUseGetDay(...args),
+  useGetDays: (...args: unknown[]) => mockUseGetDays(...args),
 }));
 jest.mock("expo-router", () => {
   const { Text } = jest.requireActual<typeof import("react-native")>("react-native");
   return {
     Link: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text>,
-    router: { push: jest.fn() },
+    router: { push: jest.fn(), replace: jest.fn() },
+    useLocalSearchParams: () => ({ date: "2026-08-31" }),
   };
 });
 jest.mock("../lib/session", () => ({ useSession: jest.fn() }));
@@ -41,6 +44,10 @@ beforeEach(() => {
       },
     },
   });
+  mockUseGetDays.mockReturnValue({
+    data: { status: 200, data: [{ local_date: "2026-08-30" }] },
+    isError: false,
+  });
 });
 
 describe("TodayScreen", () => {
@@ -48,6 +55,29 @@ describe("TodayScreen", () => {
     render(<TodayScreen />);
     expect(screen.getByText("Nothing logged yet")).toBeTruthy();
     expect(screen.getByRole("button", { name: "LOG FOOD" })).toBeTruthy();
+  });
+
+  it("opens the calendar and preserves the selected past day", () => {
+    render(<TodayScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "Choose day" }));
+    fireEvent.press(screen.getByRole("button", { name: "Choose August 30, 2026" }));
+
+    expect(router.replace).toHaveBeenCalledWith({
+      pathname: "/today",
+      params: { date: "2026-08-30" },
+    });
+  });
+
+  it("passes the selected date into food logging", () => {
+    render(<TodayScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "LOG FOOD" }));
+
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/log-food",
+      params: { date: "2026-08-31" },
+    });
   });
 
   it("shows totals and entries returned by the day resource", () => {
