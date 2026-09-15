@@ -26,7 +26,7 @@ allowBuilds:
   # Analytics-only postinstall pulled in transitively; nothing depends on it.
   '@scarf/scarf': false
 minimumReleaseAgeExclude:
-  - '@expo/cli@56.1.21'
+  - '@expo/cli@56.1.21 || 57.0.25'
   - '@expo/config-plugins@56.0.14'
   - '@expo/config@56.0.13'
   - '@expo/fingerprint@0.19.9'
@@ -34,13 +34,13 @@ minimumReleaseAgeExclude:
   - '@expo/metro-config@56.0.18'
   - '@expo/prebuild-config@56.0.21'
   - '@expo/require-utils@56.1.6'
-  - '@expo/router-server@56.0.17'
-  - babel-preset-expo@56.0.18
+  - '@expo/router-server@56.0.17 || 57.0.10'
+  - babel-preset-expo@56.0.18 || 57.0.12
   - expo-asset@56.0.21
   - expo-constants@56.0.22
   - expo-modules-autolinking@56.0.21
   - expo-modules-core@56.0.22
-  - expo@56.0.17
+  - expo@56.0.17 || 57.0.23
   - '@expo/metro-runtime@56.0.18'
   - '@expo/ui@56.0.23'
   - expo-linking@56.0.16
@@ -50,3 +50,5 @@ minimumReleaseAgeExclude:
   - expo-dev-client@57.0.14
   - expo-dev-launcher@57.0.14
   - expo-dev-menu@57.0.14
+  - expo-image-manipulator@57.0.18
+  - expo-image-picker@57.0.18
