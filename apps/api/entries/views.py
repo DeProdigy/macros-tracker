@@ -10,6 +10,7 @@ from drf_spectacular.utils import (
     extend_schema,
 )
 from rest_framework import status
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,10 +18,15 @@ from rest_framework.views import APIView
 from accounts.models import User
 from targets.models import TargetVersion
 
-from .models import DailyLog
+from . import services
+from .models import DailyLog, FoodEntry, FoodItem
 from .serializers import (
     DaySerializer,
+    EntryItemConflictSerializer,
     FoodEntrySerializer,
+    FoodItemSerializer,
+    FoodItemUpdateSerializer,
+    FoodItemWriteSerializer,
     ManualEntryCreateSerializer,
     PhotoEntryCreateSerializer,
     day_data,
@@ -53,6 +59,103 @@ class EntryListCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         entry = serializer.save()
         return Response(FoodEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class EntryItemListCreateView(APIView):
+    @extend_schema(
+        operation_id="createEntryItem",
+        summary="Add an item to a food entry",
+        description="Adds one item and recalculates the entry and day totals.",
+        tags=["entries"],
+        request=FoodItemWriteSerializer,
+        responses={
+            201: FoodItemSerializer,
+            400: OpenApiResponse(OpenApiTypes.OBJECT, description="Validation error."),
+            401: OpenApiResponse(OpenApiTypes.OBJECT, description="Authentication error."),
+            404: OpenApiResponse(OpenApiTypes.OBJECT, description="Entry not found."),
+        },
+    )
+    def post(self, request: Request, entry_id: int) -> Response:
+        serializer = FoodItemWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            item = services.create_entry_item(
+                user=cast(User, request.user),
+                entry_id=entry_id,
+                item=services.EditableItem(**serializer.validated_data),
+            )
+        except FoodEntry.DoesNotExist:
+            raise NotFound from None
+        return Response(FoodItemSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+class EntryItemDetailView(APIView):
+    def _item(self, request: Request, entry_id: int, pk: int) -> FoodItem:
+        try:
+            return FoodItem.objects.get(
+                pk=pk,
+                entry_id=entry_id,
+                entry__daily_log__user=cast(User, request.user),
+            )
+        except FoodItem.DoesNotExist:
+            raise NotFound from None
+
+    @extend_schema(
+        operation_id="updateEntryItem",
+        summary="Correct one item in a food entry",
+        description="Partially updates one item and recalculates the entry and day totals.",
+        tags=["entries"],
+        request=FoodItemUpdateSerializer,
+        responses={
+            200: FoodItemSerializer,
+            400: OpenApiResponse(OpenApiTypes.OBJECT, description="Validation error."),
+            401: OpenApiResponse(OpenApiTypes.OBJECT, description="Authentication error."),
+            404: OpenApiResponse(OpenApiTypes.OBJECT, description="Entry or item not found."),
+        },
+    )
+    def patch(self, request: Request, entry_id: int, pk: int) -> Response:
+        current = self._item(request, entry_id, pk)
+        serializer = FoodItemUpdateSerializer(current, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            item = services.update_entry_item(
+                user=cast(User, request.user),
+                entry_id=entry_id,
+                item_id=pk,
+                changes=serializer.validated_data,
+            )
+        except (FoodEntry.DoesNotExist, FoodItem.DoesNotExist):
+            raise NotFound from None
+        except ValueError as exc:
+            raise ValidationError({"non_field_errors": [str(exc)]}) from None
+        return Response(FoodItemSerializer(item).data)
+
+    @extend_schema(
+        operation_id="deleteEntryItem",
+        summary="Remove one item from a food entry",
+        description="Removes one item and recalculates totals. An entry must retain one item.",
+        tags=["entries"],
+        responses={
+            204: None,
+            401: OpenApiResponse(OpenApiTypes.OBJECT, description="Authentication error."),
+            404: OpenApiResponse(OpenApiTypes.OBJECT, description="Entry or item not found."),
+            409: EntryItemConflictSerializer,
+        },
+    )
+    def delete(self, request: Request, entry_id: int, pk: int) -> Response:
+        try:
+            services.delete_entry_item(user=cast(User, request.user), entry_id=entry_id, item_id=pk)
+        except (FoodEntry.DoesNotExist, FoodItem.DoesNotExist):
+            raise NotFound from None
+        except services.EntryRequiresOneItem:
+            return Response(
+                {
+                    "code": "entry_requires_one_item",
+                    "detail": "An entry needs at least one item. Delete the entry instead.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class DayDetailView(APIView):

@@ -5,6 +5,7 @@
  * Typed contract consumed by apps/mobile via packages/api-client.
  * OpenAPI spec version: 0.1.0
  */
+import type { FoodItemWriteRequest } from "./foodItemWriteRequest";
 
 export interface PhotoEntryCreateRequest {
   local_date: string;
@@ -16,4 +17,5 @@ export interface PhotoEntryCreateRequest {
   eaten_at: string;
   /** @minimum 1 */
   analysis_id: number;
+  items?: FoodItemWriteRequest[];
 }

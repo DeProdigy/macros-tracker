@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from unittest import mock
 
 import pytest
@@ -68,6 +69,117 @@ def test_photo_save_creates_one_entry_with_multiple_items():
     assert str(entry.calories) == "540.00"
     assert call.request_payload["photo_key"] == entry_key
     delete.assert_called_once_with(key=f"analyses/{user.pk}/meal.jpg")
+
+
+@pytest.mark.django_db
+def test_photo_save_uses_corrected_items_without_changing_the_analysis_response():
+    user = User.objects.create_user(email="corrected-photo@example.com", timezone="UTC")
+    original_response = {
+        "analysis_id": 1,
+        "calories": "360.00",
+        "protein_g": "38.00",
+        "fiber_g": "0.00",
+        "items": [
+            {
+                "name": "Chicken",
+                "portion": "2 pieces",
+                "calories": "360.00",
+                "protein_g": "38.00",
+                "fiber_g": "0.00",
+            }
+        ],
+    }
+    call = FoodAnalysisCall.objects.create(
+        user=user,
+        status=FoodAnalysisCall.Status.SUCCEEDED,
+        started_at=datetime(2026, 9, 1, tzinfo=UTC),
+        completed_at=datetime(2026, 9, 1, tzinfo=UTC),
+        request_payload={
+            "photo_key": f"analyses/{user.pk}/meal.jpg",
+            "description": "lunch",
+        },
+        response_payload=original_response,
+    )
+    client = APIClient()
+    client.force_authenticate(user)
+    with (
+        mock.patch(
+            "entries.services.copy_analysis_object_to_entry",
+            return_value=f"entries/{user.pk}/meal.jpg",
+        ),
+        mock.patch("entries.services.delete_object"),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+    ):
+        response = client.post(
+            "/api/entries/",
+            {
+                "local_date": "2026-09-01",
+                "timezone": "UTC",
+                "eaten_at": "2026-09-01T17:00:00Z",
+                "analysis_id": call.pk,
+                "items": [
+                    {
+                        "name": "Chicken thigh",
+                        "portion_label": "1 piece",
+                        "quantity": "2.00",
+                        "calories": "190.00",
+                        "protein_g": "20.00",
+                        "fiber_g": "0.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+    assert response.status_code == 201
+    entry = FoodEntry.objects.get()
+    entry.refresh_from_db()
+    call.refresh_from_db()
+    assert entry.calories == Decimal("380.00")
+    assert entry.protein_g == Decimal("40.00")
+    assert entry.items.get().name == "Chicken thigh"
+    assert call.response_payload == original_response
+
+
+@pytest.mark.django_db
+def test_photo_save_rejects_an_empty_corrected_item_list():
+    user = User.objects.create_user(email="empty-corrections@example.com", timezone="UTC")
+    call = FoodAnalysisCall.objects.create(
+        user=user,
+        status=FoodAnalysisCall.Status.SUCCEEDED,
+        started_at=datetime(2026, 9, 1, tzinfo=UTC),
+        completed_at=datetime(2026, 9, 1, tzinfo=UTC),
+        request_payload={"photo_key": f"analyses/{user.pk}/meal.jpg", "description": ""},
+        response_payload={
+            "items": [
+                {
+                    "name": "Chicken",
+                    "portion": "1 piece",
+                    "calories": "190.00",
+                    "protein_g": "20.00",
+                    "fiber_g": "0.00",
+                }
+            ]
+        },
+    )
+    client = APIClient()
+    client.force_authenticate(user)
+
+    response = client.post(
+        "/api/entries/",
+        {
+            "local_date": "2026-09-01",
+            "timezone": "UTC",
+            "eaten_at": "2026-09-01T17:00:00Z",
+            "analysis_id": call.pk,
+            "items": [],
+        },
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert response.data["items"]
+    assert FoodEntry.objects.count() == 0
 
 
 @pytest.mark.django_db

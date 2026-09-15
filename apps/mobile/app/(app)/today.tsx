@@ -58,7 +58,15 @@ export default function TodayScreen() {
           </View>
         ) : null}
         {day?.entries.map((entry) => (
-          <View key={entry.id} style={[styles.entry, { borderColor: palette.hairline }]}>
+          <Pressable
+            accessibilityLabel={`Edit ${entry.description}`}
+            accessibilityRole="button"
+            key={entry.id}
+            onPress={() =>
+              router.push({ pathname: "/entry/[id]", params: { id: entry.id, date: localDate } })
+            }
+            style={[styles.entry, { borderColor: palette.hairline }]}
+          >
             {entry.photo_url ? (
               <Image
                 accessibilityLabel={`${entry.description} meal`}
@@ -81,7 +89,7 @@ export default function TodayScreen() {
                 {entry.protein_g}p · {entry.fiber_g}f
               </Text>
             </View>
-          </View>
+          </Pressable>
         ))}
       </ScrollView>
       <Pressable
