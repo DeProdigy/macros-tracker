@@ -1,14 +1,26 @@
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import TodayScreen from "../app/(app)/today";
 import { localIsoDate } from "../lib/local-day";
 import { useSession } from "../lib/session";
+import { REAL_TIMERS } from "../test-utils/render";
 
-// The real clock decides what "today" is, so the past-day cases pin an explicit
-// date and the today cases read it back from the same helper the screen uses.
-const today = localIsoDate(new Date());
+/**
+ * A fixed instant, so "today" cannot change under the test.
+ *
+ * The screen calls `new Date()` during render. Reading the real clock here
+ * instead would leave a race: if the process crossed local midnight between
+ * this file loading and a render, the expected date and the rendered one would
+ * disagree. Moving the read into `beforeEach` shrinks that window without
+ * closing it, because the render still happens later.
+ *
+ * `beforeEach` freezes only `Date`. Faking the timer functions as well makes
+ * React Native Testing Library hang, and nothing here needs them faked.
+ */
+const NOW = new Date(2026, 8, 16, 12, 0, 0);
+const today = localIsoDate(NOW);
 const pastDate = "2026-08-31";
 // `mock` prefix required: jest.mock factories may not close over other names.
 let mockParams: { date?: string } = {};
@@ -48,6 +60,8 @@ const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.useFakeTimers({ doNotFake: [...REAL_TIMERS] });
+  jest.setSystemTime(NOW);
   mockParams = { date: pastDate };
   mockUseSession.mockReturnValue({
     status: "signedIn",
@@ -74,7 +88,18 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 describe("TodayScreen", () => {
+  it("confirms the clock is frozen", () => {
+    // Guards the premise. The fixed dates below would also pass on a machine
+    // whose real clock sits in September 2026, so without this the freeze could
+    // stop working and nothing would say so.
+    expect(Date.now()).toBe(NOW.getTime());
+  });
+
   it("tells a past empty day that backfilling is still allowed", () => {
     render(<TodayScreen />);
 

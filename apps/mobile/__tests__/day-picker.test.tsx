@@ -6,22 +6,32 @@
  * marker request that fires while the sheet is closed. Each is tested.
  */
 
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import { DayPicker } from "../components/day-picker";
 import { localIsoDate } from "../lib/local-day";
+import { REAL_TIMERS } from "../test-utils/render";
 
 const mockUseGetDays = jest.fn();
 jest.mock("@macros/api-client", () => ({
   useGetDays: (...args: unknown[]) => mockUseGetDays(...args),
 }));
 
-// The zone is pinned in jest.global-setup.js, so "today" is stable per run but
-// not a fixed string. The picker renders around the real current month.
-const today = new Date();
-const todayIso = localIsoDate(today);
-const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+/**
+ * A fixed instant, so "today" cannot change under the test.
+ *
+ * `DayPicker` calls `new Date()` during render to decide which days are in the
+ * future. Reading the real clock here would leave a race across local midnight,
+ * and across a month boundary the picker would open on a different month than
+ * the one asserted. `beforeEach` freezes `Date` to this value.
+ *
+ * Mid-month on purpose. The 16th leaves a real previous month to page back to
+ * and a real tomorrow to refuse, with no boundary special cases.
+ */
+const NOW = new Date(2026, 8, 16, 12, 0, 0);
+const todayIso = localIsoDate(NOW);
+const currentMonth = "2026-09";
 
 const longDate = (date: Date) =>
   date.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
@@ -36,10 +46,23 @@ const renderPicker = (selectedDate = todayIso) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.useFakeTimers({ doNotFake: [...REAL_TIMERS] });
+  jest.setSystemTime(NOW);
   mockUseGetDays.mockReturnValue({ data: { status: 200, data: [] }, isError: false });
 });
 
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 describe("DayPicker", () => {
+  it("confirms the clock is frozen", () => {
+    // Guards the premise. The fixed dates below would also pass on a machine
+    // whose real clock sits in September 2026, so without this the freeze could
+    // stop working and nothing would say so.
+    expect(Date.now()).toBe(NOW.getTime());
+  });
+
   it("asks for the markers of the month it is showing", () => {
     renderPicker();
 
@@ -70,7 +93,7 @@ describe("DayPicker", () => {
 
   it("reports the chosen day as a local ISO date", () => {
     renderPicker();
-    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    const first = new Date(2026, 8, 1);
 
     fireEvent.press(screen.getByRole("button", { name: `Choose ${longDate(first)}` }));
 
@@ -78,14 +101,7 @@ describe("DayPicker", () => {
   });
 
   it("refuses a future day in the current month", () => {
-    const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-    if (tomorrow.getMonth() !== today.getMonth()) {
-      // On the last day of a month tomorrow is not drawn at all, which is the
-      // same guarantee by a different route.
-      renderPicker();
-      expect(screen.queryByLabelText(`Choose ${longDate(tomorrow)}`)).toBeNull();
-      return;
-    }
+    const tomorrow = new Date(2026, 8, 17);
     renderPicker();
 
     fireEvent.press(screen.getByRole("button", { name: `Choose ${longDate(tomorrow)}` }));
@@ -94,7 +110,7 @@ describe("DayPicker", () => {
   });
 
   it("marks the days the API says carry entries", () => {
-    const second = new Date(today.getFullYear(), today.getMonth(), 2);
+    const second = new Date(2026, 8, 2);
     mockUseGetDays.mockReturnValue({
       data: { status: 200, data: [{ local_date: localIsoDate(second) }] },
       isError: false,
@@ -119,13 +135,11 @@ describe("DayPicker", () => {
 
   it("pages back and asks for the earlier month", () => {
     renderPicker();
-    const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const previousMonth = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}`;
 
     fireEvent.press(screen.getByRole("button", { name: "Previous month" }));
 
     expect(mockUseGetDays).toHaveBeenLastCalledWith(
-      { month: previousMonth },
+      { month: "2026-08" },
       { query: { enabled: true } },
     );
   });
