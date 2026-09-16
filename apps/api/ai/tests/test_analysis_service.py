@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from ai.models import FoodAnalysisCall
-from ai.provider import ProviderOutputError, ProviderResult
+from ai.provider import ProviderFoodAnalysis, ProviderOutputError, ProviderResult
 from ai.services import create_food_analysis
 
 User = get_user_model()
@@ -163,3 +163,34 @@ def test_internal_provider_type_error_keeps_provider_failure_category():
     assert call.status == FoodAnalysisCall.Status.FAILED
     assert call.failure_category == "provider_failure"
     assert call.quota_debited_at is None
+
+
+def test_provider_schema_declares_one_type_per_field():
+    """OpenAI compiles this schema into a decoder grammar before it generates.
+
+    A `Decimal` field makes pydantic emit a two-branch union of a number and a
+    patterned string, and that pattern holds a negative lookahead. The compile
+    step rejects the shape, the call returns `status=incomplete` with
+    `reason=max_output_tokens`, and usage reports zero tokens in and zero out.
+    The reported reason names the symptom, not the cause, so raising the token
+    budget does nothing.
+
+    The assertion walks the property definitions rather than searching the
+    serialised schema for a keyword. A keyword search also matches prose in a
+    docstring, because pydantic copies a class docstring into `description`.
+
+    This test only proves the shape that broke it is gone. It cannot prove OpenAI
+    accepts the schema, because it never calls OpenAI. A live call is the only
+    proof of that, and a live call costs money on every run.
+    """
+    schema = ProviderFoodAnalysis.model_json_schema()
+    definitions = [schema, *schema.get("$defs", {}).values()]
+
+    unions = [
+        f"{definition.get('title')}.{field}"
+        for definition in definitions
+        for field, spec in definition.get("properties", {}).items()
+        if "anyOf" in spec or "oneOf" in spec
+    ]
+
+    assert unions == []
