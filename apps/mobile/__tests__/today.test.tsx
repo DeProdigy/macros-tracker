@@ -12,6 +12,22 @@ const today = localIsoDate(new Date());
 const pastDate = "2026-08-31";
 // `mock` prefix required: jest.mock factories may not close over other names.
 let mockParams: { date?: string } = {};
+/**
+ * Build the calendar cell's label the same way `DayPicker` does.
+ *
+ * Not the literal "Choose August 30, 2026". `toLocaleDateString([], ...)` reads
+ * the runtime's default locale, which comes from the environment, so that
+ * literal only matches on an English runner. A German one produces
+ * "30. August 2026" and the query finds nothing.
+ *
+ * Unlike the timezone, the locale cannot be pinned in `jest.global-setup.js`.
+ * Node resolves its default locale before global setup runs, so a test that
+ * asserts a formatted date has to build the expected string with the same
+ * formatter.
+ */
+const chooseLabel = (date: Date) =>
+  `Choose ${date.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}`;
+
 const mockUseGetDay = jest.fn();
 const mockUseGetDays = jest.fn();
 jest.mock("@macros/api-client", () => ({
@@ -102,7 +118,7 @@ describe("TodayScreen", () => {
     render(<TodayScreen />);
 
     fireEvent.press(screen.getByRole("button", { name: "Choose day" }));
-    fireEvent.press(screen.getByRole("button", { name: "Choose August 30, 2026" }));
+    fireEvent.press(screen.getByRole("button", { name: chooseLabel(new Date(2026, 7, 30)) }));
 
     expect(router.replace).toHaveBeenCalledWith({
       pathname: "/today",
