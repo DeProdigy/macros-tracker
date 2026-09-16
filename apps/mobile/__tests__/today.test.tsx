@@ -3,8 +3,15 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import TodayScreen from "../app/(app)/today";
+import { localIsoDate } from "../lib/local-day";
 import { useSession } from "../lib/session";
 
+// The real clock decides what "today" is, so the past-day cases pin an explicit
+// date and the today cases read it back from the same helper the screen uses.
+const today = localIsoDate(new Date());
+const pastDate = "2026-08-31";
+// `mock` prefix required: jest.mock factories may not close over other names.
+let mockParams: { date?: string } = {};
 const mockUseGetDay = jest.fn();
 const mockUseGetDays = jest.fn();
 jest.mock("@macros/api-client", () => ({
@@ -16,7 +23,7 @@ jest.mock("expo-router", () => {
   return {
     Link: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text>,
     router: { push: jest.fn(), replace: jest.fn() },
-    useLocalSearchParams: () => ({ date: "2026-08-31" }),
+    useLocalSearchParams: () => mockParams,
   };
 });
 jest.mock("../lib/session", () => ({ useSession: jest.fn() }));
@@ -25,17 +32,18 @@ const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockParams = { date: pastDate };
   mockUseSession.mockReturnValue({
     status: "signedIn",
     timezoneStatus: "ready",
-    user: { timezone: "UTC" },
+    user: { timezone: "UTC", has_logged_food: true },
   } as never);
   mockUseGetDay.mockReturnValue({
     isLoading: false,
     data: {
       status: 200,
       data: {
-        local_date: "2026-08-31",
+        local_date: pastDate,
         targets: null,
         calories: "0.00",
         protein_g: "0.00",
@@ -51,10 +59,43 @@ beforeEach(() => {
 });
 
 describe("TodayScreen", () => {
-  it("shows an empty day and a logging action", () => {
+  it("tells a past empty day that backfilling is still allowed", () => {
     render(<TodayScreen />);
+
+    expect(screen.getByText("Nothing logged this day")).toBeTruthy();
+    expect(screen.getByText("You can still add food to this day.")).toBeTruthy();
+    // "LOG FOOD" would read as logging it now, which is not what this writes.
+    expect(screen.getByRole("button", { name: "ADD TO THIS DAY" })).toBeTruthy();
+  });
+
+  it("teaches the next action on an empty Today the user has never logged on", () => {
+    mockParams = { date: today };
+    mockUseSession.mockReturnValue({
+      status: "signedIn",
+      timezoneStatus: "ready",
+      user: { timezone: "UTC", has_logged_food: false },
+    } as never);
+
+    render(<TodayScreen />);
+
     expect(screen.getByText("Nothing logged yet")).toBeTruthy();
+    expect(
+      screen.getByText("Point the camera at your food. The app fills in the numbers."),
+    ).toBeTruthy();
     expect(screen.getByRole("button", { name: "LOG FOOD" })).toBeTruthy();
+  });
+
+  it("stays quiet on an empty Today for a user who has logged before", () => {
+    mockParams = { date: today };
+
+    render(<TodayScreen />);
+
+    expect(screen.getByText("Nothing logged yet")).toBeTruthy();
+    // The lesson is for a first run only. Repeating it every morning is noise.
+    expect(
+      screen.queryByText("Point the camera at your food. The app fills in the numbers."),
+    ).toBeNull();
+    expect(screen.queryByText("You can still add food to this day.")).toBeNull();
   });
 
   it("opens the calendar and preserves the selected past day", () => {
@@ -72,11 +113,11 @@ describe("TodayScreen", () => {
   it("passes the selected date into food logging", () => {
     render(<TodayScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "LOG FOOD" }));
+    fireEvent.press(screen.getByRole("button", { name: "ADD TO THIS DAY" }));
 
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/log-food",
-      params: { date: "2026-08-31" },
+      params: { date: pastDate },
     });
   });
 

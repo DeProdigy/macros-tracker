@@ -57,7 +57,8 @@
     "test": "jest"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "globalSetup": "<rootDir>/jest.global-setup.js"
   },
   "private": true
 }

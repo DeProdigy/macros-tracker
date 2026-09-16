@@ -5,7 +5,7 @@ import { router } from "expo-router";
 
 import PhotoScreen from "../app/(app)/photo";
 import { savePhotoAnalysis, uploadAndAnalyze } from "../lib/photo-analysis";
-import { useSession } from "../lib/session";
+import { markFoodLogged, useSession } from "../lib/session";
 
 const mockInvalidateQueries = jest.fn<() => Promise<void>>();
 
@@ -44,9 +44,13 @@ jest.mock("../lib/photo-analysis", () => ({
   uploadAndAnalyze: jest.fn(),
   savePhotoAnalysis: jest.fn(),
 }));
-jest.mock("../lib/session", () => ({ useSession: jest.fn() }));
+jest.mock("../lib/session", () => ({
+  useSession: jest.fn(),
+  markFoodLogged: jest.fn(),
+}));
 
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
+const mockMarkFoodLogged = markFoodLogged as jest.MockedFunction<typeof markFoodLogged>;
 const mockUploadAndAnalyze = uploadAndAnalyze as jest.MockedFunction<typeof uploadAndAnalyze>;
 const mockSavePhotoAnalysis = savePhotoAnalysis as jest.MockedFunction<typeof savePhotoAnalysis>;
 const mockLibrary = ImagePicker.launchImageLibraryAsync as jest.MockedFunction<
@@ -87,7 +91,7 @@ beforeEach(() => {
   mockUseSession.mockReturnValue({
     status: "signedIn",
     timezoneStatus: "ready",
-    user: { timezone: "UTC" },
+    user: { timezone: "UTC", has_logged_food: false },
   } as never);
   mockLibrary.mockResolvedValue({
     canceled: false,
@@ -145,6 +149,8 @@ describe("PhotoScreen", () => {
       ]),
     );
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["day", "2026-09-01"] });
+    // Records the first log in the cached user, so Today drops its first-run copy.
+    expect(mockMarkFoodLogged).toHaveBeenCalled();
     expect(router.replace).toHaveBeenCalledWith({
       pathname: "/today",
       params: { date: "2026-09-01" },

@@ -12,7 +12,7 @@ null clears. Those two are the same request byte-for-byte apart from one key, so
 the pair of tests is what actually pins the semantics down.
 """
 
-from datetime import timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -21,6 +21,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
+
+from entries.models import DailyLog, FoodEntry
 
 User = get_user_model()
 
@@ -74,6 +76,7 @@ def test_get_never_exposes_password_or_permission_fields(authed_client):
         "name",
         "timezone",
         "onboarding_completed",
+        "has_logged_food",
         "sex",
         "current_weight_lb",
         "goal_weight_lb",
@@ -81,6 +84,70 @@ def test_get_never_exposes_password_or_permission_fields(authed_client):
         "training_days_per_week",
         "dietary_constraints",
     }
+
+
+@pytest.mark.django_db
+def test_has_logged_food_is_false_before_any_entry(authed_client):
+    """The signal the mobile app uses to show first-run copy on an empty Today.
+
+    Without it the app cannot tell "never logged anything" from "nothing logged
+    yet today", because both arrive as an empty day.
+    """
+    response = authed_client.get(reverse("users:current"))
+
+    assert response.data["has_logged_food"] is False
+
+
+@pytest.mark.django_db
+def test_has_logged_food_ignores_a_day_that_carries_no_entries(authed_client, user):
+    """A `DailyLog` row is not proof that the user logged food.
+
+    A rolled-back save can leave the day behind, so the flag spans the join to
+    `entries` rather than asking whether a day exists.
+    """
+    DailyLog.objects.create(user=user, local_date=date(2026, 9, 15))
+
+    response = authed_client.get(reverse("users:current"))
+
+    assert response.data["has_logged_food"] is False
+
+
+@pytest.mark.django_db
+def test_has_logged_food_is_true_once_an_entry_exists(authed_client, user):
+    day = DailyLog.objects.create(user=user, local_date=date(2026, 9, 15))
+    FoodEntry.objects.create(
+        daily_log=day,
+        source=FoodEntry.Source.MANUAL,
+        description="Greek yogurt",
+        eaten_at=datetime(2026, 9, 15, 12, 30, tzinfo=UTC),
+        calories=Decimal("120.00"),
+        protein_g=Decimal("18.00"),
+        fiber_g=Decimal("2.00"),
+    )
+
+    response = authed_client.get(reverse("users:current"))
+
+    assert response.data["has_logged_food"] is True
+
+
+@pytest.mark.django_db
+def test_has_logged_food_never_reads_another_users_entries(authed_client):
+    """Ownership, on a field that would otherwise look harmless to get wrong."""
+    other = User.objects.create_apple_user(apple_user_id="000999.xyz.1111", email=None)
+    day = DailyLog.objects.create(user=other, local_date=date(2026, 9, 15))
+    FoodEntry.objects.create(
+        daily_log=day,
+        source=FoodEntry.Source.MANUAL,
+        description="Someone else's lunch",
+        eaten_at=datetime(2026, 9, 15, 12, 30, tzinfo=UTC),
+        calories=Decimal("500.00"),
+        protein_g=Decimal("30.00"),
+        fiber_g=Decimal("5.00"),
+    )
+
+    response = authed_client.get(reverse("users:current"))
+
+    assert response.data["has_logged_food"] is False
 
 
 @pytest.mark.django_db

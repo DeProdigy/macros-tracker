@@ -22,7 +22,7 @@ import { AppState, Text } from "react-native";
 import { setSessionExpiredListener } from "../lib/api-auth";
 import { clearTokens, getRefreshToken, getTokens } from "../lib/auth-storage";
 import { deviceTimezone } from "../lib/local-day";
-import { SessionProvider, useSession } from "../lib/session";
+import { markFoodLogged, SessionProvider, useSession } from "../lib/session";
 
 jest.mock("@macros/api-client", () => {
   class ApiError extends Error {
@@ -461,5 +461,61 @@ describe("the global 401 handler", () => {
     // The whole point of routing expiry through endSession: a stale access
     // token left behind is one customFetch attaches to the next request.
     expect(mockClearTokens).toHaveBeenCalled();
+  });
+});
+
+describe("markFoodLogged", () => {
+  /**
+   * The screens only owe "call this after a save". What the call does lives
+   * here, because the flag decides which empty-day copy Today shows and getting
+   * it wrong is silent.
+   */
+  const session = (overrides: Record<string, unknown>) =>
+    ({ status: "signedIn", updateUser: jest.fn(), ...overrides }) as never;
+
+  it("writes the flag when the cached user has never logged food", () => {
+    const updateUser = jest.fn();
+    const current = session({
+      updateUser,
+      user: { timezone: "UTC", has_logged_food: false, name: "Alex" },
+    });
+
+    markFoodLogged(current);
+
+    expect(updateUser).toHaveBeenCalledWith({
+      timezone: "UTC",
+      has_logged_food: true,
+      name: "Alex",
+    });
+  });
+
+  it("leaves the rest of the cached user alone", () => {
+    const updateUser = jest.fn();
+
+    markFoodLogged(
+      session({ updateUser, user: { timezone: "Europe/London", has_logged_food: false, id: 7 } }),
+    );
+
+    const written = updateUser.mock.calls[0]![0] as User;
+    expect(written.timezone).toBe("Europe/London");
+    expect(written.id).toBe(7);
+  });
+
+  it("does nothing when the flag is already set", () => {
+    const updateUser = jest.fn();
+
+    markFoodLogged(session({ updateUser, user: { has_logged_food: true } }));
+
+    // `updateUser` sets state. Calling it after every save re-renders the tree
+    // for no change.
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when nobody is signed in", () => {
+    const updateUser = jest.fn();
+
+    markFoodLogged(session({ status: "signedOut", updateUser, user: undefined }));
+
+    expect(updateUser).not.toHaveBeenCalled();
   });
 });

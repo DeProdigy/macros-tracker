@@ -21,6 +21,7 @@ export default function TodayScreen() {
     requestedDate && parseLocalIsoDate(requestedDate) && requestedDate <= today
       ? requestedDate
       : today;
+  const isToday = localDate === today;
   const [pickerVisible, setPickerVisible] = useState(false);
   const selectedDay = parseLocalIsoDate(localDate)!;
   const dayQuery = useGetDay(localDate, {
@@ -38,9 +39,7 @@ export default function TodayScreen() {
         <View style={styles.header}>
           <View>
             <Text style={[styles.title, { color: palette.text }]}>
-              {localDate === today
-                ? "Today"
-                : selectedDay.toLocaleDateString([], { weekday: "long" })}
+              {isToday ? "Today" : selectedDay.toLocaleDateString([], { weekday: "long" })}
             </Text>
             <Pressable
               accessibilityLabel="Choose day"
@@ -105,12 +104,7 @@ export default function TodayScreen() {
           </Text>
         ) : null}
         {day && day.entries.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={[styles.emptyTitle, { color: palette.text }]}>Nothing logged yet</Text>
-            <Text style={[styles.emptyBody, { color: palette.secondaryText }]}>
-              Add your first food and it will appear here.
-            </Text>
-          </View>
+          <EmptyDay copy={emptyDayCopy(isToday, session.user.has_logged_food)} palette={palette} />
         ) : null}
         {day?.entries.map((entry) => (
           <Pressable
@@ -152,7 +146,7 @@ export default function TodayScreen() {
         onPress={() => router.push({ pathname: "/log-food", params: { date: localDate } })}
         style={[styles.log, { backgroundColor: palette.accent }]}
       >
-        <Text style={styles.logText}>LOG FOOD</Text>
+        <Text style={styles.logText}>{isToday ? "LOG FOOD" : "ADD TO THIS DAY"}</Text>
       </Pressable>
       <DayPicker
         enabled={session.timezoneStatus === "ready"}
@@ -164,6 +158,58 @@ export default function TodayScreen() {
         selectedDate={localDate}
         visible={pickerVisible}
       />
+    </View>
+  );
+}
+
+type EmptyDayCopy = { title: string; body: string | null };
+
+/**
+ * Pick the copy for a day that holds no entries.
+ *
+ * The canonical flow doc asks for three empty days, not one. A first run has to
+ * teach the next action. A normal empty Today must stay quiet, because the user
+ * already knows what to do and a repeated lesson reads as noise. A past day has
+ * to say that backfilling is still allowed, which is the part a user does not
+ * guess.
+ *
+ * A pure function of two booleans, so the screen renders the right copy on the
+ * first frame. Deriving it in an effect would paint the wrong state once and
+ * then correct itself, which is visible as a flicker.
+ *
+ * `hasLoggedFood` comes from the session user, so it can lag the server by one
+ * session. That is harmless here: it only ever flips false to true, and the
+ * screens that log food update the cached user themselves.
+ */
+export function emptyDayCopy(isToday: boolean, hasLoggedFood: boolean): EmptyDayCopy {
+  if (!isToday) {
+    return {
+      title: "Nothing logged this day",
+      body: "You can still add food to this day.",
+    };
+  }
+  if (!hasLoggedFood) {
+    return {
+      title: "Nothing logged yet",
+      body: "Point the camera at your food. The app fills in the numbers.",
+    };
+  }
+  return { title: "Nothing logged yet", body: null };
+}
+
+function EmptyDay({
+  copy,
+  palette,
+}: {
+  copy: EmptyDayCopy;
+  palette: ReturnType<typeof usePalette>;
+}) {
+  return (
+    <View style={styles.empty}>
+      <Text style={[styles.emptyTitle, { color: palette.text }]}>{copy.title}</Text>
+      {copy.body ? (
+        <Text style={[styles.emptyBody, { color: palette.secondaryText }]}>{copy.body}</Text>
+      ) : null}
     </View>
   );
 }
