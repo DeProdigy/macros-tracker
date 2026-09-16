@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
@@ -7,14 +6,34 @@ from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
 
+# This model is the wire format OpenAI must generate, not the shape this app
+# stores. Note the comment, not a docstring: pydantic copies a class docstring
+# into the schema's `description`, and the SDK sends the schema on every call.
+# Engineering notes there would be billed as input tokens and read by the model
+# as instructions.
+#
+# The macros are `float` and not `Decimal` on purpose. Pydantic renders a
+# `Decimal` field as `anyOf: [number, string-with-pattern]`, and that pattern
+# holds a negative lookahead. OpenAI compiles this schema into a decoder grammar
+# before it generates anything, and it cannot compile that shape. The call then
+# returns `status=incomplete` with `reason=max_output_tokens` and zero tokens
+# used, which points at a budget that was never the problem.
+#
+# Precision is not lost. `_rounded_macro` in services.py converts each value
+# with `Decimal(str(value))` before it rounds and sums, and `str()` on a float
+# returns the shortest string that round-trips.
+#
+# The wrong choice: reach for `Decimal` here because the database column is a
+# decimal. A provider schema is bound by what a third party can generate, not by
+# how this app stores the result.
 class ProviderFoodItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=200)
     portion: str = Field(min_length=1, max_length=100)
-    calories: Decimal = Field(ge=0)
-    protein_g: Decimal = Field(ge=0)
-    fiber_g: Decimal = Field(ge=0)
+    calories: float = Field(ge=0)
+    protein_g: float = Field(ge=0)
+    fiber_g: float = Field(ge=0)
 
 
 class ProviderFoodAnalysis(BaseModel):
