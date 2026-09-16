@@ -3,7 +3,10 @@ import { Link, router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { CalorieRing } from "@/components/calorie-ring";
 import { DayPicker } from "@/components/day-picker";
+import { MacroTile } from "@/components/macro-tile";
+import { dayProgress } from "@/lib/day-progress";
 import { localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
 import { usePalette } from "@/lib/palette";
 import { useSession } from "@/lib/session";
@@ -25,6 +28,9 @@ export default function TodayScreen() {
   });
   if (session.status !== "signedIn") return null;
   const day = dayQuery.data?.status === 200 ? dayQuery.data.data : null;
+  // Null when the day carries no target version. See lib/day-progress.ts for
+  // why the current target is not substituted.
+  const progress = day ? dayProgress(day) : null;
 
   return (
     <View style={[styles.page, { backgroundColor: palette.background }]}>
@@ -59,7 +65,30 @@ export default function TodayScreen() {
             Timezone sync is unavailable. Reopen the app to try again.
           </Text>
         ) : null}
-        {day ? (
+        {progress ? (
+          <>
+            <View style={styles.ring}>
+              <CalorieRing progress={progress} />
+            </View>
+            <View style={styles.tiles}>
+              <MacroTile
+                color={palette.protein}
+                label="Protein"
+                metColor={palette.proteinMet}
+                progress={progress.protein}
+              />
+              <MacroTile
+                color={palette.fiber}
+                label="Fiber"
+                metColor={palette.fiberMet}
+                progress={progress.fiber}
+              />
+            </View>
+          </>
+        ) : null}
+        {day && !progress ? (
+          // No target version on this day, so there is nothing to measure
+          // against. Show what was eaten and no progress.
           <View style={styles.totals}>
             <Metric label="CALORIES" value={day.calories} color={palette.text} />
             <Metric label="PROTEIN" value={`${day.protein_g} g`} color={palette.text} />
@@ -155,6 +184,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 36, fontWeight: "900" },
   date: { fontSize: 13, marginTop: 4 },
   message: { marginTop: 24 },
+  ring: { marginTop: 32 },
+  tiles: { flexDirection: "row", gap: 12, marginTop: 28 },
   totals: { flexDirection: "row", gap: 10, marginTop: 36 },
   metric: { flex: 1 },
   metricLabel: { color: "#777", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
