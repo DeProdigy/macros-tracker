@@ -24,15 +24,24 @@ export async function uploadAndAnalyze(
   });
   const imageResponse = await fetch(compressed.uri);
   if (!imageResponse.ok) throw new Error("Could not read compressed photo.");
-  const blob = await imageResponse.blob();
-  const upload = await presignUpload({ content_type: "image/jpeg", content_length: blob.size });
+  // Send bytes, never a Blob. The presigned URL signs Content-Type and
+  // Content-Length, so R2 answers 403 SignatureDoesNotMatch if either header
+  // changes in flight. Expo replaces the global fetch, and for a Blob body it
+  // overwrites Content-Type with blob.type even when the caller set the header.
+  // A file:// response carries no content type, so blob.type is "". A typed
+  // array takes a different branch in Expo's fetch and keeps these headers.
+  const bytes = new Uint8Array(await imageResponse.arrayBuffer());
+  const upload = await presignUpload({
+    content_type: "image/jpeg",
+    content_length: bytes.byteLength,
+  });
   // customFetch throws ApiError for every non-2xx generated response. Orval's
   // union does not encode that runtime invariant, so narrow only after the call.
   const uploadData = upload.data as PresignUploadResponse;
   const put = await fetch(uploadData.url, {
     method: "PUT",
-    headers: { "Content-Type": "image/jpeg", "Content-Length": String(blob.size) },
-    body: blob,
+    headers: { "Content-Type": "image/jpeg", "Content-Length": String(bytes.byteLength) },
+    body: bytes,
   });
   if (!put.ok) throw new Error("Could not upload photo.");
   const analysis = await createFoodAnalysis({
