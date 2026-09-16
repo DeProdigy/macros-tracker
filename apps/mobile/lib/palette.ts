@@ -12,6 +12,16 @@
 
 import { useColorScheme } from "react-native";
 
+// The macro colours below arrived with MAC-58, taken from the approved Today
+// screens (design/source/linear-2026-08-31/19-today-normal.png and
+// 20-today-over-target.png). They are the first entries here that a mockup
+// dictates rather than a developer picking. MAC-61 owns the real visual system
+// and should absorb them.
+//
+// The split that matters is calories against the gram macros, not protein
+// against fiber. Passing the calorie target is a warning, so it turns amber.
+// Passing a gram target is the goal, so it turns green. Protein and fiber share
+// both colours on purpose, because they mean the same thing by them.
 export const lightPalette = {
   background: "#ffffff",
   text: "#111111",
@@ -20,6 +30,14 @@ export const lightPalette = {
   accent: "#208aef",
   error: "#c0392b",
   hairline: "#dcdcdc",
+  card: "#f4f4f5",
+  ringTrack: "#e4e4e7",
+  calories: "#14b8a6",
+  caloriesOver: "#f59e0b",
+  protein: "#a855f7",
+  proteinMet: "#16a34a",
+  fiber: "#a855f7",
+  fiberMet: "#16a34a",
 };
 
 export type Palette = typeof lightPalette;
@@ -32,6 +50,14 @@ export const darkPalette: Palette = {
   accent: "#4ea3f5",
   error: "#ff6b5b",
   hairline: "#2a2a2a",
+  card: "#161618",
+  ringTrack: "#27272a",
+  calories: "#5eead4",
+  caloriesOver: "#fb923c",
+  protein: "#c084fc",
+  proteinMet: "#4ade80",
+  fiber: "#c084fc",
+  fiberMet: "#4ade80",
 };
 
 export const usePalette = (): Palette => (useColorScheme() === "dark" ? darkPalette : lightPalette);

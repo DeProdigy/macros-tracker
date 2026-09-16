@@ -163,3 +163,64 @@ describe("TodayScreen", () => {
     expect(screen.queryByText("Nothing logged yet")).toBeNull();
   });
 });
+
+describe("TodayScreen progress", () => {
+  function withDay(overrides: Record<string, unknown>) {
+    mockUseGetDay.mockReturnValue({
+      isLoading: false,
+      data: {
+        status: 200,
+        data: {
+          local_date: "2026-08-31",
+          targets: { calories: 2350, protein_g: 185, fiber_g: 32 },
+          calories: "1690.00",
+          protein_g: "128.00",
+          fiber_g: "19.00",
+          entries: [],
+          ...overrides,
+        },
+      },
+    });
+  }
+
+  it("shows what is left against the day's own targets", () => {
+    withDay({});
+    render(<TodayScreen />);
+
+    expect(screen.getByText("REMAINING")).toBeTruthy();
+    // Asserted through the accessible label, not the visible string. The ring
+    // formats with toLocaleString, so "1,690" depends on the environment's
+    // locale and would make this test fail on a device that CI never sees.
+    expect(screen.getByLabelText("660 kcal left. 1690 of 2350.")).toBeTruthy();
+    expect(screen.getByText("57g short")).toBeTruthy();
+    expect(screen.getByText("13g short")).toBeTruthy();
+  });
+
+  it("turns the calorie ring into an overage when the target is passed", () => {
+    withDay({ calories: "2660.00" });
+    render(<TodayScreen />);
+
+    expect(screen.getByText("OVER BY")).toBeTruthy();
+    expect(screen.getByText("310")).toBeTruthy();
+    expect(screen.queryByText("REMAINING")).toBeNull();
+  });
+
+  it("treats a passed protein target as met rather than as a warning", () => {
+    // The point of the per-macro rule. Over on calories warns, over on protein
+    // congratulates. One shared meaning would be wrong for one of them.
+    withDay({ calories: "2660.00", protein_g: "191.00" });
+    render(<TodayScreen />);
+
+    expect(screen.getByText("OVER BY")).toBeTruthy();
+    expect(screen.getByText("TARGET MET")).toBeTruthy();
+  });
+
+  it("falls back to plain totals when the day carries no targets", () => {
+    withDay({ targets: null });
+    render(<TodayScreen />);
+
+    expect(screen.queryByText("REMAINING")).toBeNull();
+    expect(screen.queryByText("OVER BY")).toBeNull();
+    expect(screen.getByText("CALORIES")).toBeTruthy();
+  });
+});
