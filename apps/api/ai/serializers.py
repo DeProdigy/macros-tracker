@@ -43,12 +43,24 @@ class FoodAnalysisResultSerializer(serializers.Serializer):
     items = FoodAnalysisItemSerializer(many=True)
 
     def validate_items(self, value):
+        """Reject an empty list, and nothing else.
+
+        This used to also reject a result whose macros were all zero, as a guard
+        against a hallucinated answer. The guard was wrong. A diet soda and a
+        photo of a blank wall both come back as zero, zero, zero, so the numbers
+        cannot tell the two apart. Everything with no calories lost: diet soda,
+        black coffee, plain tea, water, sugar-free gum.
+
+        A validator can only test what the data answers. "Is this list empty" is
+        such a question. "Did the model do a good job" is not. To learn whether
+        the model saw food, ask it in a field of its own rather than infer it.
+
+        Nothing guards against a useless answer now, and that is the intent. The
+        user reviews every item before saving and can edit or drop each one, so a
+        bad result costs a tap. A rejected real result costs the feature.
+        """
         if not value:
             raise serializers.ValidationError("Return at least one food item.")
-        if not any(
-            item[field] > 0 for item in value for field in ("calories", "protein_g", "fiber_g")
-        ):
-            raise serializers.ValidationError("Return at least one positive macro value.")
         return value
 
 
