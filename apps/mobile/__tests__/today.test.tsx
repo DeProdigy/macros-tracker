@@ -1,9 +1,44 @@
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import TodayScreen from "../app/(app)/today";
+import { localIsoDate } from "../lib/local-day";
 import { useSession } from "../lib/session";
+import { REAL_TIMERS } from "../test-utils/render";
+
+/**
+ * A fixed instant, so "today" cannot change under the test.
+ *
+ * The screen calls `new Date()` during render. Reading the real clock here
+ * instead would leave a race: if the process crossed local midnight between
+ * this file loading and a render, the expected date and the rendered one would
+ * disagree. Moving the read into `beforeEach` shrinks that window without
+ * closing it, because the render still happens later.
+ *
+ * `beforeEach` freezes only `Date`. Faking the timer functions as well makes
+ * React Native Testing Library hang, and nothing here needs them faked.
+ */
+const NOW = new Date(2026, 8, 16, 12, 0, 0);
+const today = localIsoDate(NOW);
+const pastDate = "2026-08-31";
+// `mock` prefix required: jest.mock factories may not close over other names.
+let mockParams: { date?: string } = {};
+/**
+ * Build the calendar cell's label the same way `DayPicker` does.
+ *
+ * Not the literal "Choose August 30, 2026". `toLocaleDateString([], ...)` reads
+ * the runtime's default locale, which comes from the environment, so that
+ * literal only matches on an English runner. A German one produces
+ * "30. August 2026" and the query finds nothing.
+ *
+ * Unlike the timezone, the locale cannot be pinned in `jest.global-setup.js`.
+ * Node resolves its default locale before global setup runs, so a test that
+ * asserts a formatted date has to build the expected string with the same
+ * formatter.
+ */
+const chooseLabel = (date: Date) =>
+  `Choose ${date.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}`;
 
 const mockUseGetDay = jest.fn();
 const mockUseGetDays = jest.fn();
@@ -16,7 +51,7 @@ jest.mock("expo-router", () => {
   return {
     Link: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text>,
     router: { push: jest.fn(), replace: jest.fn() },
-    useLocalSearchParams: () => ({ date: "2026-08-31" }),
+    useLocalSearchParams: () => mockParams,
   };
 });
 jest.mock("../lib/session", () => ({ useSession: jest.fn() }));
@@ -25,17 +60,20 @@ const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.useFakeTimers({ doNotFake: [...REAL_TIMERS] });
+  jest.setSystemTime(NOW);
+  mockParams = { date: pastDate };
   mockUseSession.mockReturnValue({
     status: "signedIn",
     timezoneStatus: "ready",
-    user: { timezone: "UTC" },
+    user: { timezone: "UTC", has_logged_food: true },
   } as never);
   mockUseGetDay.mockReturnValue({
     isLoading: false,
     data: {
       status: 200,
       data: {
-        local_date: "2026-08-31",
+        local_date: pastDate,
         targets: null,
         calories: "0.00",
         protein_g: "0.00",
@@ -50,18 +88,62 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 describe("TodayScreen", () => {
-  it("shows an empty day and a logging action", () => {
+  it("confirms the clock is frozen", () => {
+    // Guards the premise. The fixed dates below would also pass on a machine
+    // whose real clock sits in September 2026, so without this the freeze could
+    // stop working and nothing would say so.
+    expect(Date.now()).toBe(NOW.getTime());
+  });
+
+  it("tells a past empty day that backfilling is still allowed", () => {
     render(<TodayScreen />);
+
+    expect(screen.getByText("Nothing logged this day")).toBeTruthy();
+    expect(screen.getByText("You can still add food to this day.")).toBeTruthy();
+    // "LOG FOOD" would read as logging it now, which is not what this writes.
+    expect(screen.getByRole("button", { name: "ADD TO THIS DAY" })).toBeTruthy();
+  });
+
+  it("teaches the next action on an empty Today the user has never logged on", () => {
+    mockParams = { date: today };
+    mockUseSession.mockReturnValue({
+      status: "signedIn",
+      timezoneStatus: "ready",
+      user: { timezone: "UTC", has_logged_food: false },
+    } as never);
+
+    render(<TodayScreen />);
+
     expect(screen.getByText("Nothing logged yet")).toBeTruthy();
+    expect(
+      screen.getByText("Point the camera at your food. The app fills in the numbers."),
+    ).toBeTruthy();
     expect(screen.getByRole("button", { name: "LOG FOOD" })).toBeTruthy();
+  });
+
+  it("stays quiet on an empty Today for a user who has logged before", () => {
+    mockParams = { date: today };
+
+    render(<TodayScreen />);
+
+    expect(screen.getByText("Nothing logged yet")).toBeTruthy();
+    // The lesson is for a first run only. Repeating it every morning is noise.
+    expect(
+      screen.queryByText("Point the camera at your food. The app fills in the numbers."),
+    ).toBeNull();
+    expect(screen.queryByText("You can still add food to this day.")).toBeNull();
   });
 
   it("opens the calendar and preserves the selected past day", () => {
     render(<TodayScreen />);
 
     fireEvent.press(screen.getByRole("button", { name: "Choose day" }));
-    fireEvent.press(screen.getByRole("button", { name: "Choose August 30, 2026" }));
+    fireEvent.press(screen.getByRole("button", { name: chooseLabel(new Date(2026, 7, 30)) }));
 
     expect(router.replace).toHaveBeenCalledWith({
       pathname: "/today",
@@ -72,11 +154,11 @@ describe("TodayScreen", () => {
   it("passes the selected date into food logging", () => {
     render(<TodayScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "LOG FOOD" }));
+    fireEvent.press(screen.getByRole("button", { name: "ADD TO THIS DAY" }));
 
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/log-food",
-      params: { date: "2026-08-31" },
+      params: { date: pastDate },
     });
   });
 

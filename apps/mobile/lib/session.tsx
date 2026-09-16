@@ -71,6 +71,28 @@ export type Session = SessionState & {
   deleteAccount: () => Promise<void>;
 };
 
+/**
+ * Record the first food log in the cached user.
+ *
+ * `has_logged_food` is server-derived, and this session fetches the user once at
+ * launch and then keeps it in React state. So a save that flips the flag on the
+ * server would otherwise not reach the app until the next launch, and Today
+ * would keep teaching a user who has just logged their first meal.
+ *
+ * Writing it locally rather than refetching `/api/users/me/` is the cheap half
+ * of the trade. The flag only ever goes false to true, so a local write cannot
+ * disagree with the server in the direction that matters. The wrong choice here
+ * would be a field that can also go back to false: this pattern would then hide
+ * a real server change behind a stale local one.
+ *
+ * The guard is not an optimization. `updateUser` sets state, so calling it after
+ * every save would re-render the whole tree for no change.
+ */
+export const markFoodLogged = (session: Session): void => {
+  if (session.status !== "signedIn" || session.user.has_logged_food) return;
+  session.updateUser({ ...session.user, has_logged_food: true });
+};
+
 const SessionContext = createContext<Session | null>(null);
 
 /**

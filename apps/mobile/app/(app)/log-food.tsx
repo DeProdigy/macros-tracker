@@ -27,7 +27,7 @@ import {
   parseLocalIsoDate,
 } from "@/lib/local-day";
 import { usePalette } from "@/lib/palette";
-import { useSession } from "@/lib/session";
+import { markFoodLogged, useSession } from "@/lib/session";
 
 type LogMode = "manual" | "recents";
 
@@ -115,6 +115,7 @@ export default function LogFoodScreen() {
         queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) }),
         queryClient.invalidateQueries({ queryKey: getGetFoodsQueryKey(), refetchType: "none" }),
       ]);
+      markFoodLogged(session);
       router.replace({ pathname: "/today", params: { date: localDate } });
     } catch (caught) {
       setError(
@@ -146,6 +147,7 @@ export default function LogFoodScreen() {
         queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) }),
         queryClient.invalidateQueries({ queryKey: getGetFoodsQueryKey(), refetchType: "none" }),
       ]);
+      markFoodLogged(session);
       router.replace({ pathname: "/today", params: { date: localDate } });
     } catch (caught) {
       const missingRecentFood =

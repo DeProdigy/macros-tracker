@@ -26,7 +26,7 @@ import {
 import { entryTimingForDate, localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
 import { usePalette } from "@/lib/palette";
 import { savePhotoAnalysis, type SelectedPhoto, uploadAndAnalyze } from "@/lib/photo-analysis";
-import { useSession } from "@/lib/session";
+import { markFoodLogged, useSession } from "@/lib/session";
 
 export default function PhotoScreen() {
   const palette = usePalette();
@@ -107,6 +107,7 @@ export default function PhotoScreen() {
       );
       if (response.status !== 201) throw new Error("Save failed.");
       await queryClient.invalidateQueries({ queryKey: getGetDayQueryKey(context.local_date) });
+      markFoodLogged(session);
       router.replace({ pathname: "/today", params: { date: localDate } });
     } catch {
       setError("Could not save this photo entry. Try again.");

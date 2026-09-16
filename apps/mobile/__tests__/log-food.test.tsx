@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { ApiError } from "@macros/api-client";
 
 import LogFoodScreen from "../app/(app)/log-food";
-import { useSession } from "../lib/session";
+import { markFoodLogged, useSession } from "../lib/session";
 
 const mockCreateEntry = jest.fn<(...args: unknown[]) => Promise<{ status: number }>>();
 const mockInvalidateQueries = jest.fn<() => Promise<void>>();
@@ -78,9 +78,13 @@ jest.mock("../lib/local-day", () => {
     parseLocalIsoDate: () => new Date(2026, 7, 31),
   };
 });
-jest.mock("../lib/session", () => ({ useSession: jest.fn() }));
+jest.mock("../lib/session", () => ({
+  useSession: jest.fn(),
+  markFoodLogged: jest.fn(),
+}));
 
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
+const mockMarkFoodLogged = markFoodLogged as jest.MockedFunction<typeof markFoodLogged>;
 
 function fillRequiredFields() {
   fireEvent.changeText(screen.getByLabelText("Food name"), "Greek yogurt");
@@ -93,7 +97,7 @@ beforeEach(() => {
   mockUseSession.mockReturnValue({
     status: "signedIn",
     timezoneStatus: "ready",
-    user: { timezone: "UTC" },
+    user: { timezone: "UTC", has_logged_food: false },
   } as never);
   mockCreateEntry.mockResolvedValue({ status: 201 });
   mockInvalidateQueries.mockResolvedValue(undefined);
@@ -176,6 +180,8 @@ describe("LogFoodScreen", () => {
         params: { date: "2026-08-31" },
       }),
     );
+    // Records the first log in the cached user, so Today drops its first-run copy.
+    expect(mockMarkFoodLogged).toHaveBeenCalled();
   });
 
   it("keeps the input when the save fails", async () => {
@@ -263,6 +269,8 @@ describe("LogFoodScreen", () => {
         params: { date: "2026-08-31" },
       }),
     );
+    // Records the first log in the cached user, so Today drops its first-run copy.
+    expect(mockMarkFoodLogged).toHaveBeenCalled();
   });
 
   it("steps a fractional Recent quantity without floating point drift", () => {

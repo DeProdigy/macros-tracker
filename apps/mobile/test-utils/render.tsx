@@ -42,3 +42,32 @@ export const renderWithProviders = (ui: ReactElement) => {
 
   return { queryClient, ...render(ui, { wrapper }) };
 };
+
+/**
+ * The fake-timer options that freeze `Date` and nothing else.
+ *
+ * A test that asserts a calendar date has to freeze the clock, because the
+ * screens call `new Date()` during render. Faking the timer functions too makes
+ * React Native Testing Library hang: React's scheduler and RNTL's own waiting
+ * both go through them, so nothing ever advances.
+ *
+ * Pass as `jest.useFakeTimers({ doNotFake: [...REAL_TIMERS] })`, then
+ * `jest.setSystemTime(...)`. Restore with `jest.useRealTimers()` in `afterEach`,
+ * or the frozen clock leaks into every later suite in the same worker.
+ *
+ * Spread at the call site. `as const` keeps the literal types Jest's
+ * `FakeableAPI` union needs, and Jest wants a mutable array, so a bare
+ * reference fails to typecheck.
+ */
+export const REAL_TIMERS = [
+  "nextTick",
+  "setImmediate",
+  "setTimeout",
+  "setInterval",
+  "clearTimeout",
+  "clearInterval",
+  "performance",
+  "queueMicrotask",
+  "requestAnimationFrame",
+  "cancelAnimationFrame",
+] as const;

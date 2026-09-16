@@ -36,6 +36,8 @@ export interface User {
   readonly timezone: string;
   /** Whether the client should route to onboarding or to Today. Server-derived, set when the user's first target version is created, and never writable. False means the user has no targets and onboarding is the only screen they may reach: there is no skip. */
   readonly onboarding_completed: boolean;
+  /** Whether this user has ever saved a food entry. The mobile app uses it to tell a first run apart from a day that is merely empty. */
+  readonly has_logged_food: boolean;
   readonly sex: (typeof UserSex)[keyof typeof UserSex];
   /**
    * @nullable

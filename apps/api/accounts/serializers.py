@@ -84,6 +84,32 @@ class UserSerializer(serializers.ModelSerializer):
     # user who skipped the question falls through it with nothing raised.
     sex = serializers.ChoiceField(choices=Sex.choices, allow_blank=True, read_only=True)
 
+    # A fact about the person, not about any one day, so it belongs on the user
+    # and not on the day resource.
+    #
+    # A SerializerMethodField runs once for every object serialized. That is the
+    # reason this is safe here and would be wrong in a list endpoint: only one
+    # user is ever serialized, by `GET /api/users/me/` and by sign-in. In a list
+    # it becomes one query per row.
+    #
+    # `user.daily_logs` is the reverse accessor, so `accounts` does not import
+    # `entries`. Import direction is a design choice. `entries` already depends
+    # on `accounts`, and reversing that would leave neither app importable alone.
+    has_logged_food = serializers.SerializerMethodField(
+        help_text=(
+            "Whether this user has ever saved a food entry. The mobile app uses it to "
+            "tell a first run apart from a day that is merely empty."
+        )
+    )
+
+    def get_has_logged_food(self, user: User) -> bool:
+        """Report whether any owned day carries an entry.
+
+        `entries__isnull=False` spans the join, so a `DailyLog` created by a
+        rolled-back save counts as empty rather than as logged food.
+        """
+        return user.daily_logs.filter(entries__isnull=False).exists()
+
     class Meta:
         model = User
         # Explicit, never `fields = "__all__"`. An `__all__` on the user model
@@ -95,6 +121,7 @@ class UserSerializer(serializers.ModelSerializer):
             "name",
             "timezone",
             "onboarding_completed",
+            "has_logged_food",
             "sex",
             "current_weight_lb",
             "goal_weight_lb",
