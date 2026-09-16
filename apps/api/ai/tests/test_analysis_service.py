@@ -1,3 +1,4 @@
+import json
 from unittest import mock
 
 import pytest
@@ -176,8 +177,8 @@ def test_provider_schema_declares_one_type_per_field():
     budget does nothing.
 
     The assertion walks the property definitions rather than searching the
-    serialised schema for a keyword. A keyword search also matches prose in a
-    docstring, because pydantic copies a class docstring into `description`.
+    serialised schema for a keyword. A keyword search also matches prose, which
+    the second assertion here exists to keep out.
 
     This test only proves the shape that broke it is gone. It cannot prove OpenAI
     accepts the schema, because it never calls OpenAI. A live call is the only
@@ -194,3 +195,18 @@ def test_provider_schema_declares_one_type_per_field():
     ]
 
     assert unions == []
+
+
+def test_provider_schema_carries_no_prose():
+    """A class docstring here would be sent to OpenAI on every analysis call.
+
+    Pydantic copies a class docstring into the schema's `description`, and the
+    SDK puts the whole schema in the request body. Engineering notes would then
+    be billed as input tokens and read by the model as instructions about the
+    task. Explain this model in a comment above the class instead.
+
+    An 896-character docstring once made up more than half of this schema.
+    """
+    schema = json.dumps(ProviderFoodAnalysis.model_json_schema())
+
+    assert "description" not in schema
