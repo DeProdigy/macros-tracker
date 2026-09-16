@@ -48,35 +48,35 @@ function toNumber(value: string | number): number {
 function macro(consumedRaw: string | number, targetRaw: number): MacroProgress {
   const consumed = toNumber(consumedRaw);
   const target = toNumber(targetRaw);
-  // A zero or missing target cannot be measured against. Report it as under
-  // with an empty bar rather than dividing by zero and rendering NaN.
-  const fraction = target > 0 ? Math.min(consumed / target, 1) : 0;
+  const fraction = Math.min(consumed / target, 1);
   const remaining = target - consumed;
-  const status: MacroStatus =
-    target <= 0 ? "under" : consumed > target ? "over" : consumed === target ? "met" : "under";
+  const status: MacroStatus = consumed > target ? "over" : consumed === target ? "met" : "under";
   return { consumed, target, remaining, fraction, status };
 }
 
 /**
- * Returns null when the day carries no targets.
+ * Returns null when the day has nothing to measure against.
  *
- * `Day.targets` is nullable in the contract. It is null for a logged day whose
- * target version went missing, which the API cannot invent a replacement for.
- * The screen shows the totals and no progress in that case, because there is
- * nothing to measure against. Inventing the current target would silently
- * rewrite history for an old day, which is exactly what capturing a
- * TargetVersion per day exists to prevent.
+ * Two cases reach that. `Day.targets` is nullable in the contract, and it is
+ * null for a logged day whose target version went missing. A target of zero or
+ * less is the same situation wearing a number: dividing by it produces
+ * Infinity, and subtracting from it reports the whole day's food as calories
+ * still remaining. Both are worse than showing no progress at all.
+ *
+ * The screen falls back to plain totals for either. Substituting the current
+ * target would silently rewrite history for an old day, which is exactly what
+ * capturing a TargetVersion per day exists to prevent.
  */
 export function dayProgress(day: Day): DayProgress | null {
   if (!day.targets) return null;
+  const { calories: cal, protein_g: pro, fiber_g: fib } = day.targets;
+  if (!(cal > 0) || !(pro > 0) || !(fib > 0)) return null;
   const calories = macro(day.calories, day.targets.calories);
   return {
     calories,
     protein: macro(day.protein_g, day.targets.protein_g),
     fiber: macro(day.fiber_g, day.targets.fiber_g),
     caloriesOverFraction:
-      calories.target > 0 && calories.remaining < 0
-        ? Math.min(-calories.remaining / calories.target, 1)
-        : 0,
+      calories.remaining < 0 ? Math.min(-calories.remaining / calories.target, 1) : 0,
   };
 }

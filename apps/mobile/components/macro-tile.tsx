@@ -34,6 +34,7 @@ export function MacroTile({ label, progress, color, metColor }: Props) {
     <View
       accessibilityLabel={`${label}. ${consumed} of ${target} grams. ${met ? "Target met." : `${short} grams short.`}`}
       accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: target, now: Math.min(consumed, target) }}
       style={[styles.tile, { backgroundColor: palette.card }]}
     >
       <Text style={[styles.label, { color: palette.secondaryText }]}>{label.toUpperCase()}</Text>

@@ -18,9 +18,10 @@ import { useColorScheme } from "react-native";
 // dictates rather than a developer picking. MAC-61 owns the real visual system
 // and should absorb them.
 //
-// Each macro gets its own hue because the over-target meaning differs by macro.
-// Passing the calorie target is a warning. Passing the protein target is a win.
-// One "over" colour would say the same thing about both.
+// The split that matters is calories against the gram macros, not protein
+// against fiber. Passing the calorie target is a warning, so it turns amber.
+// Passing a gram target is the goal, so it turns green. Protein and fiber share
+// both colours on purpose, because they mean the same thing by them.
 export const lightPalette = {
   background: "#ffffff",
   text: "#111111",

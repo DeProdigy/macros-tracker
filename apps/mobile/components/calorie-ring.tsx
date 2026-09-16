@@ -74,6 +74,11 @@ export function CalorieRing({ progress }: Props) {
           : `${amount} kcal left. ${consumed} of ${target}.`
       }
       accessibilityRole="progressbar"
+      // The label carries the meaning, "over by" against "left". The value
+      // carries the position, which is what a screen reader turns into a
+      // percentage. `now` clamps to `max` because a progressbar reading 113%
+      // is not a thing assistive tech can say usefully.
+      accessibilityValue={{ min: 0, max: target, now: Math.min(consumed, target) }}
       style={styles.wrap}
     >
       <Svg height={SIZE} width={SIZE}>

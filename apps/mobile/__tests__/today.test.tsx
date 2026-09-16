@@ -188,8 +188,10 @@ describe("TodayScreen progress", () => {
     render(<TodayScreen />);
 
     expect(screen.getByText("REMAINING")).toBeTruthy();
-    expect(screen.getByText("660")).toBeTruthy();
-    expect(screen.getByText("1,690 of 2,350 kcal")).toBeTruthy();
+    // Asserted through the accessible label, not the visible string. The ring
+    // formats with toLocaleString, so "1,690" depends on the environment's
+    // locale and would make this test fail on a device that CI never sees.
+    expect(screen.getByLabelText("660 kcal left. 1690 of 2350.")).toBeTruthy();
     expect(screen.getByText("57g short")).toBeTruthy();
     expect(screen.getByText("13g short")).toBeTruthy();
   });

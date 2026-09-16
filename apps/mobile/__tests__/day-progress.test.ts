@@ -69,12 +69,15 @@ describe("dayProgress", () => {
     expect(dayProgress(day({ targets: null }))).toBeNull();
   });
 
-  it("does not divide by a zero target", () => {
-    const progress = dayProgress(day({ targets: { calories: 0, protein_g: 0, fiber_g: 0 } }))!;
-
-    expect(progress.calories.fraction).toBe(0);
-    expect(progress.calories.status).toBe("under");
-    expect(progress.caloriesOverFraction).toBe(0);
+  it("returns null when a target is not positive", () => {
+    // A zero target is "no target" wearing a number. Measuring against it
+    // divides by zero, and subtracting from it reports the whole day's food as
+    // calories still remaining, which reads as the exact opposite of the truth.
+    expect(dayProgress(day({ targets: { calories: 0, protein_g: 185, fiber_g: 32 } }))).toBeNull();
+    expect(dayProgress(day({ targets: { calories: 2350, protein_g: 0, fiber_g: 32 } }))).toBeNull();
+    expect(
+      dayProgress(day({ targets: { calories: 2350, protein_g: 185, fiber_g: -5 } })),
+    ).toBeNull();
   });
 
   it("reads an empty day as nothing consumed", () => {

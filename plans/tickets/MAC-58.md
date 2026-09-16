@@ -153,6 +153,31 @@ ring appears on a device. Metro alone cannot deliver it.
   those.
 - **Day navigation.** Already shipped with MAC-59's day picker.
 
+## Review findings
+
+Copilot raised five points on #60 and all five were right.
+
+- **`accessibilityRole="progressbar"` with no `accessibilityValue`**, on both the
+  ring and the tile. The role promises a value that a screen reader can turn into
+  a percentage, and neither component supplied one. Both now pass min, max, and
+  now, with now clamped to max, because a progressbar reading 113 percent is not
+  something assistive tech can say usefully.
+- **A non-positive target produced nonsense.** `fraction` was guarded against
+  dividing by zero, but `remaining` was not. With a target of 0 and 500 consumed,
+  the ring read "500 kcal left". `dayProgress` now returns null for any target at
+  or below zero, and the totals fallback takes over. A zero target is "no target"
+  wearing a number, so it deserves the same answer.
+- **A locale-sensitive assertion.** The screen test matched "1,690 of 2,350 kcal",
+  which `toLocaleString` renders differently by environment. It now asserts the
+  accessible label, which carries unformatted numbers.
+- **A comment that contradicted the code.** The palette note claimed each macro
+  gets its own hue, but fiber and protein share both colours. The approved design
+  splits calories against the gram macros, not protein against fiber. The comment
+  was wrong, not the colours.
+
+The first two were defects. The other two were a brittle test and a lie in a
+comment, which are the kinds of thing that cost someone an hour a year from now.
+
 ## Open questions
 
 None. The null-target behaviour was agreed before implementation.
