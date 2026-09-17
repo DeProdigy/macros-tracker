@@ -26,7 +26,7 @@ import {
 } from "react-native";
 
 import { needsOnboarding } from "@/lib/onboarding";
-import { usePalette, type Palette } from "@/lib/palette";
+import { usePalette, type Palette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
 import { saveTargetVersion, TargetSavedButRefreshFailed } from "@/lib/target-save";
 

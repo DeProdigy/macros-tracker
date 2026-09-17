@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { EditableFoodItem } from "@/lib/entry-items";
-import { usePalette } from "@/lib/palette";
+import { usePalette } from "@/lib/theme";
 
 type Props = {
   label: string;

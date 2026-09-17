@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
-import { usePalette } from "@/lib/palette";
+import { usePalette } from "@/lib/theme";
 
 type DayPickerProps = {
   enabled: boolean;

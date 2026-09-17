@@ -11,7 +11,7 @@ import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { usePalette } from "@/lib/palette";
+import { usePalette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
 
 type Busy = "none" | "signingOut" | "deleting";

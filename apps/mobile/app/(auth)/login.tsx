@@ -15,12 +15,12 @@ import { ApiError, useCreateSession } from "@macros/api-client";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View, useColorScheme } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { AppleSignInCancelled, signInWithApple } from "@/lib/apple-sign-in";
 import { saveTokens } from "@/lib/auth-storage";
 import { needsOnboarding } from "@/lib/onboarding";
-import { darkPalette, lightPalette, type Palette } from "@/lib/palette";
+import { usePalette, type Palette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
 
 /**
@@ -80,9 +80,6 @@ const stepStates = (phase: Phase): [StepState, StepState, StepState] => {
 };
 
 export default function LoginScreen() {
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
-
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorKind, setErrorKind] = useState<ErrorKind>("credential");
   const [isAppleAvailable, setIsAppleAvailable] = useState<boolean | null>(null);
@@ -153,7 +150,7 @@ export default function LoginScreen() {
     }
   };
 
-  const palette = isDark ? darkPalette : lightPalette;
+  const palette = usePalette();
 
   // `created` is not consulted. A returning user whose onboarding never
   // finished belongs in the same place as a brand-new one, and the server
@@ -211,11 +208,9 @@ export default function LoginScreen() {
           // Guidelines require the system button for Sign in with Apple, and a
           // hand-rolled one is a review rejection later for no gain now.
           <AppleAuthentication.AppleAuthenticationButton
-            buttonStyle={
-              isDark
-                ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
-                : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-            }
+            // Always the white button. The app is dark only as of MAC-61, so
+            // the black variant would be a black button on a black screen.
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
             buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
             cornerRadius={12}
             onPress={handleSignIn}

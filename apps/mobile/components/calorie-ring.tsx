@@ -17,7 +17,7 @@ import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, G } from "react-native-svg";
 
 import type { DayProgress } from "@/lib/day-progress";
-import { usePalette } from "@/lib/palette";
+import { usePalette } from "@/lib/theme";
 
 const SIZE = 220;
 const STROKE = 16;
