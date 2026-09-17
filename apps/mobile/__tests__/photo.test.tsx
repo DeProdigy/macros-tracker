@@ -276,7 +276,7 @@ describe("PhotoScreen", () => {
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
     fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
 
-    await waitFor(() => expect(screen.getByText("540.00")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("540")).toBeTruthy());
     expect(screen.getByDisplayValue("Chicken thigh")).toBeTruthy();
     expect(screen.getByDisplayValue("Broccoli")).toBeTruthy();
     fireEvent.press(screen.getByRole("button", { name: "SAVE TO THIS DAY" }));
@@ -318,7 +318,7 @@ describe("PhotoScreen", () => {
     await waitFor(() => expect(screen.getByDisplayValue("Chicken thigh")).toBeTruthy());
 
     fireEvent.changeText(screen.getByLabelText("Item 1 quantity"), "2");
-    expect(screen.getByText("900.00")).toBeTruthy();
+    expect(screen.getByText("900")).toBeTruthy();
     fireEvent.press(screen.getByRole("button", { name: "SAVE TO THIS DAY" }));
 
     await waitFor(() =>

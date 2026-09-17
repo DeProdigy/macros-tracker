@@ -100,10 +100,7 @@ export function Button({
           // cap rarely bites.
           maxFontSizeMultiplier={1.6}
           numberOfLines={1}
-          style={[
-            styles.label,
-            { color: LABEL[variant] },
-          ]}
+          style={[styles.label, { color: LABEL[variant] }]}
         >
           {label}
         </Text>

@@ -1,49 +1,43 @@
 import { Redirect, router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
+import { Button } from "@/components/ui/button";
+import { Screen } from "@/components/ui/screen";
+import { Label, Lead, Title } from "@/components/ui/text";
 import { needsOnboarding } from "@/lib/onboarding";
-import { usePalette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
+import { colors, space } from "@/lib/theme";
 
 /** The mandatory handoff from saved targets to the first logging slice. */
 export default function FirstFoodPrompt() {
   const session = useSession();
-  const palette = usePalette();
 
   if (session.status === "loading") return null;
   if (session.status === "signedOut") return <Redirect href="/login" />;
   if (needsOnboarding(session.user)) return <Redirect href="/onboarding" />;
 
   return (
-    <View style={[styles.container, { backgroundColor: palette.background }]}>
-      <Text style={[styles.eyebrow, { color: palette.accent }]}>TARGETS SAVED</Text>
-      <Text style={[styles.title, { color: palette.text }]}>Now log your first food.</Text>
-      <Text style={[styles.body, { color: palette.secondaryText }]}>
-        Your targets are ready. Your first entry will start filling the day.
-      </Text>
-      <Pressable
-        accessibilityRole="button"
+    <Screen contentStyle={styles.page}>
+      <View style={styles.block}>
+        <Label color={colors.accent}>TARGETS SAVED</Label>
+        <Title style={styles.title}>Now log your first food.</Title>
+        <Lead style={styles.body}>
+          Your targets are ready. Your first entry will start filling the day.
+        </Lead>
+      </View>
+      <Button
         onPress={() => router.push("/log-food")}
-        style={[styles.button, { backgroundColor: palette.accent }]}
-      >
-        <Text style={[styles.buttonLabel, { color: palette.background }]}>LOG YOUR FIRST FOOD</Text>
-      </Pressable>
-    </View>
+        style={styles.button}
+        title="Log your first food"
+      />
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", paddingHorizontal: 28 },
-  eyebrow: { fontSize: 13, fontWeight: "700", letterSpacing: 2 },
-  title: { fontSize: 38, fontWeight: "800", letterSpacing: -1.2, lineHeight: 43, marginTop: 16 },
-  body: { fontSize: 16, lineHeight: 24, marginTop: 14 },
-  button: {
-    alignItems: "center",
-    borderRadius: 12,
-    justifyContent: "center",
-    marginTop: 40,
-    minHeight: 58,
-  },
-  buttonLabel: { fontSize: 14, fontWeight: "900", letterSpacing: 1.5 },
-  note: { fontSize: 13, lineHeight: 20, marginTop: 14, textAlign: "center" },
+  block: { gap: space.md },
+  body: { lineHeight: 28 },
+  button: { marginTop: space.section },
+  page: { justifyContent: "center", paddingHorizontal: space.xl },
+  title: { marginTop: space.xs },
 });

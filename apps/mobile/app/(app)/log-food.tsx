@@ -9,7 +9,11 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
+
+import { Button } from "@/components/ui/button";
+import { Screen } from "@/components/ui/screen";
+import { Body, Caption, ErrorText, Heading, Label, Muted, Title } from "@/components/ui/text";
 
 import {
   type EditableFoodItem,
@@ -26,7 +30,8 @@ import {
   LocalDayUnavailable,
   parseLocalIsoDate,
 } from "@/lib/local-day";
-import { usePalette } from "@/lib/theme";
+import { macroValue } from "@/lib/format";
+import { colors, radius, space, tapTarget, type } from "@/lib/theme";
 import { markFoodLogged, useSession } from "@/lib/session";
 
 type LogMode = "manual" | "recents";
@@ -43,7 +48,6 @@ const recentEditableItem = (food: RecentFood, quantity: string): EditableFoodIte
 });
 
 export default function LogFoodScreen() {
-  const palette = usePalette();
   const session = useSession();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ date?: string | string[] }>();
@@ -172,18 +176,15 @@ export default function LogFoodScreen() {
     }
   };
 
-  const input = [styles.input, { borderColor: palette.hairline, color: palette.text }];
   return (
-    <ScrollView
-      style={{ backgroundColor: palette.background }}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Pressable accessibilityRole="button" onPress={() => router.back()}>
-        <Text style={{ color: palette.accent }}>CANCEL</Text>
+    <Screen contentStyle={styles.content} keyboard scroll>
+      <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.cancel}>
+        <Caption color={colors.accent}>CANCEL</Caption>
       </Pressable>
-      <Text style={[styles.eyebrow, { color: palette.accent }]}>LOG FOOD</Text>
-      <Text style={[styles.title, { color: palette.text }]}>Log food</Text>
+      <Label color={colors.accent} style={styles.eyebrow}>
+        LOG FOOD
+      </Label>
+      <Title style={styles.title}>Log food</Title>
       <View style={styles.choices}>
         <Choice
           label="PHOTO"
@@ -195,25 +196,25 @@ export default function LogFoodScreen() {
       </View>
       {mode === "manual" ? (
         <>
-          <Text style={[styles.label, { color: palette.secondaryText }]}>FOOD NAME</Text>
+          <Label style={styles.label}>FOOD NAME</Label>
           <TextInput
             accessibilityLabel="Food name"
             value={name}
             onChangeText={setName}
             placeholder="Greek yogurt"
-            placeholderTextColor={palette.dimText}
-            style={input}
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
           />
           <View style={styles.row}>
-            <Field label="QUANTITY" value={quantity} onChange={setQuantity} style={input} />
-            <Field label="CALORIES" value={calories} onChange={setCalories} style={input} />
+            <Field label="QUANTITY" value={quantity} onChange={setQuantity} />
+            <Field label="CALORIES" value={calories} onChange={setCalories} />
           </View>
           <View style={styles.row}>
-            <Field label="PROTEIN (G)" value={protein} onChange={setProtein} style={input} />
-            <Field label="FIBER (G)" value={fiber} onChange={setFiber} style={input} />
+            <Field label="PROTEIN (G)" value={protein} onChange={setProtein} />
+            <Field label="FIBER (G)" value={fiber} onChange={setFiber} />
           </View>
-          {error ? <ErrorMessage message={error} color={palette.error} /> : null}
-          <SaveButton saving={saving} label="SAVE FOOD" onPress={saveManual} />
+          {error ? <ErrorText style={styles.error}>{error}</ErrorText> : null}
+          <SaveButton saving={saving} label="Save food" onPress={saveManual} />
         </>
       ) : (
         <>
@@ -226,37 +227,31 @@ export default function LogFoodScreen() {
               setError(null);
             }}
             placeholder="Search what you've logged before"
-            placeholderTextColor={palette.dimText}
-            style={input}
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
           />
-          <Text style={[styles.recentsLabel, { color: palette.secondaryText }]}>
-            MOST RECENT FIRST
-          </Text>
-          {foodsQuery.isLoading ? (
-            <Text style={[styles.message, { color: palette.secondaryText }]}>
-              Loading recents...
-            </Text>
-          ) : null}
+          <Label style={styles.recentsLabel}>MOST RECENT FIRST</Label>
+          {foodsQuery.isLoading ? <Muted style={styles.message}>Loading recents...</Muted> : null}
           {foodsQuery.isError ? (
             <View style={styles.message}>
-              <Text accessibilityRole="alert" style={{ color: palette.error }}>
-                Could not load your recent foods.
-              </Text>
-              <Pressable accessibilityRole="button" onPress={() => void foodsQuery.refetch()}>
-                <Text style={[styles.retry, { color: palette.accent }]}>TRY AGAIN</Text>
+              <ErrorText>Could not load your recent foods.</ErrorText>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void foodsQuery.refetch()}
+                style={styles.retry}
+              >
+                <Caption color={colors.accent}>TRY AGAIN</Caption>
               </Pressable>
             </View>
           ) : null}
           {!foodsQuery.isLoading && !foodsQuery.isError && foods.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={[styles.emptyTitle, { color: palette.text }]}>
-                No recent foods found
-              </Text>
-              <Text style={[styles.emptyBody, { color: palette.secondaryText }]}>
+              <Heading>No recent foods found</Heading>
+              <Muted style={styles.emptyBody}>
                 {search.trim()
                   ? "Try another search."
                   : "Log a food manually and it will appear here."}
-              </Text>
+              </Muted>
             </View>
           ) : null}
           {foods.map((food) => {
@@ -264,10 +259,7 @@ export default function LogFoodScreen() {
             return (
               <View
                 key={food.id}
-                style={[
-                  styles.recentCard,
-                  { borderColor: selected ? palette.accent : palette.hairline },
-                ]}
+                style={[styles.recentCard, selected ? styles.recentCardSelected : null]}
               >
                 <Pressable
                   accessibilityRole="button"
@@ -280,29 +272,30 @@ export default function LogFoodScreen() {
                   style={styles.recentHeader}
                 >
                   <View style={styles.recentMain}>
-                    <Text style={[styles.recentName, { color: palette.text }]}>{food.name}</Text>
-                    <Text style={[styles.recentPortion, { color: palette.secondaryText }]}>
+                    <Heading>{food.name}</Heading>
+                    <Caption style={styles.recentPortion}>
                       {food.portion_label || "1 serving"}
-                    </Text>
-                    <Text style={[styles.recentMacros, { color: palette.secondaryText }]}>
-                      {food.calories} kcal · {food.protein_g}p · {food.fiber_g}f
-                    </Text>
+                    </Caption>
+                    <Caption style={styles.recentMacros}>
+                      {macroValue(food.calories)} kcal · {macroValue(food.protein_g)}p ·{" "}
+                      {macroValue(food.fiber_g)}f
+                    </Caption>
                   </View>
-                  <Text style={[styles.expand, { color: palette.accent }]}>
+                  <Heading color={colors.accent} style={styles.expand}>
                     {selected ? "−" : "+"}
-                  </Text>
+                  </Heading>
                 </Pressable>
                 {selected && preview ? (
                   <View style={styles.selection}>
-                    <Text style={[styles.label, { color: palette.secondaryText }]}>QUANTITY</Text>
+                    <Label style={styles.label}>QUANTITY</Label>
                     <View style={styles.quantityRow}>
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel="Decrease quantity"
                         onPress={() => setRecentQuantity(stepQuantity(recentQuantity, -1))}
-                        style={[styles.stepper, { borderColor: palette.hairline }]}
+                        style={styles.stepper}
                       >
-                        <Text style={[styles.stepperText, { color: palette.text }]}>−</Text>
+                        <Heading>−</Heading>
                       </Pressable>
                       <TextInput
                         accessibilityLabel="Recent quantity"
@@ -312,37 +305,35 @@ export default function LogFoodScreen() {
                           setRecentQuantity(value);
                           setError(null);
                         }}
-                        style={[input, styles.quantityInput]}
+                        style={[styles.input, styles.quantityInput]}
                       />
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel="Increase quantity"
                         onPress={() => setRecentQuantity(stepQuantity(recentQuantity, 1))}
-                        style={[styles.stepper, { borderColor: palette.hairline }]}
+                        style={styles.stepper}
                       >
-                        <Text style={[styles.stepperText, { color: palette.text }]}>+</Text>
+                        <Heading>+</Heading>
                       </Pressable>
                     </View>
                     <View style={styles.preview}>
-                      <Text style={[styles.label, { color: palette.secondaryText }]}>ADDS</Text>
-                      <Text
-                        accessibilityLabel="Macro preview"
-                        style={[styles.previewValue, { color: palette.text }]}
-                      >
-                        {preview.calories} kcal · {preview.protein_g}p · {preview.fiber_g}f
-                      </Text>
+                      <Label>ADDS</Label>
+                      <Body accessibilityLabel="Macro preview" style={styles.previewValue}>
+                        {macroValue(preview.calories)} kcal · {macroValue(preview.protein_g)}p ·{" "}
+                        {macroValue(preview.fiber_g)}f
+                      </Body>
                     </View>
-                    {error ? <ErrorMessage message={error} color={palette.error} /> : null}
-                    <SaveButton saving={saving} label="LOG AGAIN" onPress={saveRecent} />
+                    {error ? <ErrorText style={styles.error}>{error}</ErrorText> : null}
+                    <SaveButton saving={saving} label="Log again" onPress={saveRecent} />
                   </View>
                 ) : null}
               </View>
             );
           })}
-          {error && !selectedFood ? <ErrorMessage message={error} color={palette.error} /> : null}
+          {error && !selectedFood ? <ErrorText style={styles.error}>{error}</ErrorText> : null}
         </>
       )}
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -355,28 +346,14 @@ function Choice({
   onPress: () => void;
   active: boolean;
 }) {
-  const palette = usePalette();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={[
-        styles.choice,
-        {
-          backgroundColor: active ? palette.accent : palette.background,
-          borderColor: palette.hairline,
-        },
-      ]}
+      style={[styles.choice, active ? styles.choiceActive : null]}
     >
-      <Text
-        style={{
-          color: active ? palette.background : palette.secondaryText,
-          fontWeight: "800",
-        }}
-      >
-        {label}
-      </Text>
+      <Caption color={active ? colors.background : colors.textSecondary}>{label}</Caption>
     </Pressable>
   );
 }
@@ -390,115 +367,97 @@ function SaveButton({
   label: string;
   onPress: () => Promise<void>;
 }) {
-  const palette = usePalette();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={saving}
-      onPress={() => void onPress()}
-      style={[styles.save, { backgroundColor: palette.accent }]}
-    >
-      <Text style={styles.saveText}>{saving ? "SAVING" : label}</Text>
-    </Pressable>
-  );
-}
-
-function ErrorMessage({ message, color }: { message: string; color: string }) {
-  return (
-    <Text accessibilityRole="alert" style={[styles.error, { color }]}>
-      {message}
-    </Text>
-  );
+  return <Button busy={saving} onPress={() => void onPress()} style={styles.save} title={label} />;
 }
 
 function Field({
   label,
   value,
   onChange,
-  style,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  style: object;
 }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Label style={styles.label}>{label}</Label>
       <TextInput
         accessibilityLabel={label}
         keyboardType="decimal-pad"
-        value={value}
         onChangeText={onChange}
-        style={style}
+        style={styles.input}
+        value={value}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: 48, paddingHorizontal: 24, paddingTop: 64 },
-  eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, marginTop: 30 },
-  title: { fontSize: 38, fontWeight: "900", marginTop: 8 },
-  choices: { flexDirection: "row", gap: 8, marginVertical: 28 },
+  cancel: { justifyContent: "center", minHeight: tapTarget },
   choice: {
     alignItems: "center",
-    borderRadius: 10,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
     borderWidth: 1,
     flex: 1,
     justifyContent: "center",
     minHeight: 52,
   },
-  label: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8 },
-  input: { borderRadius: 10, borderWidth: 1, fontSize: 18, minHeight: 52, paddingHorizontal: 14 },
-  row: { flexDirection: "row", gap: 12, marginTop: 20 },
+  choiceActive: { backgroundColor: colors.accent },
+  choices: { flexDirection: "row", gap: space.sm, marginVertical: space.xxl },
+  content: { paddingBottom: space.section, paddingHorizontal: space.xl, paddingTop: space.lg },
+  empty: { alignItems: "center", paddingVertical: space.empty },
+  emptyBody: { marginTop: space.sm, textAlign: "center" },
+  error: { marginTop: space.lg },
+  expand: { marginLeft: space.md },
+  eyebrow: { marginTop: space.xxl },
   field: { flex: 1 },
-  fieldLabel: {
-    color: "#8b8b8b",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
-    marginBottom: 8,
+  input: {
+    ...type.body,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    color: colors.text,
+    minHeight: 52,
+    paddingHorizontal: space.md,
   },
-  error: { fontSize: 14, lineHeight: 20, marginTop: 18 },
-  save: {
+  label: { marginBottom: space.sm },
+  message: { marginTop: space.xl },
+  preview: {
     alignItems: "center",
-    borderRadius: 12,
-    justifyContent: "center",
-    marginTop: 28,
-    minHeight: 58,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: space.xl,
   },
-  saveText: { color: "#001018", fontWeight: "900", letterSpacing: 1.2 },
-  recentsLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginTop: 26 },
-  message: { marginTop: 24 },
-  retry: { fontSize: 12, fontWeight: "800", marginTop: 12 },
-  empty: { alignItems: "center", paddingVertical: 64 },
-  emptyTitle: { fontSize: 20, fontWeight: "800" },
-  emptyBody: { lineHeight: 21, marginTop: 8, textAlign: "center" },
-  recentCard: { borderRadius: 12, borderWidth: 1, marginTop: 16, overflow: "hidden" },
-  recentHeader: { alignItems: "center", flexDirection: "row", minHeight: 92, padding: 18 },
+  previewValue: { fontFamily: type.heading.fontFamily },
+  quantityInput: { flex: 1, textAlign: "center" },
+  quantityRow: { alignItems: "center", flexDirection: "row", gap: space.sm },
+  recentCard: {
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginTop: space.lg,
+    overflow: "hidden",
+  },
+  recentCardSelected: { borderColor: colors.accent },
+  recentHeader: { alignItems: "center", flexDirection: "row", minHeight: 92, padding: space.lg },
+  recentMacros: { marginTop: space.sm },
   recentMain: { flex: 1 },
-  recentName: { fontSize: 18, fontWeight: "800" },
-  recentPortion: { fontSize: 13, marginTop: 5 },
-  recentMacros: { fontSize: 13, marginTop: 8 },
-  expand: { fontSize: 26, marginLeft: 12 },
-  selection: { padding: 18, paddingTop: 2 },
-  quantityRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  recentPortion: { marginTop: space.xs },
+  recentsLabel: { marginTop: space.xl },
+  retry: { justifyContent: "center", minHeight: tapTarget },
+  row: { flexDirection: "row", gap: space.md, marginTop: space.xl },
+  save: { marginTop: space.xxl },
+  selection: { padding: space.lg, paddingTop: 2 },
+  title: { marginTop: space.sm },
   stepper: {
     alignItems: "center",
-    borderRadius: 10,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
     borderWidth: 1,
     height: 52,
     justifyContent: "center",
     width: 52,
   },
-  stepperText: { fontSize: 24, fontWeight: "800" },
-  quantityInput: { flex: 1, textAlign: "center" },
-  preview: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 24,
-  },
-  previewValue: { fontSize: 16, fontWeight: "800" },
 });

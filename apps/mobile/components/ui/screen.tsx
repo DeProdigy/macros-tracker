@@ -33,7 +33,12 @@ import { colors } from "@/lib/theme";
 type Edge = "top" | "bottom";
 
 type Props = {
-  children: ReactNode;
+  /**
+   * Optional so a screen can render an empty page while it loads. That is not
+   * a blank frame: the page still paints the app's background, which is what
+   * stops a white flash before the real content arrives.
+   */
+  children?: ReactNode;
   /** Wraps the content in a ScrollView. Off for screens that must not scroll. */
   scroll?: boolean;
   /**

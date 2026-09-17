@@ -199,7 +199,9 @@ export default function LoginScreen() {
       </View>
 
       <View style={styles.actions}>
-        {phase === "error" ? <ErrorText style={styles.centred}>{ERROR_COPY[errorKind]}</ErrorText> : null}
+        {phase === "error" ? (
+          <ErrorText style={styles.centred}>{ERROR_COPY[errorKind]}</ErrorText>
+        ) : null}
 
         {isAppleAvailable === false ? (
           <ErrorText style={styles.centred}>

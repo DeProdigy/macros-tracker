@@ -190,8 +190,8 @@ describe("TodayScreen", () => {
     });
     render(<TodayScreen />);
     expect(screen.getByText("Greek yogurt")).toBeTruthy();
-    expect(screen.getByText("240.00 kcal")).toBeTruthy();
-    expect(screen.getByText("36.00p · 4.00f")).toBeTruthy();
+    expect(screen.getByText("240 kcal")).toBeTruthy();
+    expect(screen.getByText("36p · 4f")).toBeTruthy();
     fireEvent.press(screen.getByRole("button", { name: "Edit Greek yogurt" }));
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/entry/[id]",

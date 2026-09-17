@@ -242,13 +242,9 @@ describe("LogFoodScreen", () => {
     fireEvent.press(screen.getByRole("button", { name: "RECENTS" }));
     fireEvent.press(screen.getByRole("button", { name: "Select Greek yogurt" }));
 
-    expect(screen.getByLabelText("Macro preview")).toHaveTextContent(
-      "120.00 kcal · 18.00p · 2.00f",
-    );
+    expect(screen.getByLabelText("Macro preview")).toHaveTextContent("120 kcal · 18p · 2f");
     fireEvent.changeText(screen.getByLabelText("Recent quantity"), "1.5");
-    expect(screen.getByLabelText("Macro preview")).toHaveTextContent(
-      "180.00 kcal · 27.00p · 3.00f",
-    );
+    expect(screen.getByLabelText("Macro preview")).toHaveTextContent("180 kcal · 27p · 3f");
     fireEvent.press(screen.getByRole("button", { name: "LOG AGAIN" }));
 
     await waitFor(() =>
@@ -281,9 +277,7 @@ describe("LogFoodScreen", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "Decrease quantity" }));
     expect(screen.getByDisplayValue("1.30")).toBeTruthy();
-    expect(screen.getByLabelText("Macro preview")).toHaveTextContent(
-      "156.00 kcal · 23.40p · 2.60f",
-    );
+    expect(screen.getByLabelText("Macro preview")).toHaveTextContent("156 kcal · 23p · 3f");
 
     fireEvent.press(screen.getByRole("button", { name: "Increase quantity" }));
     expect(screen.getByDisplayValue("2.30")).toBeTruthy();

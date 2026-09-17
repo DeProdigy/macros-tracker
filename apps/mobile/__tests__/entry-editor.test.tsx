@@ -66,7 +66,7 @@ const entryQueryResult = (source = "photo", photoUrl: string | null = null) => (
       source,
       description: "Lunch",
       eaten_at: "2026-09-01T17:00:00Z",
-      calories: "280.00",
+      calories: "280",
       protein_g: "30.00",
       fiber_g: "4.00",
       photo_url: photoUrl,
@@ -119,7 +119,7 @@ describe("EntryEditorScreen", () => {
 
     expect(screen.getByText("Lunch")).toBeTruthy();
     expect(screen.getByLabelText("Item 1 food name").props.value).toBe("Chicken");
-    expect(screen.getByText("280.00")).toBeTruthy();
+    expect(screen.getByText("280")).toBeTruthy();
     expect(screen.getByText(/RECENT/)).toBeTruthy();
   });
 
@@ -204,7 +204,7 @@ describe("EntryEditorScreen", () => {
     render(<EntryEditorScreen />);
 
     fireEvent.press(screen.getByRole("button", { name: "DELETE ENTRY" }));
-    expect(screen.getByText("This removes Lunch and 280.00 calories from this day.")).toBeTruthy();
+    expect(screen.getByText("This removes Lunch and 280 calories from this day.")).toBeTruthy();
     expect(screen.queryByText(/streak/i)).toBeNull();
     fireEvent.press(screen.getByRole("button", { name: "DELETE" }));
 

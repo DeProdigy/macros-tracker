@@ -10,9 +10,13 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ItemEditor } from "@/components/item-editor";
+import { Button } from "@/components/ui/button";
+import { Screen } from "@/components/ui/screen";
+import { Caption, ErrorText, Heading, Label, Muted, Numeral, Title } from "@/components/ui/text";
 import {
   emptyEditableItem,
   type EditableFoodItem,
@@ -20,12 +24,15 @@ import {
   isValidEditableItem,
   useEntryItemMutations,
 } from "@/lib/entry-items";
+import { macroValue } from "@/lib/format";
 import { entryTimingForDate, localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
-import { usePalette } from "@/lib/theme";
+import { colors, radius, space, tapTarget, type } from "@/lib/theme";
 import { useSession } from "@/lib/session";
 
 export default function EntryEditorScreen() {
-  const palette = usePalette();
+  // The delete modal sits outside the Screen wrapper, so it reads the inset
+  // itself to keep its card clear of the home indicator.
+  const insets = useSafeAreaInsets();
   const session = useSession();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{
@@ -111,27 +118,23 @@ export default function EntryEditorScreen() {
   };
 
   return (
-    <ScrollView
-      style={{ backgroundColor: palette.background }}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Pressable accessibilityRole="button" onPress={() => returnToDay(localDate)}>
-        <Text style={{ color: palette.accent }}>
+    <Screen contentStyle={styles.content} keyboard scroll>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => returnToDay(localDate)}
+        style={styles.back}
+      >
+        <Caption color={colors.accent}>
           {localDate === today ? "BACK TO TODAY" : "BACK TO DAY"}
-        </Text>
+        </Caption>
       </Pressable>
-      <Text style={[styles.eyebrow, { color: palette.accent }]}>ENTRY</Text>
-      <Text style={[styles.title, { color: palette.text }]}>
-        {entry?.description ?? "Edit food"}
-      </Text>
-      {entryQuery.isLoading ? (
-        <Text style={{ color: palette.secondaryText }}>Loading entry...</Text>
-      ) : null}
+      <Label color={colors.accent} style={styles.eyebrow}>
+        ENTRY
+      </Label>
+      <Title style={styles.title}>{entry?.description ?? "Edit food"}</Title>
+      {entryQuery.isLoading ? <Muted>Loading entry...</Muted> : null}
       {entryQuery.isError || (!entryQuery.isLoading && !entry) ? (
-        <Text accessibilityRole="alert" style={{ color: palette.error }}>
-          Could not load this entry. Return to Today and try again.
-        </Text>
+        <ErrorText>Could not load this entry. Return to Today and try again.</ErrorText>
       ) : null}
       {entry ? (
         <>
@@ -142,17 +145,16 @@ export default function EntryEditorScreen() {
               style={styles.photo}
             />
           ) : null}
-          <Text style={[styles.metadata, { color: palette.secondaryText }]}>
+          <Label style={styles.metadata}>
             {entry.source.toUpperCase()} ·{" "}
-            {new Date(entry.eaten_at).toLocaleTimeString([], {
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-          </Text>
+            {new Date(entry.eaten_at)
+              .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+              .toUpperCase()}
+          </Label>
           <View style={styles.totals}>
-            <Metric label="CALORIES" value={entry.calories} />
-            <Metric label="PROTEIN" value={`${entry.protein_g}g`} />
-            <Metric label="FIBER" value={`${entry.fiber_g}g`} />
+            <Metric label="CALORIES" value={macroValue(entry.calories)} />
+            <Metric label="PROTEIN" value={`${macroValue(entry.protein_g)}g`} />
+            <Metric label="FIBER" value={`${macroValue(entry.fiber_g)}g`} />
           </View>
           {entry.items.map((item, index) => (
             <SavedItemEditor
@@ -194,39 +196,33 @@ export default function EntryEditorScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() => setAdding(emptyEditableItem(`new-${Date.now()}`))}
-              style={[styles.add, { borderColor: palette.accent }]}
+              style={styles.add}
             >
-              <Text style={{ color: palette.accent, fontWeight: "800" }}>ADD MISSED ITEM</Text>
+              <Caption color={colors.accent}>ADD MISSED ITEM</Caption>
             </Pressable>
           )}
           {entry.items.length === 1 ? (
-            <Text style={[styles.note, { color: palette.dimText }]}>
+            <Caption color={colors.textDim} style={styles.note}>
               Delete the entry to remove its last item.
-            </Text>
+            </Caption>
           ) : null}
-          <Pressable
-            accessibilityRole="button"
+          <Button
+            busy={working}
             disabled={working}
             onPress={() => void logAgain()}
-            style={[styles.primary, { backgroundColor: palette.accent }]}
-          >
-            <Text style={styles.primaryText}>{working ? "WORKING" : "LOG AGAIN"}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
+            style={styles.primary}
+            title="Log again"
+          />
+          <Button
             disabled={working}
             onPress={() => setDeleteVisible(true)}
-            style={[styles.delete, { borderColor: palette.error }]}
-          >
-            <Text style={{ color: palette.error, fontWeight: "800" }}>DELETE ENTRY</Text>
-          </Pressable>
+            style={styles.delete}
+            title="Delete entry"
+            variant="destructive"
+          />
         </>
       ) : null}
-      {error ? (
-        <Text accessibilityRole="alert" style={[styles.error, { color: palette.error }]}>
-          {error}
-        </Text>
-      ) : null}
+      {error ? <ErrorText style={styles.error}>{error}</ErrorText> : null}
       <Modal
         animationType="fade"
         onRequestClose={() => setDeleteVisible(false)}
@@ -234,33 +230,33 @@ export default function EntryEditorScreen() {
         visible={deleteVisible}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: palette.background }]}>
-            <Text style={[styles.modalTitle, { color: palette.text }]}>Delete this entry?</Text>
-            <Text style={[styles.modalBody, { color: palette.secondaryText }]}>
+          <View style={[styles.modalCard, { marginBottom: insets.bottom }]}>
+            <Heading>Delete this entry?</Heading>
+            <Muted style={styles.modalBody}>
               {entry
-                ? `This removes ${entry.description} and ${entry.calories} calories from this day.`
+                ? `This removes ${entry.description} and ${macroValue(entry.calories)} calories from this day.`
                 : "This removes the entry from this day."}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
+            </Muted>
+            <Button
+              busy={working}
               disabled={working}
               onPress={() => void removeEntry()}
-              style={[styles.primary, { backgroundColor: palette.error }]}
-            >
-              <Text style={styles.deleteText}>{working ? "DELETING" : "DELETE"}</Text>
-            </Pressable>
+              style={styles.confirmDelete}
+              title="Delete"
+              variant="destructive"
+            />
             <Pressable
               accessibilityRole="button"
               disabled={working}
               onPress={() => setDeleteVisible(false)}
               style={styles.cancelDelete}
             >
-              <Text style={{ color: palette.accent, fontWeight: "800" }}>CANCEL</Text>
+              <Caption color={colors.accent}>CANCEL</Caption>
             </Pressable>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -323,19 +319,19 @@ function SavedItemEditor({
         working={working}
       />
       {validationError ? (
-        <Text accessibilityRole="alert" style={styles.validationError}>
+        <ErrorText style={styles.validationError}>
           Enter a name, positive quantity, and at least one macro value.
-        </Text>
+        </ErrorText>
       ) : null}
     </View>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <View style={styles.metric}>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
+      <Numeral style={styles.metricValue}>{value}</Numeral>
+      <Label style={styles.metricLabel}>{label}</Label>
     </View>
   );
 }
@@ -343,50 +339,42 @@ function Metric({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   add: {
     alignItems: "center",
-    borderRadius: 10,
+    borderColor: colors.accent,
+    borderRadius: radius.sm,
     borderWidth: 1,
     justifyContent: "center",
-    marginTop: 20,
+    marginTop: space.xl,
     minHeight: 50,
   },
-  content: { paddingBottom: 48, paddingHorizontal: 24, paddingTop: 64 },
-  cancelDelete: { alignItems: "center", justifyContent: "center", minHeight: 48 },
-  delete: {
-    alignItems: "center",
-    borderRadius: 10,
-    borderWidth: 1,
-    justifyContent: "center",
-    marginTop: 12,
-    minHeight: 52,
-  },
-  deleteText: { color: "#ffffff", fontWeight: "900", letterSpacing: 1.2 },
-  error: { fontSize: 14, lineHeight: 20, marginTop: 20 },
-  eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, marginTop: 30 },
-  metadata: { fontSize: 12, fontWeight: "700", letterSpacing: 1, marginBottom: 18 },
-  metric: { backgroundColor: "#17191b", borderRadius: 10, flex: 1, padding: 12 },
-  metricLabel: { color: "#8b8f94", fontSize: 10, fontWeight: "800", marginTop: 4 },
-  metricValue: { color: "#f5f7f8", fontSize: 22, fontWeight: "900" },
+  back: { justifyContent: "center", minHeight: tapTarget },
+  cancelDelete: { alignItems: "center", justifyContent: "center", minHeight: tapTarget },
+  confirmDelete: { marginTop: space.xl },
+  content: { paddingBottom: space.section, paddingHorizontal: space.xl, paddingTop: space.lg },
+  delete: { marginTop: space.md },
+  error: { marginTop: space.xl },
+  eyebrow: { marginTop: space.xxl },
+  metadata: { marginBottom: space.lg },
+  metric: { backgroundColor: colors.surface, borderRadius: radius.sm, flex: 1, padding: space.md },
+  metricLabel: { marginTop: space.xs },
+  metricValue: { fontSize: type.heading.fontSize },
   modalBackdrop: {
     alignItems: "center",
     backgroundColor: "rgba(0, 0, 0, 0.6)",
     flex: 1,
     justifyContent: "center",
-    padding: 24,
+    padding: space.xl,
   },
-  modalBody: { lineHeight: 21, marginTop: 10 },
-  modalCard: { borderRadius: 16, padding: 24, width: "100%" },
-  modalTitle: { fontSize: 24, fontWeight: "900" },
-  note: { fontSize: 12, marginTop: 14, textAlign: "center" },
-  photo: { borderRadius: 14, height: 260, marginBottom: 18, width: "100%" },
-  primary: {
-    alignItems: "center",
-    borderRadius: 12,
-    justifyContent: "center",
-    marginTop: 24,
-    minHeight: 56,
+  modalBody: { lineHeight: 21, marginTop: space.sm },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: space.xl,
+    width: "100%",
   },
-  primaryText: { color: "#001018", fontWeight: "900", letterSpacing: 1.2 },
-  title: { fontSize: 36, fontWeight: "900", marginBottom: 24, marginTop: 8 },
-  totals: { flexDirection: "row", gap: 8, marginBottom: 24 },
-  validationError: { color: "#ff6b5b", fontSize: 13, marginBottom: 12 },
+  note: { marginTop: space.md, textAlign: "center" },
+  photo: { borderRadius: radius.md, height: 260, marginBottom: space.lg, width: "100%" },
+  primary: { marginTop: space.xl },
+  title: { marginBottom: space.xl, marginTop: space.sm },
+  totals: { flexDirection: "row", gap: space.sm, marginBottom: space.xl },
+  validationError: { marginBottom: space.md },
 });

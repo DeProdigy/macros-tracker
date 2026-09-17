@@ -7,11 +7,14 @@
 import { ApiError, getCurrentTarget, type TargetVersion } from "@macros/api-client";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
+import { Button } from "@/components/ui/button";
+import { Screen } from "@/components/ui/screen";
+import { Caption, ErrorText, Heading, Label, Muted, Title } from "@/components/ui/text";
 import { needsOnboarding } from "@/lib/onboarding";
-import { usePalette, type Palette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
+import { colors, radius, space, tapTarget, type } from "@/lib/theme";
 import { saveTargetVersion, TargetSavedButRefreshFailed } from "@/lib/target-save";
 
 /**
@@ -113,7 +116,6 @@ const errorsFrom = (body: unknown): { fields: FieldErrors; other: string | null 
 
 export default function AdjustTargets() {
   const session = useSession();
-  const palette = usePalette();
   const router = useRouter();
   const params = useLocalSearchParams<{
     source?: string;
@@ -297,22 +299,17 @@ export default function AdjustTargets() {
   };
 
   if (loading) {
-    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+    return <Screen />;
   }
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.content}
-      style={[styles.container, { backgroundColor: palette.background }]}
-    >
-      <Text style={[styles.title, { color: palette.text }]}>
-        {hasProposalValues ? "Make it yours" : "Your call"}
-      </Text>
-      <Text style={[styles.body, { color: palette.secondaryText }]}>
+    <Screen contentStyle={styles.content} scroll>
+      <Title>{hasProposalValues ? "Make it yours" : "Your call"}</Title>
+      <Muted style={styles.body}>
         {hasProposalValues
           ? "Adjust the proposed targets before saving your first version."
           : "Adjust your daily targets. Saving keeps the earlier version in your history."}
-      </Text>
+      </Muted>
 
       <Row
         label="Calories"
@@ -320,7 +317,6 @@ export default function AdjustTargets() {
         value={values.calories}
         error={fieldErrors.calories}
         onStep={(direction) => step("calories", direction)}
-        palette={palette}
       />
       <Row
         label="Protein"
@@ -328,7 +324,6 @@ export default function AdjustTargets() {
         value={values.protein_g}
         error={fieldErrors.protein_g}
         onStep={(direction) => step("protein_g", direction)}
-        palette={palette}
       />
       <Row
         label="Fiber"
@@ -336,30 +331,26 @@ export default function AdjustTargets() {
         value={values.fiber_g}
         error={fieldErrors.fiber_g}
         onStep={(direction) => step("fiber_g", direction)}
-        palette={palette}
       />
 
-      <Text style={[styles.note, { color: palette.secondaryText }]}>
+      <Caption color={colors.textSecondary} style={styles.note}>
         {hasProposalValues
           ? "These become your first daily targets. You can change them later in Settings."
           : "Saving writes a new version. Days you have already logged keep the targets that were live at the time, so last week's progress never gets rewritten."}
-      </Text>
+      </Caption>
 
-      {failure ? <Text style={[styles.failure, { color: palette.error }]}>{failure}</Text> : null}
+      {failure ? <ErrorText>{failure}</ErrorText> : null}
 
-      <Pressable
-        accessibilityRole="button"
+      <Button
+        busy={saving}
         disabled={saving || targetWasSaved}
         onPress={() => {
           void save();
         }}
-        style={[styles.button, { backgroundColor: palette.accent }]}
-      >
-        <Text style={styles.buttonLabel}>
-          {saving ? "Saving…" : hasProposalValues ? "SAVE AND CONTINUE" : "SAVE NEW VERSION"}
-        </Text>
-      </Pressable>
-    </ScrollView>
+        style={styles.button}
+        title={hasProposalValues ? "Save and continue" : "Save new version"}
+      />
+    </Screen>
   );
 }
 
@@ -369,69 +360,67 @@ const Row = ({
   value,
   error,
   onStep,
-  palette,
 }: {
   label: string;
   unit: string;
   value: number;
   error?: string;
   onStep: (direction: 1 | -1) => void;
-  palette: Palette;
 }) => (
-  <View style={[styles.row, { borderColor: error ? palette.error : palette.hairline }]}>
-    <Text style={[styles.rowLabel, { color: palette.dimText }]}>{label}</Text>
+  <View style={[styles.row, error ? styles.rowInvalid : null]}>
+    <Label color={colors.textDim}>{label.toUpperCase()}</Label>
 
     <View style={styles.stepper}>
       <Pressable
         accessibilityLabel={`Decrease ${label.toLowerCase()}`}
         accessibilityRole="button"
         onPress={() => onStep(-1)}
-        style={[styles.stepButton, { borderColor: palette.hairline }]}
+        style={styles.stepButton}
       >
-        <Text style={[styles.stepLabel, { color: palette.text }]}>−</Text>
+        <Heading>−</Heading>
       </Pressable>
 
-      <Text style={[styles.value, { color: palette.accent }]}>
+      <Title color={colors.accent}>
         {value}
-        <Text style={[styles.unit, { color: palette.dimText }]}> {unit}</Text>
-      </Text>
+        <Caption color={colors.textDim}> {unit}</Caption>
+      </Title>
 
       <Pressable
         accessibilityLabel={`Increase ${label.toLowerCase()}`}
         accessibilityRole="button"
         onPress={() => onStep(1)}
-        style={[styles.stepButton, { borderColor: palette.hairline }]}
+        style={styles.stepButton}
       >
-        <Text style={[styles.stepLabel, { color: palette.text }]}>+</Text>
+        <Heading>+</Heading>
       </Pressable>
     </View>
 
-    {error ? <Text style={[styles.rowError, { color: palette.error }]}>{error}</Text> : null}
+    {error ? <ErrorText style={styles.rowError}>{error}</ErrorText> : null}
   </View>
 );
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { gap: 16, paddingHorizontal: 24, paddingVertical: 48 },
-  title: { fontSize: 30, fontWeight: "800", letterSpacing: -0.5 },
-  body: { fontSize: 15, lineHeight: 22 },
-  row: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, gap: 8, padding: 16 },
-  rowLabel: { fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
-  rowError: { fontSize: 13, lineHeight: 18 },
-  stepper: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  body: { lineHeight: 22 },
+  button: { marginTop: space.sm },
+  content: { gap: space.lg, paddingHorizontal: space.xl, paddingVertical: space.section },
+  note: { lineHeight: 19 },
+  row: {
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: space.sm,
+    padding: space.lg,
+  },
+  rowError: { ...type.caption, lineHeight: 18 },
+  rowInvalid: { borderColor: colors.error },
   stepButton: {
     alignItems: "center",
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    height: 44,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    height: tapTarget,
     justifyContent: "center",
     width: 56,
   },
-  stepLabel: { fontSize: 24, fontWeight: "600" },
-  value: { fontSize: 34, fontWeight: "800" },
-  unit: { fontSize: 15, fontWeight: "600" },
-  note: { fontSize: 13, lineHeight: 19 },
-  failure: { fontSize: 14, lineHeight: 20 },
-  button: { alignItems: "center", borderRadius: 12, marginTop: 8, paddingVertical: 16 },
-  buttonLabel: { color: "#ffffff", fontSize: 15, fontWeight: "800", letterSpacing: 1 },
+  stepper: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
 });
