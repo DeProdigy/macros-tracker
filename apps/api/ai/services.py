@@ -13,7 +13,7 @@ from rest_framework.exceptions import ValidationError
 from accounts.models import User
 
 from .constants import ROLLING_WINDOW
-from .exceptions import FoodAnalysisQuotaExceeded
+from .exceptions import FoodAnalysisNoFoodVisible, FoodAnalysisQuotaExceeded
 from .models import FoodAnalysisCall
 from .provider import ProviderOutputError, analyze_food
 
@@ -281,7 +281,26 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
         raise
 
     try:
-        candidate = {"analysis_id": call.pk, **result.payload}
+        no_food_visible = result.payload["no_food_visible"]
+        if no_food_visible is True:
+            cost = _estimated_cost(result.input_tokens, result.output_tokens)
+            fail_food_analysis_call(
+                call,
+                category="no_food_visible",
+                message="Provider reported no food or drink visible.",
+                response_payload=result.payload,
+                provider_request_id=result.provider_request_id,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                usage=result.usage,
+                estimated_cost_usd=cost,
+                billable=True,
+            )
+            raise FoodAnalysisNoFoodVisible
+        if no_food_visible is not False:
+            raise ValueError("Provider no_food_visible must be a boolean.")
+
+        candidate = {"analysis_id": call.pk, "items": result.payload["items"]}
         items = [
             {
                 **item,

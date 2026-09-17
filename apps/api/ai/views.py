@@ -11,7 +11,8 @@ from rest_framework.views import APIView
 
 from accounts.models import User
 
-from .exceptions import FoodAnalysisQuotaExceeded
+from .constants import FOOD_ANALYSIS_NO_FOOD_CODE
+from .exceptions import FoodAnalysisNoFoodVisible, FoodAnalysisQuotaExceeded
 from .serializers import (
     FoodAnalysisErrorSerializer,
     FoodAnalysisQuotaErrorSerializer,
@@ -38,6 +39,7 @@ class FoodAnalysisCreateView(APIView):
             400: OpenApiResponse(OpenApiTypes.OBJECT, description="Validation error."),
             401: OpenApiResponse(OpenApiTypes.OBJECT, description="Authentication error."),
             429: FoodAnalysisQuotaErrorSerializer,
+            422: FoodAnalysisErrorSerializer,
             502: FoodAnalysisErrorSerializer,
         },
     )
@@ -63,6 +65,14 @@ class FoodAnalysisCreateView(APIView):
             return Response(
                 FoodAnalysisQuotaErrorSerializer(payload).data,
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        except FoodAnalysisNoFoodVisible:
+            return Response(
+                {
+                    "code": FOOD_ANALYSIS_NO_FOOD_CODE,
+                    "detail": "No food or drink was visible. Try another photo.",
+                },
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
         except ValidationError:
             return Response(

@@ -5,7 +5,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from ai.exceptions import FoodAnalysisQuotaExceeded
+from ai.exceptions import FoodAnalysisNoFoodVisible, FoodAnalysisQuotaExceeded
 
 User = get_user_model()
 
@@ -82,3 +82,18 @@ def test_analysis_maps_the_rolling_quota(user):
     assert response.data["code"] == "food_analysis_quota_exceeded"
     assert response.data["limit"] == 500
     assert response.data["used"] == 500
+
+
+def test_analysis_returns_a_distinct_no_food_response(user):
+    client = APIClient()
+    client.force_authenticate(user)
+    with mock.patch("ai.views.create_food_analysis", side_effect=FoodAnalysisNoFoodVisible):
+        response = client.post(
+            "/api/analyses/", {"photo_key": f"pending/{user.pk}/desk.jpg"}, format="json"
+        )
+
+    assert response.status_code == 422
+    assert response.data == {
+        "code": "food_analysis_no_food_visible",
+        "detail": "No food or drink was visible. Try another photo.",
+    }
