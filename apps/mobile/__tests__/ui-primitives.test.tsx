@@ -74,6 +74,29 @@ describe("Button", () => {
     });
   });
 
+  it("keeps a spoken label while busy, when the visible one is a spinner", () => {
+    renderInSafeArea(<Button busy onPress={jest.fn()} title="Save" />);
+
+    expect(screen.getByRole("button").props.accessibilityLabel).toBe("Save");
+  });
+
+  it("speaks the label in its original case, not the uppercased one", () => {
+    renderInSafeArea(<Button onPress={jest.fn()} title="Log food" />);
+
+    // The design uppercases a primary label. Some voices read an all-caps
+    // string letter by letter, so the spoken label keeps the original.
+    expect(screen.getByRole("button").props.accessibilityLabel).toBe("Log food");
+    expect(screen.getByText("LOG FOOD")).toBeTruthy();
+  });
+
+  it("lets a caller override the spoken label", () => {
+    renderInSafeArea(
+      <Button accessibilityLabel="Add food to 14 September" onPress={jest.fn()} title="Log food" />,
+    );
+
+    expect(screen.getByRole("button").props.accessibilityLabel).toBe("Add food to 14 September");
+  });
+
   it("blocks presses when disabled", () => {
     const onPress = jest.fn();
     renderInSafeArea(<Button disabled onPress={onPress} title="Save" />);

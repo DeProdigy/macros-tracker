@@ -61,6 +61,16 @@ export function Button({
 
   return (
     <Pressable
+      // Two separate reasons to set this rather than let VoiceOver read the
+      // child text. While `busy` the child is a spinner, so a button with no
+      // label at all is what a screen reader would find. And a primary label
+      // is uppercased for the design, which some voices read letter by letter.
+      // `title` keeps its original casing here, so the spoken label stays
+      // "Log food" while the visible one says "LOG FOOD".
+      //
+      // It sits above the spread so a caller can still pass a better label,
+      // such as one naming the day a button writes to.
+      accessibilityLabel={title}
       accessibilityRole="button"
       accessibilityState={{ busy, disabled: blocked }}
       disabled={blocked}

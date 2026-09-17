@@ -1,6 +1,6 @@
 # MAC-61: MVP visual and accessibility polish across the daily loop
 
-Status: draft, waiting for Alex's approval.
+Status: approved by Alex on 17 Sep 2026.
 
 Linear: https://linear.app/hintology/issue/MAC-61/mvp-visual-and-accessibility-polish-across-the-daily-loop
 
