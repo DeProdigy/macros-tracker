@@ -29,8 +29,8 @@ import { savePhotoAnalysis, type SelectedPhoto, uploadAndAnalyze } from "@/lib/p
 import { markFoodLogged, useSession } from "@/lib/session";
 
 const GENERIC_ANALYSIS_ERROR = "Could not analyze this photo. Retry or use Manual.";
-const QUOTA_ANALYSIS_ERROR =
-  "You reached the rolling photo-analysis limit. Manual entry is still available.";
+const MANUAL_ENTRY_HINT = "Manual entry is still available.";
+const QUOTA_ANALYSIS_ERROR = `You reached the rolling photo-analysis limit. ${MANUAL_ENTRY_HINT}`;
 
 function analysisErrorFields(body: unknown): { code: string | null; detail: string | null } {
   if (!body || typeof body !== "object") return { code: null, detail: null };
@@ -40,6 +40,10 @@ function analysisErrorFields(body: unknown): { code: string | null; detail: stri
     code: typeof fields.code === "string" ? fields.code : null,
     detail: typeof fields.detail === "string" && fields.detail.trim() ? fields.detail : null,
   };
+}
+
+function isAnalysisFailureCode(code: string | null): boolean {
+  return code === "food_analysis_failed" || code === "food_analysis_invalid_output";
 }
 
 export default function PhotoScreen() {
@@ -96,13 +100,13 @@ export default function PhotoScreen() {
     } catch (caught) {
       if (caught instanceof ApiError) {
         const { code, detail } = analysisErrorFields(caught.body);
-        if (code) {
-          console.error("Photo analysis request failed.", { status: caught.status, code });
-        }
+        console.error("Photo analysis request failed.", { status: caught.status, code });
         if (caught.status === 429) {
           setError(QUOTA_ANALYSIS_ERROR);
+        } else if (caught.status === 502 && isAnalysisFailureCode(code) && detail) {
+          setError(`${detail} ${MANUAL_ENTRY_HINT}`);
         } else {
-          setError(detail ?? GENERIC_ANALYSIS_ERROR);
+          setError(GENERIC_ANALYSIS_ERROR);
         }
       } else {
         setError(GENERIC_ANALYSIS_ERROR);

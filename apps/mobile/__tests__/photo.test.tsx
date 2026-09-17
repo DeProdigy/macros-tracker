@@ -116,7 +116,7 @@ describe("PhotoScreen", () => {
     mockUploadAndAnalyze.mockRejectedValue(
       new ApiError(502, {
         code: "food_analysis_invalid_output",
-        detail: "The estimate was not valid. Try another photo.",
+        detail: "Try another photo.",
       }),
     );
     render(<PhotoScreen />);
@@ -126,7 +126,7 @@ describe("PhotoScreen", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "The estimate was not valid. Try another photo.",
+        "Try another photo. Manual entry is still available.",
       ),
     );
     expect(consoleError).toHaveBeenCalledWith("Photo analysis request failed.", {
@@ -136,7 +136,7 @@ describe("PhotoScreen", () => {
   });
 
   it("keeps the quota message when the API returns a detail", async () => {
-    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
     mockUploadAndAnalyze.mockRejectedValue(
       new ApiError(429, {
         code: "food_analysis_quota_exceeded",
@@ -154,9 +154,14 @@ describe("PhotoScreen", () => {
       ),
     );
     expect(screen.queryByText("API quota detail that the screen does not show.")).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith("Photo analysis request failed.", {
+      status: 429,
+      code: "food_analysis_quota_exceeded",
+    });
   });
 
   it("uses the generic message for an unparsed API response", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
     mockUploadAndAnalyze.mockRejectedValue(new ApiError(502, "<html>Bad gateway</html>"));
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
@@ -168,6 +173,35 @@ describe("PhotoScreen", () => {
         "Could not analyze this photo. Retry or use Manual.",
       ),
     );
+    expect(consoleError).toHaveBeenCalledWith("Photo analysis request failed.", {
+      status: 502,
+      code: null,
+    });
+  });
+
+  it("does not show a framework detail from an unrelated API response", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    mockUploadAndAnalyze.mockRejectedValue(
+      new ApiError(401, {
+        code: "token_not_valid",
+        detail: "Given token not valid for any token type",
+      }),
+    );
+    render(<PhotoScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
+    await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
+    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Could not analyze this photo. Retry or use Manual.",
+      ),
+    );
+    expect(screen.queryByText("Given token not valid for any token type")).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith("Photo analysis request failed.", {
+      status: 401,
+      code: "token_not_valid",
+    });
   });
 
   it("keeps the selected photo and description after a network failure", async () => {
