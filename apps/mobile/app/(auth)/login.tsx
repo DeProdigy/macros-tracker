@@ -9,19 +9,25 @@
  * MAC-31 added the ending: tokens land in the Keychain, the session adopts the
  * user the API returned, and the screen redirects. Where to is the same
  * question the launch gate asks, answered from the same field.
+ *
+ * MAC-61 took the presentation from design/source/linear-2026-08-31/
+ * 01-auth-welcome.png. That artifact defines the look of this screen only. The
+ * copy is unchanged, because a screenshot cannot rewrite settled wording.
  */
 
 import { ApiError, useCreateSession } from "@macros/api-client";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
+import { Screen } from "@/components/ui/screen";
+import { Body, Caption, ErrorText, Lead, Title } from "@/components/ui/text";
 import { AppleSignInCancelled, signInWithApple } from "@/lib/apple-sign-in";
 import { saveTokens } from "@/lib/auth-storage";
 import { needsOnboarding } from "@/lib/onboarding";
-import { usePalette, type Palette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
+import { colors, radius, space } from "@/lib/theme";
 
 /**
  * Where the flow is.
@@ -150,8 +156,6 @@ export default function LoginScreen() {
     }
   };
 
-  const palette = usePalette();
-
   // `created` is not consulted. A returning user whose onboarding never
   // finished belongs in the same place as a brand-new one, and the server
   // tracks that on the user rather than in anything this screen knows.
@@ -170,49 +174,50 @@ export default function LoginScreen() {
     const [first, second, third] = stepStates(phase);
 
     return (
-      <View style={[styles.container, { backgroundColor: palette.background }]}>
-        <Text style={[styles.verifyingTitle, { color: palette.text }]}>Verifying</Text>
+      <Screen contentStyle={styles.verifyingPage}>
+        <Title style={styles.verifyingTitle}>Verifying</Title>
         <View style={styles.steps}>
-          <Step label="Confirming it's you with Apple" state={first} palette={palette} />
-          <Step label="Checking your Apple token" state={second} palette={palette} />
-          <Step label="Saving your session to the Keychain" state={third} palette={palette} />
+          <Step label="Confirming it's you with Apple" state={first} />
+          <Step label="Checking your Apple token" state={second} />
+          <Step label="Saving your session to the Keychain" state={third} />
         </View>
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: palette.background }]}>
+    <Screen contentStyle={styles.page}>
       <View style={styles.hero}>
-        <Text style={[styles.wordmark, { color: palette.text }]}>Macros</Text>
-        <Text style={[styles.tagline, { color: palette.secondaryText }]}>
-          Photograph a meal. Get the numbers.
-        </Text>
+        <View style={styles.wordmark}>
+          <Title>Macros</Title>
+          {/* The one piece of decoration in the app, and it comes from the
+              approved Welcome screen. It is hidden from VoiceOver because it
+              says nothing a reader needs. */}
+          <View accessibilityElementsHidden importantForAccessibility="no" style={styles.dot} />
+        </View>
+        <Lead>Photograph a meal. Get the numbers.</Lead>
       </View>
 
       <View style={styles.actions}>
-        {phase === "error" ? (
-          <View style={styles.errorBlock}>
-            <Text style={[styles.errorText, { color: palette.error }]}>
-              {ERROR_COPY[errorKind]}
-            </Text>
-          </View>
-        ) : null}
+        {phase === "error" ? <ErrorText style={styles.centred}>{ERROR_COPY[errorKind]}</ErrorText> : null}
 
         {isAppleAvailable === false ? (
-          <Text style={[styles.errorText, { color: palette.error }]}>
+          <ErrorText style={styles.centred}>
             Sign in with Apple isn&apos;t available on this device. It needs iOS 13 or later.
-          </Text>
+          </ErrorText>
         ) : (
           // Apple's own button component, not a lookalike. The Human Interface
           // Guidelines require the system button for Sign in with Apple, and a
           // hand-rolled one is a review rejection later for no gain now.
+          //
+          // It does not use our `Button`, and it never should. Apple owns this
+          // control's size, wording, and look.
           <AppleAuthentication.AppleAuthenticationButton
             // Always the white button. The app is dark only as of MAC-61, so
             // the black variant would be a black button on a black screen.
             buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
             buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-            cornerRadius={12}
+            cornerRadius={radius.md}
             onPress={handleSignIn}
             style={styles.appleButton}
           />
@@ -221,66 +226,63 @@ export default function LoginScreen() {
         {/* Doc 26: this line does the work the deleted Register / Log in toggle
             used to. Without it a returning user hesitates over whether the tap
             is about to make them a second account. */}
-        <Text style={[styles.sameAction, { color: palette.secondaryText }]}>
+        <Body color={colors.textSecondary} style={styles.centred}>
           New here or coming back, it&apos;s the same button.
-        </Text>
+        </Body>
       </View>
 
       {/* The dimmest text on the screen, and deliberately before the tap rather
           than buried in Settings — doc 26 calls it the only surprising thing
           about the data flow. */}
-      <Text style={[styles.disclosure, { color: palette.dimText }]}>
+      <Caption color={colors.textDim} style={styles.centred}>
         Meal photos are sent to an AI provider to be analysed.
-      </Text>
-    </View>
+      </Caption>
+    </Screen>
   );
 }
 
 /** One line of 9c. The marker carries the state; the text never changes. */
-const Step = ({ label, state, palette }: { label: string; state: StepState; palette: Palette }) => (
+const Step = ({ label, state }: { label: string; state: StepState }) => (
   <View style={styles.step}>
-    <Text
+    <Body
       accessibilityElementsHidden
-      style={[styles.stepMarker, { color: state === "pending" ? palette.dimText : palette.accent }]}
+      color={state === "pending" ? colors.textDim : colors.accent}
+      style={styles.stepMarker}
     >
       {state === "done" ? "✓" : "•"}
-    </Text>
-    <Text
+    </Body>
+    <Body
       // The state is in the marker, which is decorative, so it has to be in the
       // label too or a screen reader hears three identical lines.
       accessibilityLabel={`${label}, ${state}`}
-      style={[
-        styles.stepLabel,
-        { color: state === "pending" ? palette.dimText : palette.text },
-        state === "active" && styles.stepLabelActive,
-      ]}
+      color={state === "pending" ? colors.textDim : colors.text}
+      style={styles.stepLabel}
     >
       {label}
-    </Text>
+    </Body>
   </View>
 );
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  actions: { gap: space.lg },
+  appleButton: { height: 52, width: "100%" },
+  centred: { textAlign: "center" },
+  dot: { backgroundColor: colors.accent, borderRadius: radius.full, height: 10, width: 10 },
+  hero: { gap: space.md },
+  page: {
     justifyContent: "space-between",
-    paddingHorizontal: 32,
-    paddingBottom: 48,
+    paddingBottom: space.section,
+    paddingHorizontal: space.xxl,
+    // The hero sits low rather than under the notch, as the approved screen
+    // draws it. `paddingTop` on the content, not the page, so the safe-area
+    // inset still applies above it.
     paddingTop: 120,
   },
-  hero: { gap: 12 },
-  wordmark: { fontSize: 40, fontWeight: "700", letterSpacing: -1 },
-  tagline: { fontSize: 17, lineHeight: 24 },
-  actions: { gap: 16 },
-  appleButton: { height: 52, width: "100%" },
-  sameAction: { fontSize: 14, lineHeight: 20, textAlign: "center" },
-  errorBlock: { gap: 8 },
-  errorText: { fontSize: 14, lineHeight: 20, textAlign: "center" },
-  disclosure: { fontSize: 12, lineHeight: 17, textAlign: "center" },
-  verifyingTitle: { fontSize: 28, fontWeight: "600", marginBottom: 32 },
-  steps: { gap: 16, marginBottom: "auto" },
-  step: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  stepMarker: { fontSize: 16, lineHeight: 22, width: 18 },
-  stepLabel: { flex: 1, fontSize: 16, lineHeight: 22 },
-  stepLabelActive: { fontWeight: "600" },
+  step: { alignItems: "flex-start", flexDirection: "row", gap: space.md },
+  stepLabel: { flex: 1, lineHeight: 22 },
+  stepMarker: { lineHeight: 22, width: 18 },
+  steps: { gap: space.lg, marginBottom: "auto" },
+  verifyingPage: { paddingHorizontal: space.xxl, paddingTop: space.section },
+  verifyingTitle: { marginBottom: space.xxl },
+  wordmark: { alignItems: "flex-end", flexDirection: "row", gap: space.sm },
 });

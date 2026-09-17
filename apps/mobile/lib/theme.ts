@@ -179,6 +179,19 @@ export const type = {
     fontFamily: fontFamily.bold,
     fontSize: 30,
   },
+  /**
+   * A tagline or a standfirst under a title.
+   *
+   * Added in PR 2, not PR 1. The Welcome and first-food mockups both put a
+   * grey sentence under the title that is clearly larger than body text and is
+   * not a heading. Body at 16 read too small under a 34-point title, and
+   * `heading` is bold, which is wrong for a sentence. That gap only showed up
+   * once the scale met a real screen.
+   */
+  lead: {
+    fontFamily: fontFamily.regular,
+    fontSize: 20,
+  },
   /** Sentences, entry names, and button text. */
   body: {
     fontFamily: fontFamily.regular,

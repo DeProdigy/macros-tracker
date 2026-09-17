@@ -60,6 +60,9 @@ export const Heading = build("heading", colors.text);
 /** A tile value, such as grams of protein eaten. */
 export const Numeral = build("numeral", colors.text);
 
+/** A tagline or a standfirst under a title. Grey by default. */
+export const Lead = build("lead", colors.textSecondary);
+
 /** Sentences, entry names, and button text. */
 export const Body = build("body", colors.text);
 

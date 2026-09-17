@@ -26,7 +26,7 @@ import { colors, fontFamily, radius, space, tapTarget, type } from "@/lib/theme"
 type Variant = "primary" | "secondary" | "destructive";
 
 type Props = Omit<PressableProps, "style" | "children"> & {
-  /** The visible text. Uppercased for primary, as the mockups draw it. */
+  /** The visible text. Always uppercased on screen, never when spoken. */
   title: string;
   variant?: Variant;
   /** Swaps the label for a spinner and blocks presses. */
@@ -57,14 +57,17 @@ export function Button({
   ...rest
 }: Props) {
   const blocked = disabled === true || busy;
-  const label = variant === "primary" ? title.toUpperCase() : title;
+  // Every button in the approved artwork is uppercase, primary and secondary
+  // alike, and every screen in this app already wrote it that way by hand. One
+  // rule beats a decision at each call site.
+  const label = title.toUpperCase();
 
   return (
     <Pressable
       // Two separate reasons to set this rather than let VoiceOver read the
       // child text. While `busy` the child is a spinner, so a button with no
-      // label at all is what a screen reader would find. And a primary label
-      // is uppercased for the design, which some voices read letter by letter.
+      // label at all is what a screen reader would find. And the label is
+      // uppercased for the design, which some voices read letter by letter.
       // `title` keeps its original casing here, so the spoken label stays
       // "Log food" while the visible one says "LOG FOOD".
       //
@@ -99,10 +102,7 @@ export function Button({
           numberOfLines={1}
           style={[
             styles.label,
-            {
-              color: LABEL[variant],
-              letterSpacing: variant === "primary" ? 1.2 : 0,
-            },
+            { color: LABEL[variant] },
           ]}
         >
           {label}
@@ -125,5 +125,8 @@ const styles = StyleSheet.create({
   label: {
     ...type.body,
     fontFamily: fontFamily.black,
+    // Tracking is what makes a short uppercase label read as a control rather
+    // than as a shouted word.
+    letterSpacing: 1.2,
   },
 });
