@@ -188,6 +188,7 @@ def test_contradictory_no_food_result_is_invalid_and_keeps_provider_diagnostics(
     call = FoodAnalysisCall.objects.get()
     assert call.status == FoodAnalysisCall.Status.FAILED
     assert call.failure_category == "invalid_model_output"
+    assert call.failure_message == "Provider result contradicted no_food_visible."
     assert call.response_payload == provider.payload
     assert call.provider_request_id == "resp_contradiction"
     assert call.input_tokens == 750
@@ -195,6 +196,38 @@ def test_contradictory_no_food_result_is_invalid_and_keeps_provider_diagnostics(
     assert call.usage == provider.usage
     assert call.estimated_cost_usd is not None
     assert call.quota_debited_at is not None
+
+
+@pytest.mark.django_db
+def test_malformed_provider_payload_raises_the_public_invalid_output_error():
+    user = User.objects.create_user(email="malformed@example.com", timezone="UTC")
+    provider = ProviderResult(
+        payload={"no_food_visible": "yes", "items": []},
+        provider_request_id="resp_malformed",
+        model="gpt-5-mini-2026-08-01",
+        input_tokens=600,
+        output_tokens=10,
+        usage={"input_tokens": 600, "output_tokens": 10},
+    )
+    with (
+        mock.patch(
+            "uploads.services.retain_analysis_object",
+            return_value=f"analyses/{user.pk}/meal.jpg",
+        ),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+        mock.patch("ai.services.analyze_food", return_value=provider),
+        pytest.raises(ValidationError, match="invalid structured output"),
+    ):
+        create_food_analysis(
+            user=user,
+            photo_key=f"pending/{user.pk}/meal.jpg",
+            description="",
+        )
+
+    call = FoodAnalysisCall.objects.get()
+    assert call.failure_category == "invalid_model_output"
+    assert call.failure_message == "Provider returned invalid structured output."
+    assert call.response_payload == provider.payload
 
 
 @pytest.mark.django_db
@@ -293,7 +326,7 @@ def test_incomplete_provider_output_keeps_usage_and_failure_details():
         ),
         mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
         mock.patch("ai.services.analyze_food", side_effect=error),
-        pytest.raises(ProviderOutputError),
+        pytest.raises(ValidationError, match="invalid structured output"),
     ):
         create_food_analysis(
             user=user,

@@ -33,6 +33,8 @@ exception. A false value continues through the existing item rounding and serial
 An empty list with a false value remains invalid model output.
 A contradictory result that reports no visible food and also returns items is invalid model output.
 Its failure record keeps the provider payload, request identifier, token usage, and estimated cost.
+It uses a distinct failure message so operators can count contradictions without payload inspection.
+The service maps all known invalid provider payloads to the same typed API error path.
 
 The view maps the domain exception to status 422 with code
 `food_analysis_no_food_visible`. The detail says, "No food or drink was visible. Try another
@@ -101,7 +103,7 @@ state. Any temporary review harness stays uncommitted and is removed before fina
 - Test the provider schema and instructions.
 - Test the true branch, false branch, false branch with an empty list, contradictory output, quota
   debit, and retained provider diagnostics.
-- Test the typed status 422 endpoint response.
+- Test the typed status 422 and invalid-output status 502 endpoint responses.
 - Keep the zero-calorie serializer regression test green.
 - Test the mobile message, Manual hint, safe log, and retained photo and description.
 - Regenerate the API client and run the drift check.

@@ -3,6 +3,7 @@ from unittest import mock
 
 import pytest
 from django.contrib.auth import get_user_model
+from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 
 from ai.exceptions import FoodAnalysisNoFoodVisible, FoodAnalysisQuotaExceeded
@@ -96,4 +97,19 @@ def test_analysis_returns_a_distinct_no_food_response(user):
     assert response.data == {
         "code": "food_analysis_no_food_visible",
         "detail": "No food or drink was visible. Try another photo.",
+    }
+
+
+def test_analysis_maps_invalid_provider_output(user):
+    client = APIClient()
+    client.force_authenticate(user)
+    with mock.patch("ai.views.create_food_analysis", side_effect=ValidationError("invalid output")):
+        response = client.post(
+            "/api/analyses/", {"photo_key": f"pending/{user.pk}/meal.jpg"}, format="json"
+        )
+
+    assert response.status_code == 502
+    assert response.data == {
+        "code": "food_analysis_invalid_output",
+        "detail": "Try another photo.",
     }

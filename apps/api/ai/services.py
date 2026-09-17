@@ -263,8 +263,8 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
             estimated_cost_usd=_estimated_cost(exc.input_tokens, exc.output_tokens),
             billable=True,
         )
-        raise
-    except PydanticValidationError:
+        raise ValidationError("Provider returned invalid structured output.") from exc
+    except PydanticValidationError as exc:
         # Provider dispatch happened, but the structured response did not match
         # the provider schema. This is invalid output and remains billable.
         fail_food_analysis_call(
@@ -273,19 +273,21 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
             message="Provider returned invalid structured output.",
             billable=True,
         )
-        raise
+        raise ValidationError("Provider returned invalid structured output.") from exc
     except Exception:
         fail_food_analysis_call(
             call, category="provider_failure", message="Food analysis provider failed."
         )
         raise
 
+    invalid_output_message = "Provider returned invalid structured output."
     try:
         # Production results use the validated provider schema. Keep these checks because
         # ProviderResult.payload is also a public dict boundary for tests and adapters.
         no_food_visible = result.payload["no_food_visible"]
         items_payload = result.payload["items"]
         if no_food_visible is True and items_payload:
+            invalid_output_message = "Provider result contradicted no_food_visible."
             raise ValidationError("Provider result contradicts no_food_visible.")
         if no_food_visible is True:
             cost = _estimated_cost(result.input_tokens, result.output_tokens)
@@ -324,11 +326,11 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
         )
         serializer = FoodAnalysisResultSerializer(data=candidate)
         serializer.is_valid(raise_exception=True)
-    except (InvalidOperation, KeyError, TypeError, ValueError, ValidationError):
+    except (InvalidOperation, KeyError, TypeError, ValueError, ValidationError) as exc:
         fail_food_analysis_call(
             call,
             category="invalid_model_output",
-            message="Provider returned invalid structured output.",
+            message=invalid_output_message,
             response_payload=candidate if "candidate" in locals() else result.payload,
             provider_request_id=result.provider_request_id,
             input_tokens=result.input_tokens,
@@ -337,7 +339,9 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
             estimated_cost_usd=_estimated_cost(result.input_tokens, result.output_tokens),
             billable=True,
         )
-        raise
+        if isinstance(exc, ValidationError):
+            raise
+        raise ValidationError("Provider returned invalid structured output.") from exc
 
     cost = _estimated_cost(result.input_tokens, result.output_tokens)
     succeed_food_analysis_call(
