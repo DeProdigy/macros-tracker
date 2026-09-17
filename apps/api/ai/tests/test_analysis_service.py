@@ -177,7 +177,7 @@ def test_contradictory_no_food_result_is_invalid_and_keeps_provider_diagnostics(
         ),
         mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
         mock.patch("ai.services.analyze_food", return_value=provider),
-        pytest.raises(ValidationError, match="contradicts no_food_visible"),
+        pytest.raises(ValidationError, match="contradicted no_food_visible"),
     ):
         create_food_analysis(
             user=user,
@@ -199,10 +199,18 @@ def test_contradictory_no_food_result_is_invalid_and_keeps_provider_diagnostics(
 
 
 @pytest.mark.django_db
-def test_malformed_provider_payload_raises_the_public_invalid_output_error():
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"no_food_visible": "yes", "items": []},
+        {"no_food_visible": True, "items": None},
+    ],
+    ids=("non-boolean-flag", "non-list-items"),
+)
+def test_malformed_provider_payload_raises_the_public_invalid_output_error(payload):
     user = User.objects.create_user(email="malformed@example.com", timezone="UTC")
     provider = ProviderResult(
-        payload={"no_food_visible": "yes", "items": []},
+        payload=payload,
         provider_request_id="resp_malformed",
         model="gpt-5-mini-2026-08-01",
         input_tokens=600,
@@ -301,6 +309,7 @@ def test_empty_items_with_food_visible_false_remain_invalid_output():
     call = FoodAnalysisCall.objects.get()
     assert call.status == FoodAnalysisCall.Status.FAILED
     assert call.failure_category == "invalid_model_output"
+    assert call.response_payload == provider.payload
     assert call.quota_debited_at is not None
 
 

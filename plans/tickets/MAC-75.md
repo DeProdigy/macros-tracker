@@ -59,8 +59,8 @@ from treating it as a saveable result.
   basis to discard or accept the analysis. Record invalid model output instead.
 - **Return status 200 with an empty analysis.** There is no usable resource to review or save. This
   shape would force a second success type into the client.
-- **Return status 502.** The provider answered correctly. The photo content, not the upstream
-  service, prevents analysis.
+- **Return status 502 for a valid no-food result.** The provider answered correctly. The photo
+  content, not the upstream service, prevents analysis.
 - **Show every status 422 detail.** Authentication and framework responses can carry unreviewed
   text. The exact status and code allowlist fails safe.
 - **Do not debit quota.** The provider call used tokens and incurred cost.
@@ -84,8 +84,13 @@ uses generic copy until the app accepts it.
 ## Blast radius
 
 This change updates the provider schema and prompt, analysis service, API error contract, generated
-client, and one mobile error state. It adds no database migration. It does not change saved entry
-validation or the successful analysis response.
+client, and one mobile error state. Known malformed provider output now uses the reviewed 502
+invalid-output message instead of the generic failure message. It adds no database migration. It
+does not change saved entry validation or the successful analysis response.
+
+Known invalid output no longer reaches the generic `Food analysis failed.` exception log. The
+failed call row is the operational record. Provider output errors retain the raw response, payload,
+request identifier, and token usage when the provider makes those values available.
 
 This change adds a user-visible error state. The pull request needs a live screenshot of that
 state. Any temporary review harness stays uncommitted and is removed before final checks.

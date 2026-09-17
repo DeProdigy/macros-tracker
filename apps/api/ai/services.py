@@ -20,6 +20,10 @@ from .provider import ProviderOutputError, analyze_food
 TWOPLACES = Decimal("0.01")
 
 
+class _ContradictoryProviderOutput(ValueError):
+    pass
+
+
 @dataclass(frozen=True)
 class FoodAnalysisRequestSnapshot:
     photo_key: str
@@ -280,16 +284,18 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
         )
         raise
 
-    invalid_output_message = "Provider returned invalid structured output."
     try:
         # Production results use the validated provider schema. Keep these checks because
         # ProviderResult.payload is also a public dict boundary for tests and adapters.
         no_food_visible = result.payload["no_food_visible"]
         items_payload = result.payload["items"]
-        if no_food_visible is True and items_payload:
-            invalid_output_message = "Provider result contradicted no_food_visible."
-            raise ValidationError("Provider result contradicts no_food_visible.")
-        if no_food_visible is True:
+        if no_food_visible is not True and no_food_visible is not False:
+            raise ValueError("Provider no_food_visible must be a boolean.")
+        if not isinstance(items_payload, list):
+            raise TypeError("Provider items must be a list.")
+        if no_food_visible:
+            if items_payload:
+                raise _ContradictoryProviderOutput("Provider result contradicted no_food_visible.")
             cost = _estimated_cost(result.input_tokens, result.output_tokens)
             fail_food_analysis_call(
                 call,
@@ -304,10 +310,8 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
                 billable=True,
             )
             raise FoodAnalysisNoFoodVisible
-        if no_food_visible is not False:
-            raise ValueError("Provider no_food_visible must be a boolean.")
 
-        candidate = {"analysis_id": call.pk, "items": items_payload}
+        candidate: dict[str, Any] = {"analysis_id": call.pk, "items": items_payload}
         items = [
             {
                 **item,
@@ -327,11 +331,16 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
         serializer = FoodAnalysisResultSerializer(data=candidate)
         serializer.is_valid(raise_exception=True)
     except (InvalidOperation, KeyError, TypeError, ValueError, ValidationError) as exc:
+        failure_message = (
+            str(exc)
+            if isinstance(exc, _ContradictoryProviderOutput)
+            else "Provider returned invalid structured output."
+        )
         fail_food_analysis_call(
             call,
             category="invalid_model_output",
-            message=invalid_output_message,
-            response_payload=candidate if "candidate" in locals() else result.payload,
+            message=failure_message,
+            response_payload=result.payload,
             provider_request_id=result.provider_request_id,
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
@@ -341,7 +350,7 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
         )
         if isinstance(exc, ValidationError):
             raise
-        raise ValidationError("Provider returned invalid structured output.") from exc
+        raise ValidationError(failure_message) from exc
 
     cost = _estimated_cost(result.input_tokens, result.output_tokens)
     succeed_food_analysis_call(
