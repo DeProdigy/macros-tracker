@@ -12,13 +12,15 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api-production-2884.up.railway.app"
-      }
+      },
+      "autoIncrement": true
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api-production-2884.up.railway.app"
-      }
+      },
+      "autoIncrement": true
     },
     "production": {
       "autoIncrement": true,
