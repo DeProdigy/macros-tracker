@@ -19,10 +19,16 @@ Add a small local helper that narrows `ApiError.body` from `unknown`. The helper
 non-empty string `detail` and a string `code`. It does not assume that every HTTP failure contains
 JSON.
 
-The analysis catch path first checks for `ApiError`. It logs the HTTP status and stable code when
-the response contains a code. It keeps the current message for status 429. It shows the API detail
-for another structured API error. It uses the existing generic message for a network failure, an
-unparsed response, or a malformed body.
+The analysis catch path first checks for `ApiError`. It logs the HTTP status for every API failure.
+It logs the stable code when the body contains one. The log uses `null` when the body does not
+contain a code, so code-less proxy and validation failures still have a consistent diagnostic
+shape.
+
+The screen keeps the current message for status 429. It shows the API detail only when status 502
+uses `food_analysis_failed` or `food_analysis_invalid_output`. It appends the Manual entry hint to
+that detail. It adds a period first when the API detail does not end with one. It uses the existing
+generic message for every unknown code, unrelated HTTP status, network failure, unparsed response,
+or malformed body.
 
 The user sees the actionable detail but does not see the internal code. The log contains only the
 HTTP status and code. It does not contain the response body, meal description, photo information,
@@ -37,6 +43,9 @@ or other user data.
 - **Add a released-build error reporter.** MAC-62 owns production observability.
 - **Show the raw response or code to the user.** Internal data does not help the user choose the
   next action.
+- **Show every 502 detail.** A new or unrelated code could contain text that nobody reviewed for
+  this screen. The explicit code allowlist fails safe. An unknown code uses the generic message
+  until the mobile app reviews and accepts its copy.
 
 ## Django and React Native concepts
 

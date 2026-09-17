@@ -42,8 +42,14 @@ function analysisErrorFields(body: unknown): { code: string | null; detail: stri
   };
 }
 
+// Keep this allowlist narrow. An unknown API code must use the reviewed generic copy.
 function isAnalysisFailureCode(code: string | null): boolean {
   return code === "food_analysis_failed" || code === "food_analysis_invalid_output";
+}
+
+function analysisErrorMessage(detail: string): string {
+  const sentence = detail.endsWith(".") ? detail : `${detail}.`;
+  return `${sentence} ${MANUAL_ENTRY_HINT}`;
 }
 
 export default function PhotoScreen() {
@@ -104,7 +110,7 @@ export default function PhotoScreen() {
         if (caught.status === 429) {
           setError(QUOTA_ANALYSIS_ERROR);
         } else if (caught.status === 502 && isAnalysisFailureCode(code) && detail) {
-          setError(`${detail} ${MANUAL_ENTRY_HINT}`);
+          setError(analysisErrorMessage(detail));
         } else {
           setError(GENERIC_ANALYSIS_ERROR);
         }

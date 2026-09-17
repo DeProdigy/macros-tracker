@@ -133,6 +133,28 @@ describe("PhotoScreen", () => {
       status: 502,
       code: "food_analysis_invalid_output",
     });
+    expect(consoleError).toHaveBeenCalledTimes(1);
+  });
+
+  it("adds punctuation before the Manual hint", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    mockUploadAndAnalyze.mockRejectedValue(
+      new ApiError(502, {
+        code: "food_analysis_failed",
+        detail: "Could not analyze this photo",
+      }),
+    );
+    render(<PhotoScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
+    await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
+    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Could not analyze this photo. Manual entry is still available.",
+      ),
+    );
+    expect(consoleError).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the quota message when the API returns a detail", async () => {
@@ -158,6 +180,7 @@ describe("PhotoScreen", () => {
       status: 429,
       code: "food_analysis_quota_exceeded",
     });
+    expect(consoleError).toHaveBeenCalledTimes(1);
   });
 
   it("uses the generic message for an unparsed API response", async () => {
@@ -177,6 +200,7 @@ describe("PhotoScreen", () => {
       status: 502,
       code: null,
     });
+    expect(consoleError).toHaveBeenCalledTimes(1);
   });
 
   it("does not show a framework detail from an unrelated API response", async () => {
@@ -202,6 +226,7 @@ describe("PhotoScreen", () => {
       status: 401,
       code: "token_not_valid",
     });
+    expect(consoleError).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the selected photo and description after a network failure", async () => {
