@@ -9,7 +9,6 @@ retry or use Manual. A zero-calorie drink remains a valid food-analysis result.
 
 - `apps/api/ai/provider.py`: add the explicit provider flag, permit an empty provider item list,
   and tell the model when to use the flag.
-- `apps/api/ai/constants.py`: define the stable no-food response code.
 - `apps/api/ai/exceptions.py`: define the no-food domain exception.
 - `apps/api/ai/services.py`: branch on the provider flag and record the billable outcome.
 - `apps/api/ai/views.py`: map the domain exception to a typed HTTP response.
@@ -32,6 +31,8 @@ billable failed call with category `no_food_visible`. The record keeps the struc
 payload, request identifier, token usage, and estimated cost. The service then raises a domain
 exception. A false value continues through the existing item rounding and serializer validation.
 An empty list with a false value remains invalid model output.
+A contradictory result that reports no visible food and also returns items is invalid model output.
+Its failure record keeps the provider payload, request identifier, token usage, and estimated cost.
 
 The view maps the domain exception to status 422 with code
 `food_analysis_no_food_visible`. The detail says, "No food or drink was visible. Try another
@@ -52,6 +53,8 @@ from treating it as a saveable result.
   macros as a blank scene.
 - **Treat every empty list as no food.** An empty list with `no_food_visible=False` is invalid
   structured output. The explicit flag decides the branch.
+- **Trust either half of a contradictory result.** A true flag with returned items gives no safe
+  basis to discard or accept the analysis. Record invalid model output instead.
 - **Return status 200 with an empty analysis.** There is no usable resource to review or save. This
   shape would force a second success type into the client.
 - **Return status 502.** The provider answered correctly. The photo content, not the upstream
@@ -96,8 +99,8 @@ state. Any temporary review harness stays uncommitted and is removed before fina
 ## Verification
 
 - Test the provider schema and instructions.
-- Test the true branch, false branch, false branch with an empty list, quota debit, and retained
-  provider diagnostics.
+- Test the true branch, false branch, false branch with an empty list, contradictory output, quota
+  debit, and retained provider diagnostics.
 - Test the typed status 422 endpoint response.
 - Keep the zero-calorie serializer regression test green.
 - Test the mobile message, Manual hint, safe log, and retained photo and description.

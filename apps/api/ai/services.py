@@ -281,7 +281,12 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
         raise
 
     try:
+        # Production results use the validated provider schema. Keep these checks because
+        # ProviderResult.payload is also a public dict boundary for tests and adapters.
         no_food_visible = result.payload["no_food_visible"]
+        items_payload = result.payload["items"]
+        if no_food_visible is True and items_payload:
+            raise ValidationError("Provider result contradicts no_food_visible.")
         if no_food_visible is True:
             cost = _estimated_cost(result.input_tokens, result.output_tokens)
             fail_food_analysis_call(
@@ -300,7 +305,7 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
         if no_food_visible is not False:
             raise ValueError("Provider no_food_visible must be a boolean.")
 
-        candidate = {"analysis_id": call.pk, "items": result.payload["items"]}
+        candidate = {"analysis_id": call.pk, "items": items_payload}
         items = [
             {
                 **item,
@@ -324,7 +329,12 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
             call,
             category="invalid_model_output",
             message="Provider returned invalid structured output.",
-            response_payload=candidate if "candidate" in locals() else None,
+            response_payload=candidate if "candidate" in locals() else result.payload,
+            provider_request_id=result.provider_request_id,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            usage=result.usage,
+            estimated_cost_usd=_estimated_cost(result.input_tokens, result.output_tokens),
             billable=True,
         )
         raise

@@ -11,7 +11,6 @@ from rest_framework.views import APIView
 
 from accounts.models import User
 
-from .constants import FOOD_ANALYSIS_NO_FOOD_CODE
 from .exceptions import FoodAnalysisNoFoodVisible, FoodAnalysisQuotaExceeded
 from .serializers import (
     FoodAnalysisErrorSerializer,
@@ -69,7 +68,7 @@ class FoodAnalysisCreateView(APIView):
         except FoodAnalysisNoFoodVisible:
             return Response(
                 {
-                    "code": FOOD_ANALYSIS_NO_FOOD_CODE,
+                    "code": "food_analysis_no_food_visible",
                     "detail": "No food or drink was visible. Try another photo.",
                 },
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,

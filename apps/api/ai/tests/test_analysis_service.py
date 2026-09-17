@@ -149,6 +149,55 @@ def test_no_food_result_records_a_billable_failure_and_raises_domain_error():
 
 
 @pytest.mark.django_db
+def test_contradictory_no_food_result_is_invalid_and_keeps_provider_diagnostics():
+    user = User.objects.create_user(email="contradiction@example.com", timezone="UTC")
+    provider = ProviderResult(
+        payload={
+            "no_food_visible": True,
+            "items": [
+                {
+                    "name": "Coffee",
+                    "portion": "1 cup",
+                    "calories": 2,
+                    "protein_g": 0,
+                    "fiber_g": 0,
+                }
+            ],
+        },
+        provider_request_id="resp_contradiction",
+        model="gpt-5-mini-2026-08-01",
+        input_tokens=750,
+        output_tokens=30,
+        usage={"input_tokens": 750, "output_tokens": 30},
+    )
+    with (
+        mock.patch(
+            "uploads.services.retain_analysis_object",
+            return_value=f"analyses/{user.pk}/drink.jpg",
+        ),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+        mock.patch("ai.services.analyze_food", return_value=provider),
+        pytest.raises(ValidationError, match="contradicts no_food_visible"),
+    ):
+        create_food_analysis(
+            user=user,
+            photo_key=f"pending/{user.pk}/drink.jpg",
+            description="coffee",
+        )
+
+    call = FoodAnalysisCall.objects.get()
+    assert call.status == FoodAnalysisCall.Status.FAILED
+    assert call.failure_category == "invalid_model_output"
+    assert call.response_payload == provider.payload
+    assert call.provider_request_id == "resp_contradiction"
+    assert call.input_tokens == 750
+    assert call.output_tokens == 30
+    assert call.usage == provider.usage
+    assert call.estimated_cost_usd is not None
+    assert call.quota_debited_at is not None
+
+
+@pytest.mark.django_db
 def test_visible_zero_calorie_drink_remains_a_valid_analysis():
     user = User.objects.create_user(email="zero-drink@example.com", timezone="UTC")
     provider = ProviderResult(
@@ -327,7 +376,8 @@ def test_provider_schema_allows_an_honest_empty_no_food_result():
     assert ProviderFoodAnalysis(no_food_visible=True, items=[]).items == []
 
 
-def test_provider_instructions_separate_empty_scenes_from_zero_calorie_drinks():
+def test_provider_instructions_keep_no_food_and_zero_calorie_rules():
+    """Guard prompt rules; only a live provider call can prove model behavior."""
     assert "true only when the image shows no food or drink" in FOOD_ANALYSIS_INSTRUCTIONS
     assert "including zero-calorie drinks" in FOOD_ANALYSIS_INSTRUCTIONS
 
