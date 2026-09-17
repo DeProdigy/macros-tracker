@@ -142,7 +142,7 @@ describe("LogFoodScreen", () => {
   it("rejects a form without a name or positive macro", () => {
     render(<LogFoodScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "SAVE FOOD" }));
+    fireEvent.press(screen.getByRole("button", { name: "Save food" }));
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Enter a name, a positive quantity, and at least one macro value.",
@@ -154,7 +154,7 @@ describe("LogFoodScreen", () => {
     render(<LogFoodScreen />);
     fillRequiredFields();
 
-    fireEvent.press(screen.getByRole("button", { name: "SAVE FOOD" }));
+    fireEvent.press(screen.getByRole("button", { name: "Save food" }));
 
     await waitFor(() =>
       expect(mockCreateEntry).toHaveBeenCalledWith(
@@ -189,7 +189,7 @@ describe("LogFoodScreen", () => {
     render(<LogFoodScreen />);
     fillRequiredFields();
 
-    fireEvent.press(screen.getByRole("button", { name: "SAVE FOOD" }));
+    fireEvent.press(screen.getByRole("button", { name: "Save food" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("Could not save this food. Try again."),
@@ -209,7 +209,7 @@ describe("LogFoodScreen", () => {
     render(<LogFoodScreen />);
     fillRequiredFields();
 
-    fireEvent.press(screen.getByRole("button", { name: "SAVE FOOD" }));
+    fireEvent.press(screen.getByRole("button", { name: "Save food" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("Sync your timezone and try again."),
@@ -242,14 +242,10 @@ describe("LogFoodScreen", () => {
     fireEvent.press(screen.getByRole("button", { name: "RECENTS" }));
     fireEvent.press(screen.getByRole("button", { name: "Select Greek yogurt" }));
 
-    expect(screen.getByLabelText("Macro preview")).toHaveTextContent(
-      "120.00 kcal · 18.00p · 2.00f",
-    );
+    expect(screen.getByLabelText("Macro preview")).toHaveTextContent("120 kcal · 18p · 2f");
     fireEvent.changeText(screen.getByLabelText("Recent quantity"), "1.5");
-    expect(screen.getByLabelText("Macro preview")).toHaveTextContent(
-      "180.00 kcal · 27.00p · 3.00f",
-    );
-    fireEvent.press(screen.getByRole("button", { name: "LOG AGAIN" }));
+    expect(screen.getByLabelText("Macro preview")).toHaveTextContent("180 kcal · 27p · 3f");
+    fireEvent.press(screen.getByRole("button", { name: "Log again" }));
 
     await waitFor(() =>
       expect(mockCreateEntry).toHaveBeenCalledWith(
@@ -281,9 +277,7 @@ describe("LogFoodScreen", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "Decrease quantity" }));
     expect(screen.getByDisplayValue("1.30")).toBeTruthy();
-    expect(screen.getByLabelText("Macro preview")).toHaveTextContent(
-      "156.00 kcal · 23.40p · 2.60f",
-    );
+    expect(screen.getByLabelText("Macro preview")).toHaveTextContent("156 kcal · 23p · 3f");
 
     fireEvent.press(screen.getByRole("button", { name: "Increase quantity" }));
     expect(screen.getByDisplayValue("2.30")).toBeTruthy();
@@ -296,7 +290,7 @@ describe("LogFoodScreen", () => {
     fireEvent.press(screen.getByRole("button", { name: "Select Greek yogurt" }));
     fireEvent.changeText(screen.getByLabelText("Recent quantity"), "2.25");
 
-    fireEvent.press(screen.getByRole("button", { name: "LOG AGAIN" }));
+    fireEvent.press(screen.getByRole("button", { name: "Log again" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -315,7 +309,7 @@ describe("LogFoodScreen", () => {
     fireEvent.press(screen.getByRole("button", { name: "RECENTS" }));
     fireEvent.press(screen.getByRole("button", { name: "Select Greek yogurt" }));
 
-    fireEvent.press(screen.getByRole("button", { name: "LOG AGAIN" }));
+    fireEvent.press(screen.getByRole("button", { name: "Log again" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(

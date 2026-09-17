@@ -1,9 +1,11 @@
 import { useGetDays } from "@macros/api-client";
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Body, Caption, ErrorText, Heading, Label } from "@/components/ui/text";
 import { localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
-import { usePalette } from "@/lib/theme";
+import { colors, radius, space, tapTarget } from "@/lib/theme";
 
 type DayPickerProps = {
   enabled: boolean;
@@ -19,7 +21,9 @@ const monthValue = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
 export function DayPicker({ enabled, onClose, onSelect, selectedDate, visible }: DayPickerProps) {
-  const palette = usePalette();
+  // A modal sits outside the screen's `Screen` wrapper, so it reads the inset
+  // itself. Without this the Done row sits under the home indicator.
+  const insets = useSafeAreaInsets();
   const selected = parseLocalIsoDate(selectedDate) ?? new Date();
   const [month, setMonth] = useState(
     () => new Date(selected.getFullYear(), selected.getMonth(), 1),
@@ -49,7 +53,7 @@ export function DayPicker({ enabled, onClose, onSelect, selectedDate, visible }:
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
       <View style={styles.backdrop}>
-        <View style={[styles.sheet, { backgroundColor: palette.background }]}>
+        <View style={[styles.sheet, { paddingBottom: space.md + insets.bottom }]}>
           <View style={styles.heading}>
             <Pressable
               accessibilityLabel="Previous month"
@@ -58,11 +62,11 @@ export function DayPicker({ enabled, onClose, onSelect, selectedDate, visible }:
                 setMonth((value) => new Date(value.getFullYear(), value.getMonth() - 1, 1))
               }
             >
-              <Text style={[styles.arrow, { color: palette.accent }]}>‹</Text>
+              <Heading color={colors.accent} style={styles.arrow}>
+                ‹
+              </Heading>
             </Pressable>
-            <Text style={[styles.month, { color: palette.text }]}>
-              {month.toLocaleDateString([], { month: "long", year: "numeric" })}
-            </Text>
+            <Heading>{month.toLocaleDateString([], { month: "long", year: "numeric" })}</Heading>
             <Pressable
               accessibilityLabel="Next month"
               accessibilityRole="button"
@@ -71,24 +75,19 @@ export function DayPicker({ enabled, onClose, onSelect, selectedDate, visible }:
                 setMonth((value) => new Date(value.getFullYear(), value.getMonth() + 1, 1))
               }
             >
-              <Text
-                style={[
-                  styles.arrow,
-                  { color: palette.accent, opacity: queryMonth >= currentMonth ? 0.3 : 1 },
-                ]}
+              <Heading
+                color={colors.accent}
+                style={[styles.arrow, queryMonth >= currentMonth ? styles.arrowDisabled : null]}
               >
                 ›
-              </Text>
+              </Heading>
             </Pressable>
           </View>
           <View style={styles.grid}>
             {weekdays.map((weekday, index) => (
-              <Text
-                key={`${weekday}-${index}`}
-                style={[styles.weekday, { color: palette.secondaryText }]}
-              >
+              <Label key={`${weekday}-${index}`} style={styles.weekday}>
                 {weekday}
-              </Text>
+              </Label>
             ))}
             {cells.map((date, index) => {
               if (!date) return <View key={`empty-${index}`} style={styles.day} />;
@@ -106,22 +105,20 @@ export function DayPicker({ enabled, onClose, onSelect, selectedDate, visible }:
                   disabled={future}
                   key={dateValue}
                   onPress={() => onSelect(dateValue)}
-                  style={[styles.day, selectedDay ? { backgroundColor: palette.accent } : null]}
+                  style={[styles.day, selectedDay ? styles.daySelected : null]}
                 >
-                  <Text
-                    style={{
-                      color: selectedDay ? palette.background : palette.text,
-                      opacity: future ? 0.3 : 1,
-                    }}
+                  <Body
+                    color={selectedDay ? colors.background : colors.text}
+                    style={future ? styles.dayFuture : null}
                   >
                     {date.getDate()}
-                  </Text>
+                  </Body>
                   {loggedDates.has(dateValue) ? (
                     <View
                       accessibilityLabel="Contains logged food"
                       style={[
                         styles.dot,
-                        { backgroundColor: selectedDay ? palette.background : palette.accent },
+                        { backgroundColor: selectedDay ? colors.background : colors.accent },
                       ]}
                     />
                   ) : null}
@@ -130,12 +127,10 @@ export function DayPicker({ enabled, onClose, onSelect, selectedDate, visible }:
             })}
           </View>
           {daysQuery.isError ? (
-            <Text accessibilityRole="alert" style={[styles.error, { color: palette.error }]}>
-              Could not load logged-day markers.
-            </Text>
+            <ErrorText style={styles.error}>Could not load logged-day markers.</ErrorText>
           ) : null}
           <Pressable accessibilityRole="button" onPress={onClose} style={styles.done}>
-            <Text style={{ color: palette.accent, fontWeight: "800" }}>DONE</Text>
+            <Caption color={colors.accent}>DONE</Caption>
           </Pressable>
         </View>
       </View>
@@ -144,21 +139,33 @@ export function DayPicker({ enabled, onClose, onSelect, selectedDate, visible }:
 }
 
 const styles = StyleSheet.create({
+  arrow: { minWidth: tapTarget, textAlign: "center" },
+  arrowDisabled: { opacity: 0.3 },
   backdrop: { backgroundColor: "rgba(0, 0, 0, 0.55)", flex: 1, justifyContent: "flex-end" },
-  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 },
-  heading: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  arrow: { fontSize: 36, minWidth: 42, textAlign: "center" },
-  month: { fontSize: 18, fontWeight: "800" },
-  grid: { flexDirection: "row", flexWrap: "wrap", marginTop: 18 },
-  weekday: { fontSize: 11, fontWeight: "800", textAlign: "center", width: "14.285%" },
   day: {
     alignItems: "center",
-    borderRadius: 22,
-    height: 44,
+    borderRadius: radius.full,
+    height: tapTarget,
     justifyContent: "center",
     width: "14.285%",
   },
+  dayFuture: { opacity: 0.3 },
+  daySelected: { backgroundColor: colors.accent },
+  done: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: space.md,
+    minHeight: tapTarget,
+  },
   dot: { borderRadius: 2, bottom: 5, height: 4, position: "absolute", width: 4 },
-  error: { marginTop: 12, textAlign: "center" },
-  done: { alignItems: "center", minHeight: 48, justifyContent: "center", marginTop: 12 },
+  error: { marginTop: space.md, textAlign: "center" },
+  grid: { flexDirection: "row", flexWrap: "wrap", marginTop: space.lg },
+  heading: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    padding: space.xl,
+  },
+  weekday: { textAlign: "center", width: "14.285%" },
 });

@@ -7,10 +7,11 @@
  * that contradiction inside one set of branches.
  */
 
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
+import { Caption, Label, Numeral } from "@/components/ui/text";
 import type { MacroProgress } from "@/lib/day-progress";
-import { usePalette } from "@/lib/theme";
+import { colors, radius, space } from "@/lib/theme";
 
 type Props = {
   label: string;
@@ -22,7 +23,6 @@ type Props = {
 };
 
 export function MacroTile({ label, progress, color, metColor }: Props) {
-  const palette = usePalette();
   const met = progress.status !== "under";
   const barColor = met ? metColor : color;
   const consumed = Math.round(progress.consumed);
@@ -35,14 +35,14 @@ export function MacroTile({ label, progress, color, metColor }: Props) {
       accessibilityLabel={`${label}. ${consumed} of ${target} grams. ${met ? "Target met." : `${short} grams short.`}`}
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: target, now: Math.min(consumed, target) }}
-      style={[styles.tile, { backgroundColor: palette.card }]}
+      style={styles.tile}
     >
-      <Text style={[styles.label, { color: palette.secondaryText }]}>{label.toUpperCase()}</Text>
+      <Label>{label.toUpperCase()}</Label>
       <View style={styles.row}>
-        <Text style={[styles.value, { color: barColor }]}>{consumed}</Text>
-        <Text style={[styles.target, { color: palette.dimText }]}>/{target}g</Text>
+        <Numeral color={barColor}>{consumed}</Numeral>
+        <Caption color={colors.textDim}>/{target}g</Caption>
       </View>
-      <View style={[styles.track, { backgroundColor: palette.ringTrack }]}>
+      <View style={styles.track}>
         <View
           style={[
             styles.fill,
@@ -50,20 +50,20 @@ export function MacroTile({ label, progress, color, metColor }: Props) {
           ]}
         />
       </View>
-      <Text style={[styles.footer, { color: met ? metColor : palette.secondaryText }]}>
-        {footer}
-      </Text>
+      <Caption color={met ? metColor : colors.textSecondary}>{footer}</Caption>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  tile: { borderRadius: 14, flex: 1, gap: 8, padding: 16 },
-  label: { fontSize: 12, letterSpacing: 2 },
-  row: { alignItems: "baseline", flexDirection: "row", gap: 4 },
-  value: { fontSize: 30, fontWeight: "700" },
-  target: { fontSize: 15 },
-  track: { borderRadius: 2, height: 4, overflow: "hidden" },
   fill: { height: 4 },
-  footer: { fontSize: 13 },
+  row: { alignItems: "baseline", flexDirection: "row", gap: space.xs },
+  tile: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    flex: 1,
+    gap: space.sm,
+    padding: space.lg,
+  },
+  track: { backgroundColor: colors.accentDim, borderRadius: 2, height: 4, overflow: "hidden" },
 });

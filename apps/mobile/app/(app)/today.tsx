@@ -1,19 +1,31 @@
 import { useGetDay } from "@macros/api-client";
 import { Link, router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 
 import { CalorieRing } from "@/components/calorie-ring";
 import { DayPicker } from "@/components/day-picker";
 import { MacroTile } from "@/components/macro-tile";
+import { Button } from "@/components/ui/button";
+import { Screen } from "@/components/ui/screen";
+import {
+  Body,
+  Caption,
+  ErrorText,
+  Heading,
+  Label,
+  Muted,
+  Numeral,
+  Title,
+} from "@/components/ui/text";
 import { dayProgress } from "@/lib/day-progress";
+import { macroValue } from "@/lib/format";
 import { localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
-import { usePalette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
+import { colors, radius, space, tapTarget } from "@/lib/theme";
 
 export default function TodayScreen() {
   const session = useSession();
-  const palette = usePalette();
   const params = useLocalSearchParams<{ date?: string | string[] }>();
   const today = localIsoDate(new Date());
   const requestedDate = Array.isArray(params.date) ? params.date[0] : params.date;
@@ -34,35 +46,49 @@ export default function TodayScreen() {
   const progress = day ? dayProgress(day) : null;
 
   return (
-    <View style={[styles.page, { backgroundColor: palette.background }]}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <>
+      <Screen
+        contentStyle={styles.content}
+        // The log action is a real footer rather than an absolutely positioned
+        // button. The old version floated above the list, so the last entry
+        // could scroll underneath it and stay unreachable.
+        footer={
+          <View style={styles.footer}>
+            <Button
+              onPress={() => router.push({ pathname: "/log-food", params: { date: localDate } })}
+              title={isToday ? "Log food" : "Add to this day"}
+            />
+          </View>
+        }
+        scroll
+      >
         <View style={styles.header}>
           <View>
-            <Text style={[styles.title, { color: palette.text }]}>
+            <Title>
               {isToday ? "Today" : selectedDay.toLocaleDateString([], { weekday: "long" })}
-            </Text>
+            </Title>
             <Pressable
               accessibilityLabel="Choose day"
               accessibilityRole="button"
+              hitSlop={space.md}
               onPress={() => setPickerVisible(true)}
+              style={styles.dateButton}
             >
-              <Text style={[styles.date, { color: palette.accent }]}>
-                {selectedDay.toLocaleDateString([], {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </Text>
+              <Caption color={colors.accent}>
+                {selectedDay
+                  .toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })
+                  .toUpperCase()}
+              </Caption>
             </Pressable>
           </View>
-          <Link href="/settings" style={{ color: palette.accent }}>
-            Settings
+          <Link href="/settings" style={styles.settings}>
+            <Caption color={colors.accent}>SETTINGS</Caption>
           </Link>
         </View>
         {session.timezoneStatus === "unavailable" ? (
-          <Text accessibilityRole="alert" style={[styles.message, { color: palette.error }]}>
+          <ErrorText style={styles.message}>
             Timezone sync is unavailable. Reopen the app to try again.
-          </Text>
+          </ErrorText>
         ) : null}
         {progress ? (
           <>
@@ -71,15 +97,15 @@ export default function TodayScreen() {
             </View>
             <View style={styles.tiles}>
               <MacroTile
-                color={palette.protein}
+                color={colors.protein}
                 label="Protein"
-                metColor={palette.proteinMet}
+                metColor={colors.positive}
                 progress={progress.protein}
               />
               <MacroTile
-                color={palette.fiber}
+                color={colors.protein}
                 label="Fiber"
-                metColor={palette.fiberMet}
+                metColor={colors.positive}
                 progress={progress.fiber}
               />
             </View>
@@ -89,22 +115,20 @@ export default function TodayScreen() {
           // No target version on this day, so there is nothing to measure
           // against. Show what was eaten and no progress.
           <View style={styles.totals}>
-            <Metric label="CALORIES" value={day.calories} color={palette.text} />
-            <Metric label="PROTEIN" value={`${day.protein_g} g`} color={palette.text} />
-            <Metric label="FIBER" value={`${day.fiber_g} g`} color={palette.text} />
+            <Metric label="CALORIES" value={macroValue(day.calories)} />
+            <Metric label="PROTEIN" value={`${macroValue(day.protein_g)} g`} />
+            <Metric label="FIBER" value={`${macroValue(day.fiber_g)} g`} />
           </View>
         ) : null}
-        <Text style={[styles.section, { color: palette.secondaryText }]}>ENTRIES</Text>
-        {dayQuery.isLoading ? (
-          <Text style={{ color: palette.secondaryText }}>Loading your day...</Text>
-        ) : null}
+        <Label style={styles.section}>ENTRIES</Label>
+        {dayQuery.isLoading ? <Muted>Loading your day...</Muted> : null}
         {dayQuery.isError ? (
-          <Text accessibilityRole="alert" style={[styles.message, { color: palette.error }]}>
+          <ErrorText style={styles.message}>
             Could not load your day. Reopen the app to try again.
-          </Text>
+          </ErrorText>
         ) : null}
         {day && day.entries.length === 0 ? (
-          <EmptyDay copy={emptyDayCopy(isToday, session.user.has_logged_food)} palette={palette} />
+          <EmptyDay copy={emptyDayCopy(isToday, session.user.has_logged_food)} />
         ) : null}
         {day?.entries.map((entry) => (
           <Pressable
@@ -114,7 +138,7 @@ export default function TodayScreen() {
             onPress={() =>
               router.push({ pathname: "/entry/[id]", params: { id: entry.id, date: localDate } })
             }
-            style={[styles.entry, { borderColor: palette.hairline }]}
+            style={styles.entry}
           >
             {entry.photo_url ? (
               <Image
@@ -124,30 +148,25 @@ export default function TodayScreen() {
               />
             ) : null}
             <View style={styles.entryMain}>
-              <Text style={[styles.entryName, { color: palette.text }]}>{entry.description}</Text>
-              <Text style={{ color: palette.dimText }}>
-                {new Date(entry.eaten_at).toLocaleTimeString([], {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
-              </Text>
+              <Body style={styles.entryName}>{entry.description}</Body>
+              {/* `textDim` on a timestamp is the one accepted contrast
+                  exemption. Alex chose the approved artwork over WCAG AA on
+                  17 Sep 2026. See __tests__/theme.test.ts. */}
+              <Caption color={colors.textDim}>
+                {new Date(entry.eaten_at)
+                  .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+                  .toUpperCase()}
+              </Caption>
             </View>
             <View style={styles.entryMacros}>
-              <Text style={{ color: palette.text }}>{entry.calories} kcal</Text>
-              <Text style={{ color: palette.secondaryText }}>
-                {entry.protein_g}p · {entry.fiber_g}f
-              </Text>
+              <Body>{macroValue(entry.calories)} kcal</Body>
+              <Caption>
+                {macroValue(entry.protein_g)}p · {macroValue(entry.fiber_g)}f
+              </Caption>
             </View>
           </Pressable>
         ))}
-      </ScrollView>
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.push({ pathname: "/log-food", params: { date: localDate } })}
-        style={[styles.log, { backgroundColor: palette.accent }]}
-      >
-        <Text style={styles.logText}>{isToday ? "LOG FOOD" : "ADD TO THIS DAY"}</Text>
-      </Pressable>
+      </Screen>
       <DayPicker
         enabled={session.timezoneStatus === "ready"}
         onClose={() => setPickerVisible(false)}
@@ -158,7 +177,7 @@ export default function TodayScreen() {
         selectedDate={localDate}
         visible={pickerVisible}
       />
-    </View>
+    </>
   );
 }
 
@@ -197,69 +216,56 @@ export function emptyDayCopy(isToday: boolean, hasLoggedFood: boolean): EmptyDay
   return { title: "Nothing logged yet", body: null };
 }
 
-function EmptyDay({
-  copy,
-  palette,
-}: {
-  copy: EmptyDayCopy;
-  palette: ReturnType<typeof usePalette>;
-}) {
+function EmptyDay({ copy }: { copy: EmptyDayCopy }) {
   return (
     <View style={styles.empty}>
-      <Text style={[styles.emptyTitle, { color: palette.text }]}>{copy.title}</Text>
-      {copy.body ? (
-        <Text style={[styles.emptyBody, { color: palette.secondaryText }]}>{copy.body}</Text>
-      ) : null}
+      <Heading>{copy.title}</Heading>
+      {copy.body ? <Muted style={styles.emptyBody}>{copy.body}</Muted> : null}
     </View>
   );
 }
 
-function Metric({ label, value, color }: { label: string; value: string; color: string }) {
+function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <View style={styles.metric}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={[styles.metricValue, { color }]}>{value}</Text>
+      <Label color={colors.textDim}>{label}</Label>
+      <Numeral style={styles.metricValue}>{value}</Numeral>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1 },
-  content: { paddingBottom: 130, paddingHorizontal: 24, paddingTop: 68 },
-  header: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
-  title: { fontSize: 36, fontWeight: "900" },
-  date: { fontSize: 13, marginTop: 4 },
-  message: { marginTop: 24 },
-  ring: { marginTop: 32 },
-  tiles: { flexDirection: "row", gap: 12, marginTop: 28 },
-  totals: { flexDirection: "row", gap: 10, marginTop: 36 },
-  metric: { flex: 1 },
-  metricLabel: { color: "#777", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
-  metricValue: { fontSize: 20, fontWeight: "900", marginTop: 7 },
-  section: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 14, marginTop: 42 },
-  empty: { alignItems: "center", paddingVertical: 64 },
-  emptyTitle: { fontSize: 20, fontWeight: "800" },
-  emptyBody: { marginTop: 8 },
+  content: { paddingHorizontal: space.xl, paddingTop: space.xl },
+  dateButton: { justifyContent: "center", minHeight: space.xl },
+  empty: { alignItems: "center", paddingVertical: space.empty },
+  emptyBody: { marginTop: space.sm, textAlign: "center" },
   entry: {
     alignItems: "center",
+    borderColor: colors.border,
     borderTopWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 18,
+    minHeight: tapTarget,
+    paddingVertical: space.lg,
   },
-  entryName: { fontSize: 17, fontWeight: "700" },
+  entryMacros: { alignItems: "flex-end", gap: space.xs },
   entryMain: { flex: 1 },
-  entryPhoto: { borderRadius: 8, height: 52, marginRight: 12, width: 52 },
-  entryMacros: { alignItems: "flex-end", gap: 4 },
-  log: {
-    alignItems: "center",
-    borderRadius: 12,
-    bottom: 34,
-    justifyContent: "center",
-    left: 24,
-    minHeight: 58,
-    position: "absolute",
-    right: 24,
+  entryName: { marginBottom: space.xs },
+  entryPhoto: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.sm,
+    height: 52,
+    marginRight: space.md,
+    width: 52,
   },
-  logText: { color: "#001018", fontWeight: "900", letterSpacing: 1.2 },
+  footer: { paddingHorizontal: space.xl, paddingTop: space.md },
+  header: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
+  message: { marginTop: space.xl },
+  metric: { flex: 1 },
+  metricValue: { marginTop: space.xs },
+  ring: { marginTop: space.xxl },
+  section: { marginBottom: space.md, marginTop: space.section },
+  settings: { minHeight: tapTarget, paddingTop: space.sm },
+  tiles: { flexDirection: "row", gap: space.md, marginTop: space.xxl },
+  totals: { flexDirection: "row", gap: space.sm, marginTop: space.xxl },
 });

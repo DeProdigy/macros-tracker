@@ -13,11 +13,12 @@
  * MAC-61 wants one later.
  */
 
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import Svg, { Circle, G } from "react-native-svg";
 
+import { Caption, Display, Label } from "@/components/ui/text";
 import type { DayProgress } from "@/lib/day-progress";
-import { usePalette } from "@/lib/theme";
+import { colors, space } from "@/lib/theme";
 
 const SIZE = 220;
 const STROKE = 16;
@@ -54,10 +55,9 @@ function Arc({
 }
 
 export function CalorieRing({ progress }: Props) {
-  const palette = usePalette();
   const { calories, caloriesOverFraction } = progress;
   const over = calories.status === "over";
-  const ringColor = over ? palette.caloriesOver : palette.calories;
+  const ringColor = over ? colors.warning : colors.accent;
   const radius = (SIZE - STROKE) / 2;
   const innerRadius = radius - INNER_INSET;
 
@@ -86,16 +86,11 @@ export function CalorieRing({ progress }: Props) {
             circle starts at three o'clock, which reads as a quarter already
             spent. */}
         <G rotation={-90} origin={`${SIZE / 2}, ${SIZE / 2}`}>
-          <Arc color={palette.ringTrack} fraction={1} radius={radius} stroke={STROKE} />
+          <Arc color={colors.accentDim} fraction={1} radius={radius} stroke={STROKE} />
           <Arc color={ringColor} fraction={calories.fraction} radius={radius} stroke={STROKE} />
           {over ? (
             <>
-              <Arc
-                color={palette.ringTrack}
-                fraction={1}
-                radius={innerRadius}
-                stroke={STROKE / 2}
-              />
+              <Arc color={colors.accentDim} fraction={1} radius={innerRadius} stroke={STROKE / 2} />
               <Arc
                 color={ringColor}
                 fraction={caloriesOverFraction}
@@ -107,14 +102,12 @@ export function CalorieRing({ progress }: Props) {
         </G>
       </Svg>
       <View pointerEvents="none" style={styles.center}>
-        <Text style={[styles.headline, { color: over ? ringColor : palette.secondaryText }]}>
-          {headline}
-        </Text>
-        <Text style={[styles.amount, { color: ringColor }]}>{amount.toLocaleString()}</Text>
-        <Text style={[styles.unit, { color: palette.text }]}>{over ? "KCAL" : "KCAL LEFT"}</Text>
-        <Text style={[styles.detail, { color: palette.dimText }]}>
+        <Label color={over ? ringColor : colors.textSecondary}>{headline}</Label>
+        <Display color={ringColor}>{amount.toLocaleString()}</Display>
+        <Label color={colors.text}>{over ? "KCAL" : "KCAL LEFT"}</Label>
+        <Caption color={colors.textDim} style={styles.detail}>
           {consumed.toLocaleString()} of {target.toLocaleString()} kcal
-        </Text>
+        </Caption>
       </View>
     </View>
   );
@@ -131,11 +124,8 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
   },
-  headline: { fontSize: 13, letterSpacing: 2 },
-  // The number is the reason the screen exists, so it stays large. It does not
-  // scale with Dynamic Type, because a ring cannot grow with it and a clipped
-  // number is worse than a fixed one. The label under it does scale.
-  amount: { fontSize: 52, fontWeight: "700" },
-  unit: { fontSize: 13, letterSpacing: 2 },
-  detail: { fontSize: 13, marginTop: 6 },
+  // The number is the reason the screen exists, so it stays large. `Display`
+  // caps its Dynamic Type growth, because a ring cannot grow with the text and
+  // a clipped number is worse than a fixed one. The labels around it scale.
+  detail: { marginTop: space.xs },
 });

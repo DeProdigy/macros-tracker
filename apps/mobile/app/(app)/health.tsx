@@ -13,7 +13,11 @@
 
 import { ApiError, useHealth, type Health } from "@macros/api-client";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+
+import { Screen } from "@/components/ui/screen";
+import { Body, Caption, ErrorText, Heading, Label, Muted, Title } from "@/components/ui/text";
+import { colors, radius, space, tapTarget } from "@/lib/theme";
 
 /**
  * Reads the unhealthy body out of a failed request.
@@ -47,61 +51,51 @@ export default function HealthScreen() {
   const health = data?.data ?? unhealthyBody(error);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Health check</Text>
-      <Text style={styles.subtitle}>Reads /api/health/, which runs a real query.</Text>
+    <Screen contentStyle={styles.page}>
+      <Title>Health check</Title>
+      <Muted style={styles.subtitle}>Reads /api/health/, which runs a real query.</Muted>
 
       <View style={styles.card}>
-        <Text style={styles.cardLabel}>API health</Text>
+        <Label>API HEALTH</Label>
         {isPending ? (
-          <ActivityIndicator />
+          <ActivityIndicator color={colors.accent} />
         ) : !health ? (
-          <Text style={styles.error}>unreachable</Text>
+          <ErrorText>unreachable</ErrorText>
         ) : (
           <>
-            <Text style={[styles.status, health.status === "ok" ? styles.ok : styles.error]}>
+            <Heading color={health.status === "ok" ? colors.positive : colors.error}>
               {health.status}
-            </Text>
-            <Text style={styles.meta}>
-              database {health.database ? "reachable" : "unreachable"}
-            </Text>
-            <Text style={styles.meta}>v{health.version}</Text>
-            <Text style={styles.meta}>{health.timestamp}</Text>
+            </Heading>
+            <Caption>database {health.database ? "reachable" : "unreachable"}</Caption>
+            <Caption>v{health.version}</Caption>
+            <Caption>{health.timestamp}</Caption>
           </>
         )}
       </View>
 
-      <Pressable accessibilityRole="button" onPress={() => router.back()}>
-        <Text style={styles.link}>Back to Settings</Text>
+      <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.link}>
+        <Body color={colors.accent}>Back to Settings</Body>
       </Pressable>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    padding: 24,
-  },
-  title: { fontSize: 28, fontWeight: "600" },
-  subtitle: { fontSize: 16, opacity: 0.7 },
   card: {
     alignItems: "center",
-    gap: 4,
-    marginTop: 8,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#c8c8c8",
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    gap: space.xs,
+    marginTop: space.sm,
     minWidth: 200,
+    padding: space.lg,
   },
-  cardLabel: { fontSize: 12, textTransform: "uppercase", opacity: 0.5 },
-  status: { fontSize: 20, fontWeight: "600" },
-  ok: { color: "#1a8a3f" },
-  meta: { fontSize: 13, opacity: 0.6 },
-  error: { fontSize: 16, color: "#c0392b" },
-  link: { fontSize: 16, color: "#208aef", marginTop: 8 },
+  link: { justifyContent: "center", marginTop: space.sm, minHeight: tapTarget },
+  page: {
+    alignItems: "center",
+    gap: space.md,
+    justifyContent: "center",
+    padding: space.xl,
+  },
+  subtitle: { textAlign: "center" },
 });

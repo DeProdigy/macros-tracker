@@ -9,16 +9,19 @@
 import { ApiError, getCurrentTarget, type TargetVersion } from "@macros/api-client";
 import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 
-import { usePalette } from "@/lib/theme";
+import { Button } from "@/components/ui/button";
+import { Screen } from "@/components/ui/screen";
+import { Body, ErrorText, Label, Muted, Numeral, Title } from "@/components/ui/text";
+
+import { colors, radius, space, tapTarget, type } from "@/lib/theme";
 import { useSession } from "@/lib/session";
 
 type Busy = "none" | "signingOut" | "deleting";
 
 export default function SettingsScreen() {
   const session = useSession();
-  const palette = usePalette();
   const router = useRouter();
   const [busy, setBusy] = useState<Busy>("none");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -100,90 +103,80 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.content}
-      style={[styles.container, { backgroundColor: palette.background }]}
-    >
-      <Pressable onPress={() => router.back()}>
-        <Text style={[styles.back, { color: palette.accent }]}>‹ Today</Text>
+    <Screen contentStyle={styles.content} scroll>
+      <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.back}>
+        <Body color={colors.accent}>‹ Today</Body>
       </Pressable>
 
-      <Text style={[styles.title, { color: palette.text }]}>Settings</Text>
+      <Title>Settings</Title>
 
-      <View style={[styles.group, { borderColor: palette.hairline }]}>
-        <Text style={[styles.groupLabel, { color: palette.dimText }]}>Account</Text>
-        <Text style={[styles.value, { color: palette.text }]}>{user.name || "No name"}</Text>
-        <Text style={[styles.meta, { color: palette.secondaryText }]}>
+      <View style={styles.group}>
+        <Label color={colors.textDim}>ACCOUNT</Label>
+        <Body style={styles.value}>{user.name || "No name"}</Body>
+        <Muted style={styles.meta}>
           {/* Apple may withhold the address or hand back a private relay one, so
               this is genuinely allowed to be empty. */}
           {user.email ?? "Apple is hiding your email address"}
-        </Text>
-        <Text style={[styles.meta, { color: palette.secondaryText }]}>Signed in with Apple</Text>
+        </Muted>
+        <Muted style={styles.meta}>Signed in with Apple</Muted>
       </View>
 
-      <View style={[styles.group, { borderColor: palette.hairline }]}>
-        <Text style={[styles.groupLabel, { color: palette.dimText }]}>Targets</Text>
+      <View style={styles.group}>
+        <Label color={colors.textDim}>TARGETS</Label>
         {targetsLoading ? (
           <View accessibilityLabel="Loading current targets" style={styles.targetStatus}>
-            <ActivityIndicator color={palette.accent} />
+            <ActivityIndicator color={colors.accent} />
           </View>
         ) : targetsFailure ? (
           <View style={styles.targetStatus}>
-            <Text style={[styles.meta, { color: palette.secondaryText }]}>
-              Current targets did not load.
-            </Text>
-            <Pressable accessibilityRole="button" onPress={() => void loadTargets()}>
-              <Text style={[styles.link, { color: palette.accent }]}>Try again</Text>
+            <Muted style={styles.meta}>Current targets did not load.</Muted>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void loadTargets()}
+              style={styles.link}
+            >
+              <Body color={colors.accent}>Try again</Body>
             </Pressable>
           </View>
         ) : target ? (
           <View style={styles.targetMetrics}>
-            <TargetMetric label="KCAL" value={target.calories} color={palette.accent} />
-            <TargetMetric label="PROTEIN" value={target.protein_g} color="#70e6a3" />
-            <TargetMetric label="FIBER" value={target.fiber_g} color="#ad8cff" />
+            <TargetMetric label="KCAL" value={target.calories} color={colors.accent} />
+            <TargetMetric label="PROTEIN" value={target.protein_g} color={colors.positive} />
+            <TargetMetric label="FIBER" value={target.fiber_g} color={colors.protein} />
           </View>
         ) : (
-          <Text style={[styles.meta, { color: palette.secondaryText }]}>No targets set.</Text>
+          <Muted style={styles.meta}>No targets set.</Muted>
         )}
 
         <View style={styles.targetActions}>
-          <Link
-            href="/targets"
-            style={[styles.targetAction, { color: palette.accent, borderColor: palette.hairline }]}
-          >
+          <Link href="/targets" style={styles.targetAction}>
             Adjust
           </Link>
-          <Link
-            href="/target-history"
-            style={[styles.targetAction, { color: palette.accent, borderColor: palette.hairline }]}
-          >
+          <Link href="/target-history" style={styles.targetAction}>
             History
           </Link>
         </View>
       </View>
 
-      <View style={[styles.group, { borderColor: palette.hairline }]}>
-        <Text style={[styles.groupLabel, { color: palette.dimText }]}>Diagnostics</Text>
-        <Link href="/health" style={[styles.link, { color: palette.accent }]}>
+      <View style={styles.group}>
+        <Label color={colors.textDim}>DIAGNOSTICS</Label>
+        <Link href="/health" style={styles.linkText}>
           API health
         </Link>
       </View>
 
-      {failure ? <Text style={[styles.failure, { color: palette.error }]}>{failure}</Text> : null}
+      {failure ? <ErrorText>{failure}</ErrorText> : null}
 
-      <Pressable
-        accessibilityRole="button"
+      <Button
+        busy={busy === "signingOut"}
         disabled={busy !== "none"}
         onPress={handleSignOut}
-        style={[styles.button, { borderColor: palette.hairline }]}
-      >
-        <Text style={[styles.buttonLabel, { color: palette.text }]}>
-          {busy === "signingOut" ? "Signing out…" : "Sign out"}
-        </Text>
-      </Pressable>
+        title="Sign out"
+        variant="secondary"
+      />
 
-      <View style={[styles.group, { borderColor: palette.error }]}>
-        <Text style={[styles.groupLabel, { color: palette.error }]}>Danger</Text>
+      <View style={[styles.group, styles.dangerGroup]}>
+        <Label color={colors.error}>DANGER</Label>
 
         {confirmingDelete ? (
           <>
@@ -192,96 +185,101 @@ export default function SettingsScreen() {
               window changes the decision. If deletion becomes immediate, this
               sequence must change with the server behavior.
             */}
-            <Text style={[styles.value, { color: palette.text }]}>Delete your account?</Text>
-            <Text style={[styles.meta, { color: palette.secondaryText }]}>
+            <Body style={styles.value}>Delete your account?</Body>
+            <Muted style={styles.meta}>
               Now: signed out everywhere, and you can no longer log in.
-            </Text>
-            <Text style={[styles.meta, { color: palette.secondaryText }]}>
+            </Muted>
+            <Muted style={styles.meta}>
               For 30 days: your entries and photos are held, and nothing is visible to you.
-            </Text>
-            <Text style={[styles.meta, { color: palette.secondaryText }]}>
-              After that: purged for good, rows and photos alike.
-            </Text>
-            <Text style={[styles.meta, { color: palette.secondaryText }]}>
+            </Muted>
+            <Muted style={styles.meta}>After that: purged for good, rows and photos alike.</Muted>
+            <Muted style={styles.meta}>
               Signing in with the same Apple ID during those 30 days brings the account back.
-            </Text>
+            </Muted>
 
-            <Pressable
-              accessibilityRole="button"
+            <Button
+              busy={busy === "deleting"}
               disabled={busy !== "none"}
               onPress={handleDelete}
-              style={[styles.button, { borderColor: palette.error }]}
-            >
-              <Text style={[styles.buttonLabel, { color: palette.error }]}>
-                {busy === "deleting" ? "Deleting…" : "Delete my account"}
-              </Text>
-            </Pressable>
+              style={styles.dangerButton}
+              title="Delete my account"
+              variant="destructive"
+            />
 
-            <Pressable
-              accessibilityRole="button"
+            <Button
               disabled={busy !== "none"}
               onPress={() => setConfirmingDelete(false)}
-              style={[styles.button, { borderColor: palette.hairline }]}
-            >
-              <Text style={[styles.buttonLabel, { color: palette.text }]}>Keep my account</Text>
-            </Pressable>
+              style={styles.dangerButton}
+              title="Keep my account"
+              variant="secondary"
+            />
           </>
         ) : (
-          <Pressable
-            accessibilityRole="button"
+          <Button
             disabled={busy !== "none"}
             onPress={() => setConfirmingDelete(true)}
-            style={[styles.button, { borderColor: palette.error }]}
-          >
-            <Text style={[styles.buttonLabel, { color: palette.error }]}>Delete my account</Text>
-          </Pressable>
+            style={styles.dangerButton}
+            title="Delete my account"
+            variant="destructive"
+          />
         )}
       </View>
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { gap: 20, paddingBottom: 64, paddingHorizontal: 24, paddingTop: 72 },
-  back: { fontSize: 16 },
-  title: { fontSize: 32, fontWeight: "700", letterSpacing: -0.5 },
-  group: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, gap: 6, padding: 16 },
-  groupLabel: { fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase" },
-  value: { fontSize: 17, fontWeight: "600" },
-  meta: { fontSize: 14, lineHeight: 20 },
-  link: { fontSize: 16 },
-  targetStatus: { gap: 8, minHeight: 48, justifyContent: "center" },
-  targetMetrics: { flexDirection: "row", gap: 18, paddingVertical: 10 },
-  targetMetric: { gap: 2 },
-  targetValue: { fontSize: 24, fontWeight: "800" },
-  targetUnit: { color: "#6b6b6b", fontSize: 10, letterSpacing: 0.8 },
-  targetActions: { flexDirection: "row", gap: 10, marginTop: 8 },
+  back: { justifyContent: "center", minHeight: tapTarget },
+  content: {
+    gap: space.xl,
+    paddingBottom: space.empty,
+    paddingHorizontal: space.xl,
+    paddingTop: space.lg,
+  },
+  dangerButton: { marginTop: space.sm },
+  dangerGroup: { borderColor: colors.error },
+  group: {
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: space.xs,
+    padding: space.lg,
+  },
+  link: { justifyContent: "center", minHeight: tapTarget },
+  linkText: {
+    color: colors.accent,
+    fontFamily: type.body.fontFamily,
+    fontSize: type.body.fontSize,
+    paddingVertical: space.md,
+  },
+  meta: { fontSize: type.caption.fontSize, lineHeight: 20 },
   targetAction: {
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    color: colors.accent,
     flex: 1,
-    fontSize: 14,
-    fontWeight: "700",
+    fontFamily: type.label.fontFamily,
+    fontSize: type.label.fontSize,
+    letterSpacing: type.label.letterSpacing,
     overflow: "hidden",
-    paddingVertical: 13,
+    paddingVertical: space.lg,
     textAlign: "center",
     textTransform: "uppercase",
   },
-  failure: { fontSize: 14, lineHeight: 20 },
-  button: {
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 8,
-    paddingVertical: 14,
-  },
-  buttonLabel: { fontSize: 16, fontWeight: "600" },
+  targetActions: { flexDirection: "row", gap: space.sm, marginTop: space.sm },
+  targetMetric: { gap: 2 },
+  targetMetrics: { flexDirection: "row", gap: space.lg, paddingVertical: space.sm },
+  targetStatus: { gap: space.sm, justifyContent: "center", minHeight: tapTarget },
+  targetValue: { fontSize: type.heading.fontSize },
+  value: { fontFamily: type.heading.fontFamily },
 });
 
 const TargetMetric = ({ label, value, color }: { label: string; value: number; color: string }) => (
   <View style={styles.targetMetric}>
-    <Text style={[styles.targetValue, { color }]}>{value.toLocaleString()}</Text>
-    <Text style={styles.targetUnit}>{label}</Text>
+    <Numeral color={color} style={styles.targetValue}>
+      {value.toLocaleString()}
+    </Numeral>
+    <Label color={colors.textDim}>{label}</Label>
   </View>
 );

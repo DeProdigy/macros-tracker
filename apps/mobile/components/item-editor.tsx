@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
+import { Caption, Label } from "@/components/ui/text";
 import type { EditableFoodItem } from "@/lib/entry-items";
-import { usePalette } from "@/lib/theme";
+import { colors, radius, space, tapTarget, type } from "@/lib/theme";
 
 type Props = {
   label: string;
@@ -24,43 +25,40 @@ export function ItemEditor({
   onAction,
   working = false,
 }: Props) {
-  const palette = usePalette();
-  const inputStyle = [styles.input, { borderColor: palette.hairline, color: palette.text }];
   const change = (field: keyof EditableFoodItem, next: string) =>
     onChange({ ...value, [field]: next });
 
   return (
-    <View style={[styles.card, { borderColor: palette.hairline }]}>
+    <View style={styles.card}>
       <View style={styles.header}>
-        <Text style={[styles.itemLabel, { color: palette.secondaryText }]}>
-          {label.toUpperCase()}
-        </Text>
+        <Label>{label.toUpperCase()}</Label>
         {onRemove ? (
           <Pressable
             accessibilityRole="button"
             disabled={removeDisabled || working}
             onPress={onRemove}
+            style={styles.remove}
           >
-            <Text style={{ color: removeDisabled ? palette.dimText : palette.error }}>REMOVE</Text>
+            <Caption color={removeDisabled ? colors.textDim : colors.error}>REMOVE</Caption>
           </Pressable>
         ) : null}
       </View>
-      <Text style={[styles.label, { color: palette.secondaryText }]}>FOOD NAME</Text>
+      <Label style={styles.label}>FOOD NAME</Label>
       <TextInput
         accessibilityLabel={`${label} food name`}
         onChangeText={(next) => change("name", next)}
         placeholder="Greek yogurt"
-        placeholderTextColor={palette.dimText}
-        style={inputStyle}
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
         value={value.name}
       />
-      <Text style={[styles.label, { color: palette.secondaryText }]}>PORTION</Text>
+      <Label style={styles.label}>PORTION</Label>
       <TextInput
         accessibilityLabel={`${label} portion`}
         onChangeText={(next) => change("portion_label", next)}
         placeholder="1 cup"
-        placeholderTextColor={palette.dimText}
-        style={inputStyle}
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
         value={value.portion_label}
       />
       <View style={styles.row}>
@@ -69,14 +67,12 @@ export function ItemEditor({
           title="QUANTITY"
           value={value.quantity}
           onChange={(next) => change("quantity", next)}
-          style={inputStyle}
         />
         <NumberField
           label={`${label} calories`}
           title="CALORIES"
           value={value.calories}
           onChange={(next) => change("calories", next)}
-          style={inputStyle}
         />
       </View>
       <View style={styles.row}>
@@ -85,14 +81,12 @@ export function ItemEditor({
           title="PROTEIN (G)"
           value={value.protein_g}
           onChange={(next) => change("protein_g", next)}
-          style={inputStyle}
         />
         <NumberField
           label={`${label} fiber`}
           title="FIBER (G)"
           value={value.fiber_g}
           onChange={(next) => change("fiber_g", next)}
-          style={inputStyle}
         />
       </View>
       {actionLabel && onAction ? (
@@ -100,11 +94,9 @@ export function ItemEditor({
           accessibilityRole="button"
           disabled={working}
           onPress={onAction}
-          style={[styles.action, { borderColor: palette.accent }]}
+          style={styles.action}
         >
-          <Text style={{ color: palette.accent, fontWeight: "800" }}>
-            {working ? "SAVING" : actionLabel}
-          </Text>
+          <Caption color={colors.accent}>{working ? "SAVING" : actionLabel}</Caption>
         </Pressable>
       ) : null}
     </View>
@@ -116,22 +108,20 @@ function NumberField({
   title,
   value,
   onChange,
-  style,
 }: {
   label: string;
   title: string;
   value: string;
   onChange: (value: string) => void;
-  style: object;
 }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.numberLabel}>{title}</Text>
+      <Label style={styles.numberLabel}>{title}</Label>
       <TextInput
         accessibilityLabel={label}
         keyboardType="decimal-pad"
         onChangeText={onChange}
-        style={style}
+        style={styles.input}
         value={value}
       />
     </View>
@@ -141,30 +131,27 @@ function NumberField({
 const styles = StyleSheet.create({
   action: {
     alignItems: "center",
-    borderRadius: 10,
+    borderColor: colors.accent,
+    borderRadius: radius.sm,
     borderWidth: 1,
     justifyContent: "center",
-    marginTop: 20,
-    minHeight: 48,
+    marginTop: space.xl,
+    minHeight: tapTarget,
   },
-  card: { borderTopWidth: 1, paddingVertical: 20 },
+  card: { borderColor: colors.border, borderTopWidth: 1, paddingVertical: space.xl },
   field: { flex: 1 },
-  header: { flexDirection: "row", justifyContent: "space-between" },
+  header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   input: {
-    borderRadius: 10,
+    ...type.body,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    fontSize: 16,
+    color: colors.text,
     minHeight: 50,
-    paddingHorizontal: 12,
+    paddingHorizontal: space.md,
   },
-  itemLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
-  label: { fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 7, marginTop: 16 },
-  numberLabel: {
-    color: "#8b8b8b",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1,
-    marginBottom: 7,
-  },
-  row: { flexDirection: "row", gap: 12, marginTop: 16 },
+  label: { marginBottom: space.sm, marginTop: space.lg },
+  numberLabel: { marginBottom: space.sm },
+  remove: { justifyContent: "center", minHeight: tapTarget },
+  row: { flexDirection: "row", gap: space.md, marginTop: space.lg },
 });

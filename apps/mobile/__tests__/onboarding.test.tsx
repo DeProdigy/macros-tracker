@@ -196,10 +196,10 @@ describe("mandatory onboarding", () => {
     fireEvent.press(screen.getByText("ACCEPT AND CONTINUE"));
     expect(await screen.findByText(/targets are saved/)).toBeTruthy();
 
-    const accept = screen.getByRole("button", { name: "ACCEPT AND CONTINUE" });
+    const accept = screen.getByRole("button", { name: "Accept and continue" });
     expect(accept).toBeDisabled();
-    expect(screen.getByRole("button", { name: "ADJUST FIRST" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "BACK TO ANSWERS" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Adjust first" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Back to answers" })).toBeDisabled();
     fireEvent.press(accept);
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
@@ -257,7 +257,7 @@ describe("mandatory onboarding", () => {
 
     fireEvent.press(screen.getByText("BUILD MY TARGETS"));
 
-    expect(screen.getByRole("button", { name: "BACK" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
     expect(screen.getByText("How active is your day?")).toBeTruthy();
   });
 

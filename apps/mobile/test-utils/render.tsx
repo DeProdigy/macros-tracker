@@ -8,6 +8,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react-native";
 import type { ReactElement, ReactNode } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+
+import { TEST_FRAME, TEST_INSETS } from "./insets";
 
 /**
  * A QueryClient scoped to one test.
@@ -32,12 +35,22 @@ export const createTestQueryClient = (): QueryClient =>
  * without one React Query throws "No QueryClient set". Screens acquire that
  * dependency invisibly, just by importing a hook, so wrapping here keeps the
  * requirement in one place instead of in every future screen test.
+ *
+ * `SafeAreaProvider` is here for the same reason as of MAC-61. Every screen
+ * renders inside `components/ui/screen.tsx`, which reads the insets. A suite
+ * using plain `render` gets the same numbers from `jest.setup.tsx`, so this
+ * wrapper is about mirroring the real root rather than about making the insets
+ * available.
  */
 export const renderWithProviders = (ui: ReactElement) => {
   const queryClient = createTestQueryClient();
 
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <SafeAreaProvider initialMetrics={{ insets: TEST_INSETS, frame: TEST_FRAME }}>
+        {children}
+      </SafeAreaProvider>
+    </QueryClientProvider>
   );
 
   return { queryClient, ...render(ui, { wrapper }) };

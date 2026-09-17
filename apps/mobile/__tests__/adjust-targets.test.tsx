@@ -309,7 +309,7 @@ describe("failures the first version hid", () => {
 
     fireEvent.press(screen.getByText("SAVE NEW VERSION"));
     expect(await screen.findByText(/are saved/)).toBeTruthy();
-    const saveButton = screen.getByRole("button", { name: "SAVE NEW VERSION" });
+    const saveButton = screen.getByRole("button", { name: "Save new version" });
     expect(saveButton).toBeDisabled();
 
     fireEvent.press(saveButton);

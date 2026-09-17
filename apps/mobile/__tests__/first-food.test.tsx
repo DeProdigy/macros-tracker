@@ -30,13 +30,13 @@ describe("first-food prompt", () => {
     render(<FirstFoodPrompt />);
 
     expect(screen.getByText("TARGETS SAVED")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "LOG YOUR FIRST FOOD" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Log your first food" })).toBeEnabled();
   });
 
   it("opens the signed-in Log Food route", () => {
     render(<FirstFoodPrompt />);
 
-    fireEvent.press(screen.getByRole("button", { name: "LOG YOUR FIRST FOOD" }));
+    fireEvent.press(screen.getByRole("button", { name: "Log your first food" }));
     expect(router.push).toHaveBeenCalledWith("/log-food");
   });
 

@@ -179,6 +179,19 @@ export const type = {
     fontFamily: fontFamily.bold,
     fontSize: 30,
   },
+  /**
+   * A tagline or a standfirst under a title.
+   *
+   * Added in PR 2, not PR 1. The Welcome and first-food mockups both put a
+   * grey sentence under the title that is clearly larger than body text and is
+   * not a heading. Body at 16 read too small under a 34-point title, and
+   * `heading` is bold, which is wrong for a sentence. That gap only showed up
+   * once the scale met a real screen.
+   */
+  lead: {
+    fontFamily: fontFamily.regular,
+    fontSize: 20,
+  },
   /** Sentences, entry names, and button text. */
   body: {
     fontFamily: fontFamily.regular,
@@ -212,40 +225,3 @@ export type TypeRole = keyof typeof type;
  * sizes that break the layout. Never put this on a sentence.
  */
 export const numeralScaleCap = 1.4;
-
-/**
- * Kept so the 18 screens still compile while PR 1 lands.
- *
- * This is a shim with an expiry date. PR 2 rewrites every screen onto `colors`
- * directly and deletes this export. It is a small lie in the meantime: a hook
- * implies the value can change between renders, and under a dark-only app it
- * never can.
- *
- * The old names map onto the new tokens so no screen changes in this PR. Where
- * a name has no new equivalent, it points at the closest token rather than
- * keeping a second value alive.
- *
- * @deprecated Import `colors` instead. Removed in MAC-61 PR 2.
- */
-export const usePalette = () => legacyPalette;
-
-const legacyPalette = {
-  background: colors.background,
-  text: colors.text,
-  secondaryText: colors.textSecondary,
-  dimText: colors.textDim,
-  accent: colors.accent,
-  error: colors.error,
-  hairline: colors.border,
-  card: colors.surface,
-  ringTrack: colors.accentDim,
-  calories: colors.accent,
-  caloriesOver: colors.warning,
-  protein: colors.protein,
-  proteinMet: colors.positive,
-  fiber: colors.protein,
-  fiberMet: colors.positive,
-} as const;
-
-/** @deprecated Import `colors` instead. Removed in MAC-61 PR 2. */
-export type Palette = typeof legacyPalette;

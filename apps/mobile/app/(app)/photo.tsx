@@ -3,16 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import {
-  Image,
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Image, Linking, Pressable, StyleSheet, TextInput, View } from "react-native";
+
+import { Button } from "@/components/ui/button";
+import { Screen } from "@/components/ui/screen";
+import { Body, Caption, ErrorText, Label, Numeral, Title } from "@/components/ui/text";
 
 import { ItemEditor } from "@/components/item-editor";
 import {
@@ -23,8 +18,9 @@ import {
   itemTotals,
   itemWriteRequest,
 } from "@/lib/entry-items";
+import { macroValue } from "@/lib/format";
 import { entryTimingForDate, localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
-import { usePalette } from "@/lib/theme";
+import { colors, radius, space, tapTarget, type } from "@/lib/theme";
 import { savePhotoAnalysis, type SelectedPhoto, uploadAndAnalyze } from "@/lib/photo-analysis";
 import { markFoodLogged, useSession } from "@/lib/session";
 
@@ -57,7 +53,6 @@ function analysisErrorMessage(detail: string): string {
 }
 
 export default function PhotoScreen() {
-  const palette = usePalette();
   const session = useSession();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ date?: string | string[] }>();
@@ -168,18 +163,14 @@ export default function PhotoScreen() {
   const totals = itemTotals(items);
 
   return (
-    <ScrollView
-      style={{ backgroundColor: palette.background }}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Pressable accessibilityRole="button" onPress={() => router.back()}>
-        <Text style={{ color: palette.accent }}>CANCEL</Text>
+    <Screen contentStyle={styles.content} keyboard scroll>
+      <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.link}>
+        <Caption color={colors.accent}>CANCEL</Caption>
       </Pressable>
-      <Text style={[styles.eyebrow, { color: palette.accent }]}>PHOTO LOG</Text>
-      <Text style={[styles.title, { color: palette.text }]}>
-        {analysis ? "Review estimate" : "Photograph your meal"}
-      </Text>
+      <Label color={colors.accent} style={styles.eyebrow}>
+        PHOTO LOG
+      </Label>
+      <Title style={styles.title}>{analysis ? "Review estimate" : "Photograph your meal"}</Title>
 
       {!analysis ? (
         <>
@@ -189,11 +180,15 @@ export default function PhotoScreen() {
           </View>
           {permissionDenied ? (
             <View style={styles.permission}>
-              <Text style={{ color: palette.secondaryText }}>
+              <Body color={colors.textSecondary}>
                 Camera access is off. Choose Library or enable Camera in iOS Settings.
-              </Text>
-              <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings()}>
-                <Text style={{ color: palette.accent }}>OPEN SETTINGS</Text>
+              </Body>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void Linking.openSettings()}
+                style={styles.link}
+              >
+                <Caption color={colors.accent}>OPEN SETTINGS</Caption>
               </Pressable>
             </View>
           ) : null}
@@ -204,33 +199,30 @@ export default function PhotoScreen() {
               style={styles.photo}
             />
           ) : null}
-          <Text style={[styles.label, { color: palette.secondaryText }]}>
-            DESCRIPTION (OPTIONAL)
-          </Text>
+          <Label style={styles.label}>DESCRIPTION (OPTIONAL)</Label>
           <TextInput
             accessibilityLabel="Meal description"
             multiline
             onChangeText={setDescription}
             placeholder="Chicken thighs, rice, and broccoli"
-            placeholderTextColor={palette.dimText}
-            style={[styles.input, { borderColor: palette.hairline, color: palette.text }]}
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
             value={description}
           />
-          <Pressable
-            accessibilityRole="button"
+          <Button
+            busy={working}
             disabled={!photo || working}
             onPress={() => void analyze()}
-            style={[styles.primary, { backgroundColor: palette.accent, opacity: photo ? 1 : 0.45 }]}
-          >
-            <Text style={styles.primaryText}>{working ? "ANALYZING" : "ANALYZE PHOTO"}</Text>
-          </Pressable>
+            style={styles.primary}
+            title="Analyze photo"
+          />
         </>
       ) : (
         <>
           <View style={styles.totals}>
-            <Metric label="CALORIES" value={totals.calories} />
-            <Metric label="PROTEIN" value={`${totals.protein_g}g`} />
-            <Metric label="FIBER" value={`${totals.fiber_g}g`} />
+            <Metric label="CALORIES" value={macroValue(totals.calories)} />
+            <Metric label="PROTEIN" value={`${macroValue(totals.protein_g)}g`} />
+            <Metric label="FIBER" value={`${macroValue(totals.fiber_g)}g`} />
           </View>
           {items.map((item, index) => (
             <ItemEditor
@@ -247,20 +239,17 @@ export default function PhotoScreen() {
             onPress={() =>
               setItems((current) => [...current, emptyEditableItem(`new-${Date.now()}`)])
             }
-            style={[styles.add, { borderColor: palette.accent }]}
+            style={styles.add}
           >
-            <Text style={{ color: palette.accent, fontWeight: "800" }}>ADD MISSED ITEM</Text>
+            <Caption color={colors.accent}>ADD MISSED ITEM</Caption>
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
+          <Button
+            busy={working}
             disabled={working}
             onPress={() => void save()}
-            style={[styles.primary, { backgroundColor: palette.accent }]}
-          >
-            <Text style={styles.primaryText}>
-              {working ? "SAVING" : localDate === today ? "SAVE TO TODAY" : "SAVE TO THIS DAY"}
-            </Text>
-          </Pressable>
+            style={styles.primary}
+            title={localDate === today ? "Save to today" : "Save to this day"}
+          />
           <Pressable
             accessibilityRole="button"
             onPress={() => {
@@ -269,88 +258,87 @@ export default function PhotoScreen() {
             }}
             style={styles.link}
           >
-            <Text style={{ color: palette.accent }}>CHOOSE ANOTHER PHOTO</Text>
+            <Caption color={colors.accent}>CHOOSE ANOTHER PHOTO</Caption>
           </Pressable>
         </>
       )}
       {error ? (
         <View>
-          <Text accessibilityRole="alert" style={[styles.error, { color: palette.error }]}>
-            {error}
-          </Text>
+          <ErrorText style={styles.error}>{error}</ErrorText>
           <Pressable
             accessibilityRole="button"
             onPress={() => router.replace({ pathname: "/log-food", params: { date: localDate } })}
+            style={styles.link}
           >
-            <Text style={{ color: palette.accent }}>USE MANUAL</Text>
+            <Caption color={colors.accent}>USE MANUAL</Caption>
           </Pressable>
         </View>
       ) : null}
-    </ScrollView>
+    </Screen>
   );
 }
 
 function Action({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.action}>
-      <Text style={styles.actionText}>{label}</Text>
+      <Caption color={colors.text}>{label}</Caption>
     </Pressable>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <View style={styles.metric}>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
+      <Numeral style={styles.metricValue}>{value}</Numeral>
+      <Label style={styles.metricLabel}>{label}</Label>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: 48, paddingHorizontal: 24, paddingTop: 64 },
-  eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, marginTop: 30 },
-  title: { fontSize: 36, fontWeight: "900", marginBottom: 24, marginTop: 8 },
-  actions: { flexDirection: "row", gap: 12 },
   action: {
-    backgroundColor: "#202326",
-    borderRadius: 10,
+    alignItems: "center",
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: radius.sm,
     flex: 1,
+    justifyContent: "center",
     minHeight: 52,
-    justifyContent: "center",
-    alignItems: "center",
   },
-  actionText: { color: "#f5f7f8", fontSize: 12, fontWeight: "900", letterSpacing: 1 },
-  permission: { gap: 12, marginTop: 18 },
-  photo: { borderRadius: 14, height: 260, marginTop: 22, width: "100%" },
-  label: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8, marginTop: 24 },
-  input: {
-    borderRadius: 10,
-    borderWidth: 1,
-    fontSize: 16,
-    minHeight: 90,
-    padding: 14,
-    textAlignVertical: "top",
-  },
-  primary: {
-    alignItems: "center",
-    borderRadius: 12,
-    justifyContent: "center",
-    marginTop: 24,
-    minHeight: 58,
-  },
-  primaryText: { color: "#001018", fontWeight: "900", letterSpacing: 1.2 },
-  totals: { flexDirection: "row", gap: 8, marginBottom: 24 },
-  metric: { backgroundColor: "#17191b", borderRadius: 10, flex: 1, padding: 12 },
-  metricValue: { color: "#f5f7f8", fontSize: 22, fontWeight: "900" },
-  metricLabel: { color: "#8b8f94", fontSize: 10, fontWeight: "800", marginTop: 4 },
+  actions: { flexDirection: "row", gap: space.md },
   add: {
     alignItems: "center",
-    borderRadius: 10,
+    borderColor: colors.accent,
+    borderRadius: radius.sm,
     borderWidth: 1,
     justifyContent: "center",
     minHeight: 50,
   },
-  link: { alignItems: "center", minHeight: 48, justifyContent: "center" },
-  error: { fontSize: 14, lineHeight: 20, marginBottom: 12, marginTop: 18 },
+  content: { paddingBottom: space.section, paddingHorizontal: space.xl, paddingTop: space.lg },
+  error: { marginBottom: space.md, marginTop: space.lg },
+  eyebrow: { marginTop: space.xxl },
+  input: {
+    ...type.body,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    color: colors.text,
+    minHeight: 90,
+    padding: space.md,
+    textAlignVertical: "top",
+  },
+  label: { marginBottom: space.sm, marginTop: space.xl },
+  link: { alignItems: "center", justifyContent: "center", minHeight: tapTarget },
+  metric: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.sm,
+    flex: 1,
+    padding: space.md,
+  },
+  metricLabel: { marginTop: space.xs },
+  metricValue: { fontSize: type.heading.fontSize },
+  permission: { gap: space.md, marginTop: space.lg },
+  photo: { borderRadius: radius.md, height: 260, marginTop: space.xl, width: "100%" },
+  primary: { marginTop: space.xl },
+  title: { marginBottom: space.xl, marginTop: space.sm },
+  totals: { flexDirection: "row", gap: space.sm, marginBottom: space.xl },
 });

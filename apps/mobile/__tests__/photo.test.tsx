@@ -122,7 +122,7 @@ describe("PhotoScreen", () => {
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
-    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -148,7 +148,7 @@ describe("PhotoScreen", () => {
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
     fireEvent.changeText(screen.getByLabelText("Meal description"), "desk near a window");
-    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -175,7 +175,7 @@ describe("PhotoScreen", () => {
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
-    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -196,7 +196,7 @@ describe("PhotoScreen", () => {
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
-    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -217,7 +217,7 @@ describe("PhotoScreen", () => {
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
-    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -242,7 +242,7 @@ describe("PhotoScreen", () => {
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
-    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -263,7 +263,7 @@ describe("PhotoScreen", () => {
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
     fireEvent.changeText(screen.getByLabelText("Meal description"), "two chicken thighs");
-    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/retry/i));
     expect(screen.getByLabelText("Selected meal")).toBeTruthy();
@@ -274,12 +274,12 @@ describe("PhotoScreen", () => {
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
-    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
 
-    await waitFor(() => expect(screen.getByText("540.00")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("540")).toBeTruthy());
     expect(screen.getByDisplayValue("Chicken thigh")).toBeTruthy();
     expect(screen.getByDisplayValue("Broccoli")).toBeTruthy();
-    fireEvent.press(screen.getByRole("button", { name: "SAVE TO THIS DAY" }));
+    fireEvent.press(screen.getByRole("button", { name: "Save to this day" }));
 
     await waitFor(() =>
       expect(mockSavePhotoAnalysis).toHaveBeenCalledWith(17, expect.any(Object), [
@@ -314,12 +314,12 @@ describe("PhotoScreen", () => {
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
-    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
     await waitFor(() => expect(screen.getByDisplayValue("Chicken thigh")).toBeTruthy());
 
     fireEvent.changeText(screen.getByLabelText("Item 1 quantity"), "2");
-    expect(screen.getByText("900.00")).toBeTruthy();
-    fireEvent.press(screen.getByRole("button", { name: "SAVE TO THIS DAY" }));
+    expect(screen.getByText("900")).toBeTruthy();
+    fireEvent.press(screen.getByRole("button", { name: "Save to this day" }));
 
     await waitFor(() =>
       expect(mockSavePhotoAnalysis).toHaveBeenCalledWith(
@@ -336,7 +336,7 @@ describe("PhotoScreen", () => {
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
     await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
-    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
     await waitFor(() => expect(screen.getAllByRole("button", { name: "REMOVE" })).toHaveLength(2));
 
     fireEvent.press(screen.getAllByRole("button", { name: "REMOVE" })[0]);

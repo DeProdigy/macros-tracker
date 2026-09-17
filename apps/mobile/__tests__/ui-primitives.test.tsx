@@ -9,27 +9,13 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, screen } from "@testing-library/react-native";
 import { Text } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { Button } from "@/components/ui/button";
 import { Screen } from "@/components/ui/screen";
 import { Body, Display, Label } from "@/components/ui/text";
 import { numeralScaleCap, tapTarget, type } from "@/lib/theme";
+import { TEST_INSETS } from "@/test-utils/insets";
 import { renderWithProviders } from "@/test-utils/render";
-
-/**
- * Insets from an iPhone with a notch.
- *
- * `SafeAreaProvider` measures the real window at runtime and reports zeroes in
- * a test renderer, so the numbers have to be injected. These are an iPhone 15's.
- */
-const INSETS = { top: 59, bottom: 34, left: 0, right: 0 };
-const FRAME = { x: 0, y: 0, width: 393, height: 852 };
-
-const renderInSafeArea = (ui: React.ReactElement) =>
-  renderWithProviders(
-    <SafeAreaProvider initialMetrics={{ insets: INSETS, frame: FRAME }}>{ui}</SafeAreaProvider>,
-  );
 
 /** Flatten a possibly nested style prop into one object. */
 const styleOf = (element: { props: { style?: unknown } }): Record<string, unknown> => {
@@ -42,28 +28,30 @@ const styleOf = (element: { props: { style?: unknown } }): Record<string, unknow
 
 describe("Button", () => {
   it("reaches the tap-target minimum", () => {
-    renderInSafeArea(<Button onPress={jest.fn()} title="Log food" />);
+    renderWithProviders(<Button onPress={jest.fn()} title="Log food" />);
 
     expect(styleOf(screen.getByRole("button")).minHeight as number).toBeGreaterThanOrEqual(
       tapTarget,
     );
   });
 
-  it("uppercases a primary label and leaves a secondary one alone", () => {
-    renderInSafeArea(
+  it("uppercases every variant's visible label", () => {
+    renderWithProviders(
       <>
         <Button onPress={jest.fn()} title="Log food" />
         <Button onPress={jest.fn()} title="Not now" variant="secondary" />
+        <Button onPress={jest.fn()} title="Delete entry" variant="destructive" />
       </>,
     );
 
     expect(screen.getByText("LOG FOOD")).toBeTruthy();
-    expect(screen.getByText("Not now")).toBeTruthy();
+    expect(screen.getByText("NOT NOW")).toBeTruthy();
+    expect(screen.getByText("DELETE ENTRY")).toBeTruthy();
   });
 
   it("blocks presses and reports itself busy while working", () => {
     const onPress = jest.fn();
-    renderInSafeArea(<Button busy onPress={onPress} title="Save" />);
+    renderWithProviders(<Button busy onPress={onPress} title="Save" />);
 
     fireEvent.press(screen.getByRole("button"));
 
@@ -75,13 +63,13 @@ describe("Button", () => {
   });
 
   it("keeps a spoken label while busy, when the visible one is a spinner", () => {
-    renderInSafeArea(<Button busy onPress={jest.fn()} title="Save" />);
+    renderWithProviders(<Button busy onPress={jest.fn()} title="Save" />);
 
     expect(screen.getByRole("button").props.accessibilityLabel).toBe("Save");
   });
 
   it("speaks the label in its original case, not the uppercased one", () => {
-    renderInSafeArea(<Button onPress={jest.fn()} title="Log food" />);
+    renderWithProviders(<Button onPress={jest.fn()} title="Log food" />);
 
     // The design uppercases a primary label. Some voices read an all-caps
     // string letter by letter, so the spoken label keeps the original.
@@ -90,7 +78,7 @@ describe("Button", () => {
   });
 
   it("lets a caller override the spoken label", () => {
-    renderInSafeArea(
+    renderWithProviders(
       <Button accessibilityLabel="Add food to 14 September" onPress={jest.fn()} title="Log food" />,
     );
 
@@ -99,7 +87,7 @@ describe("Button", () => {
 
   it("blocks presses when disabled", () => {
     const onPress = jest.fn();
-    renderInSafeArea(<Button disabled onPress={onPress} title="Save" />);
+    renderWithProviders(<Button disabled onPress={onPress} title="Save" />);
 
     fireEvent.press(screen.getByRole("button"));
 
@@ -109,19 +97,19 @@ describe("Button", () => {
 
 describe("Screen", () => {
   it("pads for the notch and the home indicator", () => {
-    renderInSafeArea(
+    renderWithProviders(
       <Screen testID="content">
         <Text>Today</Text>
       </Screen>,
     );
 
     const content = screen.getByTestId("content");
-    expect(styleOf(content).paddingBottom).toBe(INSETS.bottom);
+    expect(styleOf(content).paddingBottom).toBe(TEST_INSETS.bottom);
     expect(screen.getByText("Today")).toBeTruthy();
   });
 
   it("gives the bottom inset to a footer instead of the content", () => {
-    renderInSafeArea(
+    renderWithProviders(
       <Screen footer={<Button onPress={jest.fn()} title="Log food" />} testID="content">
         <Text>Today</Text>
       </Screen>,
@@ -133,25 +121,25 @@ describe("Screen", () => {
   });
 
   it("skips an inset the caller opts out of", () => {
-    renderInSafeArea(
+    renderWithProviders(
       <Screen edges={["bottom"]} testID="content">
         <Text>Camera</Text>
       </Screen>,
     );
 
-    expect(styleOf(screen.getByTestId("content")).paddingBottom).toBe(INSETS.bottom);
+    expect(styleOf(screen.getByTestId("content")).paddingBottom).toBe(TEST_INSETS.bottom);
   });
 });
 
 describe("text roles", () => {
   it("caps Dynamic Type on a numeral", () => {
-    renderInSafeArea(<Display>660</Display>);
+    renderWithProviders(<Display>660</Display>);
 
     expect(screen.getByText("660").props.maxFontSizeMultiplier).toBe(numeralScaleCap);
   });
 
   it("leaves Dynamic Type uncapped on a sentence", () => {
-    renderInSafeArea(<Body>Point the camera at your food.</Body>);
+    renderWithProviders(<Body>Point the camera at your food.</Body>);
 
     expect(
       screen.getByText("Point the camera at your food.").props.maxFontSizeMultiplier,
@@ -159,7 +147,7 @@ describe("text roles", () => {
   });
 
   it("uses the mono family for a label", () => {
-    renderInSafeArea(<Label>PROTEIN</Label>);
+    renderWithProviders(<Label>PROTEIN</Label>);
 
     expect(styleOf(screen.getByText("PROTEIN")).fontFamily).toBe(type.label.fontFamily);
   });

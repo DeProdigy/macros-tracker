@@ -106,7 +106,7 @@ describe("TodayScreen", () => {
     expect(screen.getByText("Nothing logged this day")).toBeTruthy();
     expect(screen.getByText("You can still add food to this day.")).toBeTruthy();
     // "LOG FOOD" would read as logging it now, which is not what this writes.
-    expect(screen.getByRole("button", { name: "ADD TO THIS DAY" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add to this day" })).toBeTruthy();
   });
 
   it("teaches the next action on an empty Today the user has never logged on", () => {
@@ -123,7 +123,7 @@ describe("TodayScreen", () => {
     expect(
       screen.getByText("Point the camera at your food. The app fills in the numbers."),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "LOG FOOD" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Log food" })).toBeTruthy();
   });
 
   it("stays quiet on an empty Today for a user who has logged before", () => {
@@ -154,7 +154,7 @@ describe("TodayScreen", () => {
   it("passes the selected date into food logging", () => {
     render(<TodayScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "ADD TO THIS DAY" }));
+    fireEvent.press(screen.getByRole("button", { name: "Add to this day" }));
 
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/log-food",
@@ -190,8 +190,8 @@ describe("TodayScreen", () => {
     });
     render(<TodayScreen />);
     expect(screen.getByText("Greek yogurt")).toBeTruthy();
-    expect(screen.getByText("240.00 kcal")).toBeTruthy();
-    expect(screen.getByText("36.00p · 4.00f")).toBeTruthy();
+    expect(screen.getByText("240 kcal")).toBeTruthy();
+    expect(screen.getByText("36p · 4f")).toBeTruthy();
     fireEvent.press(screen.getByRole("button", { name: "Edit Greek yogurt" }));
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/entry/[id]",

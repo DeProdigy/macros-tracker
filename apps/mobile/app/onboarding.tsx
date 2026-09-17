@@ -3,6 +3,11 @@
  *
  * Answers live on this route while the user moves between questions. Nothing
  * is persisted here: MAC-43 turns an accepted proposal into a TargetVersion.
+ *
+ * MAC-61 took the presentation from design/source/linear-2026-08-31/
+ * 05-onboarding-question.png, 06-onboarding-targets.png, and
+ * 07-onboarding-adjust-targets.png. Those artifacts define the look of these
+ * states only.
  */
 import {
   ActivityEnum,
@@ -15,20 +20,15 @@ import {
 } from "@macros/api-client";
 import { Redirect, useRouter } from "expo-router";
 import { useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
+import { Button } from "@/components/ui/button";
+import { Screen } from "@/components/ui/screen";
+import { Body, Caption, ErrorText, Label, Muted, Numeral, Title } from "@/components/ui/text";
 import { needsOnboarding } from "@/lib/onboarding";
-import { usePalette, type Palette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
 import { saveTargetVersion, TargetSavedButRefreshFailed } from "@/lib/target-save";
+import { colors, radius, space, tapTarget, type } from "@/lib/theme";
 
 type Answers = {
   age: string;
@@ -113,7 +113,6 @@ const requestFrom = (answers: Answers): TargetProposalRequestRequest => ({
 export default function Onboarding() {
   const session = useSession();
   const router = useRouter();
-  const palette = usePalette();
   const [answers, setAnswers] = useState(EMPTY_ANSWERS);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -194,53 +193,33 @@ export default function Onboarding() {
   };
 
   if (proposal) {
+    const locked = savingTargets || targetWasSaved;
+
     return (
-      <ScrollView
-        contentContainerStyle={[styles.resultScreen, { backgroundColor: palette.background }]}
-      >
-        <Text style={[styles.eyebrow, { color: palette.accent }]}>YOUR DAILY TARGETS</Text>
-        <Text style={[styles.title, { color: palette.text }]}>
-          A starting point built from you.
-        </Text>
-        <View style={[styles.result, { borderColor: palette.hairline }]}>
-          <Metric
-            label="CALORIES"
-            value={proposal.targets.calories}
-            unit="KCAL"
-            palette={palette}
-          />
-          <Metric label="PROTEIN" value={proposal.targets.protein_g} unit="G" palette={palette} />
-          <Metric label="FIBER" value={proposal.targets.fiber_g} unit="G" palette={palette} />
+      <Screen contentStyle={styles.resultContent} scroll>
+        <Label color={colors.accent}>YOUR DAILY TARGETS</Label>
+        <Title style={styles.title}>A starting point built from you.</Title>
+        <View style={styles.result}>
+          <Metric label="CALORIES" value={proposal.targets.calories} unit="KCAL" />
+          <Metric label="PROTEIN" value={proposal.targets.protein_g} unit="G" />
+          <Metric label="FIBER" value={proposal.targets.fiber_g} unit="G" />
         </View>
         {proposal.clamped ? (
-          <Text
-            style={[styles.notice, { borderColor: palette.hairline, color: palette.secondaryText }]}
-          >
+          <Muted style={styles.notice}>
             The safe range adjusted the raw estimate before showing it.
-          </Text>
+          </Muted>
         ) : null}
-        <Text style={[styles.sectionLabel, { color: palette.dimText }]}>WHY THESE NUMBERS</Text>
-        <Text style={[styles.body, { color: palette.secondaryText }]}>{proposal.rationale}</Text>
-        {saveFailure ? (
-          <Text accessibilityRole="alert" style={[styles.error, { color: palette.error }]}>
-            {saveFailure}
-          </Text>
-        ) : null}
-        <Pressable
-          accessibilityRole="button"
-          disabled={savingTargets || targetWasSaved}
+        <Label color={colors.textDim}>WHY THESE NUMBERS</Label>
+        <Muted style={styles.help}>{proposal.rationale}</Muted>
+        {saveFailure ? <ErrorText>{saveFailure}</ErrorText> : null}
+        <Button
+          busy={savingTargets}
+          disabled={locked}
           onPress={() => void acceptProposal()}
-          style={[styles.nextButton, { backgroundColor: palette.accent }]}
-        >
-          {savingTargets ? (
-            <ActivityIndicator color="#001111" />
-          ) : (
-            <Text style={styles.nextLabel}>ACCEPT AND CONTINUE</Text>
-          )}
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={savingTargets || targetWasSaved}
+          title="Accept and continue"
+        />
+        <Button
+          disabled={locked}
           onPress={() =>
             router.push({
               pathname: "/targets",
@@ -252,99 +231,87 @@ export default function Onboarding() {
               },
             })
           }
-          style={[styles.secondaryButton, { borderColor: palette.hairline }]}
-        >
-          <Text style={[styles.secondaryLabel, { color: palette.text }]}>ADJUST FIRST</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={savingTargets || targetWasSaved}
+          title="Adjust first"
+          variant="secondary"
+        />
+        <Button
+          disabled={locked}
           onPress={() => {
             setProposal(null);
             setStep(LAST_QUESTION_INDEX);
           }}
-          style={[styles.secondaryButton, { borderColor: palette.hairline }]}
-        >
-          <Text style={[styles.secondaryLabel, { color: palette.text }]}>BACK TO ANSWERS</Text>
-        </Pressable>
-      </ScrollView>
+          title="Back to answers"
+          variant="secondary"
+        />
+      </Screen>
     );
   }
 
   const [title, help] = QUESTIONS[step];
   return (
-    <View style={[styles.screen, { backgroundColor: palette.background }]}>
-      <View style={styles.progressRow}>
+    <Screen
+      contentStyle={styles.questionPage}
+      footer={
+        <View style={styles.actions}>
+          {step > 0 ? (
+            <Button
+              disabled={submitting}
+              onPress={() => {
+                setStep((current) => current - 1);
+                setError(null);
+              }}
+              title="Back"
+              variant="secondary"
+            />
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              disabled={signingOut}
+              onPress={() => {
+                setSigningOut(true);
+                void session.signOut().catch(() => setSigningOut(false));
+              }}
+              style={styles.signOut}
+            >
+              <Caption color={colors.textSecondary}>
+                {signingOut ? "SIGNING OUT…" : "SIGN OUT"}
+              </Caption>
+            </Pressable>
+          )}
+          <Button
+            busy={submitting}
+            onPress={() => void next()}
+            style={styles.nextButton}
+            title={step === LAST_QUESTION_INDEX ? "Build my targets" : "Next"}
+          />
+        </View>
+      }
+      keyboard
+    >
+      {/* Six bars rather than "3 of 6" alone. The count is still there for a
+          screen reader, and the bars answer "how much is left" without being
+          read. */}
+      <View accessibilityElementsHidden importantForAccessibility="no" style={styles.progressRow}>
         {QUESTIONS.map((_, index) => (
           <View
             key={index}
             style={[
               styles.progress,
-              { backgroundColor: index <= step ? palette.accent : palette.hairline },
+              { backgroundColor: index <= step ? colors.accent : colors.border },
             ]}
           />
         ))}
       </View>
-      <ScrollView
-        contentContainerStyle={styles.questionContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text style={[styles.eyebrow, { color: palette.dimText }]}>
+      <View style={styles.questionBody}>
+        <Label color={colors.textDim}>
           {step + 1} OF {QUESTIONS.length}
-        </Text>
-        <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
-        <Text style={[styles.body, { color: palette.secondaryText }]}>{help}</Text>
-        <QuestionControl step={step} answers={answers} update={update} palette={palette} />
-        {error ? (
-          <Text accessibilityRole="alert" style={[styles.error, { color: palette.error }]}>
-            {error}
-          </Text>
-        ) : null}
-      </ScrollView>
-      <View style={styles.actions}>
-        {step > 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            disabled={submitting}
-            onPress={() => {
-              setStep((current) => current - 1);
-              setError(null);
-            }}
-            style={[styles.backButton, { borderColor: palette.hairline }]}
-          >
-            <Text style={[styles.secondaryLabel, { color: palette.text }]}>BACK</Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            disabled={signingOut}
-            onPress={() => {
-              setSigningOut(true);
-              void session.signOut().catch(() => setSigningOut(false));
-            }}
-            style={styles.signOut}
-          >
-            <Text style={[styles.secondaryLabel, { color: palette.secondaryText }]}>
-              {signingOut ? "SIGNING OUT…" : "SIGN OUT"}
-            </Text>
-          </Pressable>
-        )}
-        <Pressable
-          accessibilityRole="button"
-          disabled={submitting}
-          onPress={() => void next()}
-          style={[styles.nextButton, { backgroundColor: palette.accent }]}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#001111" />
-          ) : (
-            <Text style={styles.nextLabel}>
-              {step === LAST_QUESTION_INDEX ? "BUILD MY TARGETS" : "NEXT"}
-            </Text>
-          )}
-        </Pressable>
+        </Label>
+        <Title style={styles.title}>{title}</Title>
+        <Muted style={styles.help}>{help}</Muted>
+        <QuestionControl step={step} answers={answers} update={update} />
+        {error ? <ErrorText style={styles.error}>{error}</ErrorText> : null}
       </View>
-    </View>
+    </Screen>
   );
 }
 
@@ -352,14 +319,11 @@ function QuestionControl({
   step,
   answers,
   update,
-  palette,
 }: {
   step: number;
   answers: Answers;
   update: <K extends keyof Answers>(key: K, value: Answers[K]) => void;
-  palette: Palette;
 }) {
-  const input = [styles.input, { borderColor: palette.hairline, color: palette.text }];
   if (step === 0)
     return (
       <TextInput
@@ -369,8 +333,8 @@ function QuestionControl({
         maxLength={3}
         onChangeText={(value) => update("age", value)}
         placeholder="34"
-        placeholderTextColor={palette.dimText}
-        style={input}
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
         value={answers.age}
       />
     );
@@ -383,7 +347,6 @@ function QuestionControl({
         ]}
         selected={answers.sex}
         onSelect={(value) => update("sex", value)}
-        palette={palette}
       />
     );
   if (step === 2)
@@ -395,8 +358,8 @@ function QuestionControl({
           maxLength={1}
           onChangeText={(value) => update("heightFeet", value)}
           placeholder="5 ft"
-          placeholderTextColor={palette.dimText}
-          style={[input, styles.half]}
+          placeholderTextColor={colors.textDim}
+          style={[styles.input, styles.half]}
           value={answers.heightFeet}
         />
         <TextInput
@@ -405,8 +368,8 @@ function QuestionControl({
           maxLength={2}
           onChangeText={(value) => update("heightInches", value)}
           placeholder="11 in"
-          placeholderTextColor={palette.dimText}
-          style={[input, styles.half]}
+          placeholderTextColor={colors.textDim}
+          style={[styles.input, styles.half]}
           value={answers.heightInches}
         />
       </View>
@@ -419,8 +382,8 @@ function QuestionControl({
         maxLength={6}
         onChangeText={(value) => update("weight", value)}
         placeholder="185 lb"
-        placeholderTextColor={palette.dimText}
-        style={input}
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
         value={answers.weight}
       />
     );
@@ -434,7 +397,6 @@ function QuestionControl({
         ]}
         selected={answers.goal}
         onSelect={(value) => update("goal", value)}
-        palette={palette}
       />
     );
   return (
@@ -447,7 +409,6 @@ function QuestionControl({
       ]}
       selected={answers.activity}
       onSelect={(value) => update("activity", value)}
-      palette={palette}
     />
   );
 }
@@ -456,12 +417,10 @@ function ChoiceList<T extends string>({
   items,
   selected,
   onSelect,
-  palette,
 }: {
   items: readonly (readonly [string, T])[];
   selected: T | null;
   onSelect: (value: T) => void;
-  palette: Palette;
 }) {
   return (
     <View style={styles.choiceList}>
@@ -476,14 +435,14 @@ function ChoiceList<T extends string>({
             style={[
               styles.choice,
               {
-                backgroundColor: chosen ? palette.accent : palette.background,
-                borderColor: chosen ? palette.accent : palette.hairline,
+                backgroundColor: chosen ? colors.accent : colors.background,
+                borderColor: chosen ? colors.accent : colors.border,
               },
             ]}
           >
-            <Text style={[styles.choiceLabel, { color: chosen ? "#001111" : palette.text }]}>
+            <Body color={chosen ? colors.background : colors.text} style={styles.choiceLabel}>
               {label}
-            </Text>
+            </Body>
           </Pressable>
         );
       })}
@@ -491,90 +450,69 @@ function ChoiceList<T extends string>({
   );
 }
 
-function Metric({
-  label,
-  value,
-  unit,
-  palette,
-}: {
-  label: string;
-  value: number;
-  unit: string;
-  palette: Palette;
-}) {
+function Metric({ label, value, unit }: { label: string; value: number; unit: string }) {
   return (
     <View accessibilityLabel={`${label} ${value} ${unit}`} style={styles.metric}>
-      <Text style={[styles.sectionLabel, { color: palette.dimText }]}>{label}</Text>
-      <Text style={[styles.metricValue, { color: palette.accent }]}>
+      <Label color={colors.textDim}>{label}</Label>
+      <Numeral color={colors.accent}>
         {value}
-        <Text style={[styles.metricUnit, { color: palette.secondaryText }]}> {unit}</Text>
-      </Text>
+        <Caption color={colors.textSecondary}> {unit}</Caption>
+      </Numeral>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, paddingBottom: 28, paddingHorizontal: 28, paddingTop: 64 },
-  resultScreen: { flexGrow: 1, gap: 24, paddingBottom: 40, paddingHorizontal: 28, paddingTop: 72 },
-  questionContent: { flexGrow: 1, paddingTop: 56 },
-  progressRow: { flexDirection: "row", gap: 6 },
-  progress: { flex: 1, height: 3 },
-  eyebrow: { fontSize: 13, fontWeight: "700", letterSpacing: 2 },
-  title: { fontSize: 36, fontWeight: "800", letterSpacing: -1.2, lineHeight: 41, marginTop: 14 },
-  body: { fontSize: 16, lineHeight: 24, marginTop: 12 },
-  input: {
-    borderRadius: 12,
-    borderWidth: 1,
-    fontSize: 30,
-    fontWeight: "700",
-    marginTop: 40,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-  },
-  inline: { flexDirection: "row", gap: 12 },
-  half: { flex: 1 },
-  choiceList: { gap: 12, marginTop: 40 },
+  actions: { flexDirection: "row", gap: space.md, paddingHorizontal: space.xl },
   choice: {
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
     justifyContent: "center",
     minHeight: 58,
-    paddingHorizontal: 18,
+    paddingHorizontal: space.lg,
   },
-  choiceLabel: { fontSize: 17, fontWeight: "700" },
-  error: { fontSize: 14, fontWeight: "600", marginTop: 20 },
-  actions: { flexDirection: "row", gap: 12, paddingTop: 20 },
-  backButton: {
-    alignItems: "center",
-    borderRadius: 12,
+  choiceLabel: { fontFamily: type.heading.fontFamily },
+  choiceList: { gap: space.md, marginTop: space.section },
+  error: { marginTop: space.xl },
+  half: { flex: 1 },
+  help: { lineHeight: 24, marginTop: space.md },
+  inline: { flexDirection: "row", gap: space.md },
+  input: {
+    ...type.numeral,
+    borderColor: colors.border,
+    borderRadius: radius.md,
     borderWidth: 1,
-    justifyContent: "center",
-    minHeight: 56,
-    paddingHorizontal: 22,
+    color: colors.text,
+    marginTop: space.section,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.lg,
   },
-  signOut: { alignItems: "center", justifyContent: "center", minHeight: 56, paddingHorizontal: 8 },
-  nextButton: {
-    alignItems: "center",
-    borderRadius: 12,
-    flex: 1,
-    justifyContent: "center",
-    minHeight: 56,
-    paddingHorizontal: 16,
-  },
-  nextLabel: { color: "#001111", fontSize: 14, fontWeight: "900", letterSpacing: 1.5 },
-  secondaryButton: {
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    justifyContent: "center",
-    minHeight: 56,
-    marginTop: 12,
-  },
-  secondaryLabel: { fontSize: 13, fontWeight: "800", letterSpacing: 1.2 },
-  result: { borderBottomWidth: 1, borderTopWidth: 1, gap: 18, paddingVertical: 24 },
   metric: { alignItems: "baseline", flexDirection: "row", justifyContent: "space-between" },
-  metricValue: { fontSize: 30, fontWeight: "900" },
-  metricUnit: { fontSize: 13, fontWeight: "700" },
-  sectionLabel: { fontSize: 12, fontWeight: "700", letterSpacing: 1.8 },
-  notice: { borderRadius: 12, borderWidth: 1, fontSize: 14, lineHeight: 21, padding: 16 },
+  nextButton: { flex: 1 },
+  notice: {
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    lineHeight: 21,
+    padding: space.lg,
+  },
+  progress: { flex: 1, height: 3 },
+  progressRow: { flexDirection: "row", gap: space.xs, paddingHorizontal: space.xl },
+  questionBody: { flexGrow: 1, paddingHorizontal: space.xl, paddingTop: space.section },
+  questionPage: { paddingTop: space.lg },
+  result: {
+    borderBottomWidth: 1,
+    borderColor: colors.border,
+    borderTopWidth: 1,
+    gap: space.lg,
+    paddingVertical: space.xl,
+  },
+  resultContent: { gap: space.xl, paddingHorizontal: space.xl, paddingTop: space.xxl },
+  signOut: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: tapTarget,
+    paddingHorizontal: space.md,
+  },
+  title: { marginTop: space.md },
 });

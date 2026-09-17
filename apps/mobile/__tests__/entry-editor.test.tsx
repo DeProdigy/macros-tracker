@@ -66,7 +66,7 @@ const entryQueryResult = (source = "photo", photoUrl: string | null = null) => (
       source,
       description: "Lunch",
       eaten_at: "2026-09-01T17:00:00Z",
-      calories: "280.00",
+      calories: "280",
       protein_g: "30.00",
       fiber_g: "4.00",
       photo_url: photoUrl,
@@ -119,7 +119,7 @@ describe("EntryEditorScreen", () => {
 
     expect(screen.getByText("Lunch")).toBeTruthy();
     expect(screen.getByLabelText("Item 1 food name").props.value).toBe("Chicken");
-    expect(screen.getByText("280.00")).toBeTruthy();
+    expect(screen.getByText("280")).toBeTruthy();
     expect(screen.getByText(/RECENT/)).toBeTruthy();
   });
 
@@ -184,7 +184,7 @@ describe("EntryEditorScreen", () => {
   it("logs a fresh copy to Today without photo analysis", async () => {
     render(<EntryEditorScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "LOG AGAIN" }));
+    fireEvent.press(screen.getByRole("button", { name: "Log again" }));
 
     await waitFor(() =>
       expect(mockCreateEntry).toHaveBeenCalledWith({
@@ -203,10 +203,10 @@ describe("EntryEditorScreen", () => {
   it("confirms deletion and returns to the source day", async () => {
     render(<EntryEditorScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "DELETE ENTRY" }));
-    expect(screen.getByText("This removes Lunch and 280.00 calories from this day.")).toBeTruthy();
+    fireEvent.press(screen.getByRole("button", { name: "Delete entry" }));
+    expect(screen.getByText("This removes Lunch and 280 calories from this day.")).toBeTruthy();
     expect(screen.queryByText(/streak/i)).toBeNull();
-    fireEvent.press(screen.getByRole("button", { name: "DELETE" }));
+    fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(mockDeleteEntry).toHaveBeenCalledWith(7));
     expect(mockRemoveQueries).toHaveBeenCalledWith({ queryKey: ["entry", 7] });

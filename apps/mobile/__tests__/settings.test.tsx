@@ -145,7 +145,7 @@ describe("signing out", () => {
   it("calls sign-out on tap", async () => {
     render(<SettingsScreen />);
 
-    fireEvent.press(screen.getByText("Sign out"));
+    fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
   });
@@ -155,7 +155,7 @@ describe("deleting the account", () => {
   it("asks first, and does not delete on the first tap", () => {
     render(<SettingsScreen />);
 
-    fireEvent.press(screen.getByText("Delete my account"));
+    fireEvent.press(screen.getByRole("button", { name: "Delete my account" }));
 
     expect(deleteAccount).not.toHaveBeenCalled();
     expect(screen.getByText("Delete your account?")).toBeTruthy();
@@ -165,7 +165,7 @@ describe("deleting the account", () => {
     // The grace period answers what deletion does before the destructive tap.
     render(<SettingsScreen />);
 
-    fireEvent.press(screen.getByText("Delete my account"));
+    fireEvent.press(screen.getByRole("button", { name: "Delete my account" }));
 
     expect(screen.getByText(/for 30 days/i)).toBeTruthy();
     expect(screen.getByText(/purged for good/i)).toBeTruthy();
@@ -174,8 +174,8 @@ describe("deleting the account", () => {
   it("backs out cleanly", () => {
     render(<SettingsScreen />);
 
-    fireEvent.press(screen.getByText("Delete my account"));
-    fireEvent.press(screen.getByText("Keep my account"));
+    fireEvent.press(screen.getByRole("button", { name: "Delete my account" }));
+    fireEvent.press(screen.getByRole("button", { name: "Keep my account" }));
 
     expect(deleteAccount).not.toHaveBeenCalled();
     expect(screen.queryByText("Delete your account?")).toBeNull();
@@ -184,10 +184,10 @@ describe("deleting the account", () => {
   it("deletes on the confirming tap", async () => {
     render(<SettingsScreen />);
 
-    fireEvent.press(screen.getByText("Delete my account"));
+    fireEvent.press(screen.getByRole("button", { name: "Delete my account" }));
     // The trigger is replaced by the panel, so the same label now belongs to
     // the button that actually deletes.
-    fireEvent.press(screen.getByText("Delete my account"));
+    fireEvent.press(screen.getByRole("button", { name: "Delete my account" }));
 
     await waitFor(() => expect(deleteAccount).toHaveBeenCalledTimes(1));
   });
@@ -197,8 +197,8 @@ describe("deleting the account", () => {
 
     render(<SettingsScreen />);
 
-    fireEvent.press(screen.getByText("Delete my account"));
-    fireEvent.press(screen.getByText("Delete my account"));
+    fireEvent.press(screen.getByRole("button", { name: "Delete my account" }));
+    fireEvent.press(screen.getByRole("button", { name: "Delete my account" }));
 
     await waitFor(() => expect(screen.getByText(/wasn't deleted/i)).toBeTruthy());
     // The session is untouched, because the account still exists.
