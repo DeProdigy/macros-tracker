@@ -21,7 +21,7 @@ import {
   useEntryItemMutations,
 } from "@/lib/entry-items";
 import { entryTimingForDate, localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
-import { usePalette } from "@/lib/palette";
+import { usePalette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
 
 export default function EntryEditorScreen() {

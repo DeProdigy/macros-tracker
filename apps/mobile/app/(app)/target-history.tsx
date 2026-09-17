@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { usePalette, type Palette } from "@/lib/palette";
+import { usePalette, type Palette } from "@/lib/theme";
 
 const parseDate = (date: string) => {
   const [year, month, day] = date.split("-").map(Number);

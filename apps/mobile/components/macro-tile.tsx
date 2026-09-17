@@ -10,7 +10,7 @@
 import { StyleSheet, Text, View } from "react-native";
 
 import type { MacroProgress } from "@/lib/day-progress";
-import { usePalette } from "@/lib/palette";
+import { usePalette } from "@/lib/theme";
 
 type Props = {
   label: string;

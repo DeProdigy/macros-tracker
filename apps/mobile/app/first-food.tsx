@@ -2,7 +2,7 @@ import { Redirect, router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { needsOnboarding } from "@/lib/onboarding";
-import { usePalette } from "@/lib/palette";
+import { usePalette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
 
 /** The mandatory handoff from saved targets to the first logging slice. */

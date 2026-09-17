@@ -26,6 +26,16 @@ export default [
     },
   },
   {
+    // Build-time scripts run in Node, not on a device. `make-icons.mjs` draws
+    // the app icon, so it reads Buffer and prints to the console. Declared by
+    // hand to match the root config, which makes the same trade for its own
+    // scripts directory.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { Buffer: "readonly", console: "readonly", process: "readonly" },
+    },
+  },
+  {
     ignores: ["expo-env.d.ts", ".expo/**", "dist/**"],
   },
 ];

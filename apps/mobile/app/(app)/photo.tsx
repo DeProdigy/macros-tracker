@@ -24,7 +24,7 @@ import {
   itemWriteRequest,
 } from "@/lib/entry-items";
 import { entryTimingForDate, localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
-import { usePalette } from "@/lib/palette";
+import { usePalette } from "@/lib/theme";
 import { savePhotoAnalysis, type SelectedPhoto, uploadAndAnalyze } from "@/lib/photo-analysis";
 import { markFoodLogged, useSession } from "@/lib/session";
 

@@ -26,7 +26,7 @@ import {
   LocalDayUnavailable,
   parseLocalIsoDate,
 } from "@/lib/local-day";
-import { usePalette } from "@/lib/palette";
+import { usePalette } from "@/lib/theme";
 import { markFoodLogged, useSession } from "@/lib/session";
 
 type LogMode = "manual" | "recents";

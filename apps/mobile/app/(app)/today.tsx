@@ -8,7 +8,7 @@ import { DayPicker } from "@/components/day-picker";
 import { MacroTile } from "@/components/macro-tile";
 import { dayProgress } from "@/lib/day-progress";
 import { localIsoDate, parseLocalIsoDate } from "@/lib/local-day";
-import { usePalette } from "@/lib/palette";
+import { usePalette } from "@/lib/theme";
 import { useSession } from "@/lib/session";
 
 export default function TodayScreen() {
