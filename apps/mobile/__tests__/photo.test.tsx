@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { ApiError } from "@macros/api-client";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
@@ -12,9 +13,11 @@ const mockInvalidateQueries = jest.fn<() => Promise<void>>();
 jest.mock("@macros/api-client", () => ({
   ApiError: class ApiError extends Error {
     status: number;
-    constructor(value: number) {
+    body: unknown;
+    constructor(value: number, body: unknown) {
       super();
       this.status = value;
+      this.body = body;
     }
   },
   getGetDayQueryKey: (date: string) => ["day", date],
@@ -103,8 +106,71 @@ beforeEach(() => {
   mockInvalidateQueries.mockResolvedValue(undefined);
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 describe("PhotoScreen", () => {
-  it("keeps the selected photo and description after analysis failure", async () => {
+  it("shows an API detail and logs its code without the response body", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    mockUploadAndAnalyze.mockRejectedValue(
+      new ApiError(502, {
+        code: "food_analysis_invalid_output",
+        detail: "The estimate was not valid. Try another photo.",
+      }),
+    );
+    render(<PhotoScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
+    await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
+    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "The estimate was not valid. Try another photo.",
+      ),
+    );
+    expect(consoleError).toHaveBeenCalledWith("Photo analysis request failed.", {
+      status: 502,
+      code: "food_analysis_invalid_output",
+    });
+  });
+
+  it("keeps the quota message when the API returns a detail", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    mockUploadAndAnalyze.mockRejectedValue(
+      new ApiError(429, {
+        code: "food_analysis_quota_exceeded",
+        detail: "API quota detail that the screen does not show.",
+      }),
+    );
+    render(<PhotoScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
+    await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
+    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "You reached the rolling photo-analysis limit. Manual entry is still available.",
+      ),
+    );
+    expect(screen.queryByText("API quota detail that the screen does not show.")).toBeNull();
+  });
+
+  it("uses the generic message for an unparsed API response", async () => {
+    mockUploadAndAnalyze.mockRejectedValue(new ApiError(502, "<html>Bad gateway</html>"));
+    render(<PhotoScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
+    await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
+    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Could not analyze this photo. Retry or use Manual.",
+      ),
+    );
+  });
+
+  it("keeps the selected photo and description after a network failure", async () => {
     mockUploadAndAnalyze.mockRejectedValue(new Error("network"));
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
