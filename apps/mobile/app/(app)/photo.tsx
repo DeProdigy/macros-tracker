@@ -42,9 +42,13 @@ function analysisErrorFields(body: unknown): { code: string | null; detail: stri
   };
 }
 
-// Keep this allowlist narrow. An unknown API code must use the reviewed generic copy.
-function isAnalysisFailureCode(code: string | null): boolean {
-  return code === "food_analysis_failed" || code === "food_analysis_invalid_output";
+// Keep this allowlist narrow. An unknown status or code must use the reviewed generic copy.
+function isDisplayableAnalysisError(status: number, code: string | null): boolean {
+  return (
+    (status === 502 &&
+      (code === "food_analysis_failed" || code === "food_analysis_invalid_output")) ||
+    (status === 422 && code === "food_analysis_no_food_visible")
+  );
 }
 
 function analysisErrorMessage(detail: string): string {
@@ -109,7 +113,7 @@ export default function PhotoScreen() {
         console.error("Photo analysis request failed.", { status: caught.status, code });
         if (caught.status === 429) {
           setError(QUOTA_ANALYSIS_ERROR);
-        } else if (caught.status === 502 && isAnalysisFailureCode(code) && detail) {
+        } else if (isDisplayableAnalysisError(caught.status, code) && detail) {
           setError(analysisErrorMessage(detail));
         } else {
           setError(GENERIC_ANALYSIS_ERROR);

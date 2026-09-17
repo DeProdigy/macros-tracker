@@ -39,7 +39,18 @@ class ProviderFoodItem(BaseModel):
 class ProviderFoodAnalysis(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    items: list[ProviderFoodItem] = Field(min_length=1, max_length=30)
+    no_food_visible: bool
+    items: list[ProviderFoodItem] = Field(max_length=30)
+
+
+FOOD_ANALYSIS_INSTRUCTIONS = (
+    "Estimate every distinct food or drink visible in this meal photo. The user's description "
+    "is strong evidence and resolves ambiguity, but it does not make food visible when the image "
+    "shows none. Set no_food_visible to true only when the image shows no food or drink, and then "
+    "return no items. Set no_food_visible to false when any food or drink is visible, including "
+    "zero-calorie drinks. When food or drink is visible, return practical portion labels and "
+    "calories, protein grams, and fiber grams for each item."
+)
 
 
 @dataclass(frozen=True)
@@ -74,11 +85,7 @@ def analyze_food(*, image_url: str, description: str) -> ProviderResult:
         input=[
             {
                 "role": "system",
-                "content": (
-                    "Estimate every distinct food visible in this meal photo. The user's "
-                    "description is strong evidence and resolves ambiguity. Return practical "
-                    "portion labels and calories, protein grams, and fiber grams for each item."
-                ),
+                "content": FOOD_ANALYSIS_INSTRUCTIONS,
             },
             {
                 "role": "user",

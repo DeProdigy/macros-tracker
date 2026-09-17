@@ -98,6 +98,11 @@ export type createFoodAnalysisResponse401 = {
   status: 401;
 };
 
+export type createFoodAnalysisResponse422 = {
+  data: FoodAnalysisError;
+  status: 422;
+};
+
 export type createFoodAnalysisResponse429 = {
   data: FoodAnalysisQuotaError;
   status: 429;
@@ -114,6 +119,7 @@ export type createFoodAnalysisResponseSuccess = createFoodAnalysisResponse201 & 
 export type createFoodAnalysisResponseError = (
   | createFoodAnalysisResponse400
   | createFoodAnalysisResponse401
+  | createFoodAnalysisResponse422
   | createFoodAnalysisResponse429
   | createFoodAnalysisResponse502
 ) & {
@@ -141,7 +147,7 @@ export const createFoodAnalysis = async (
 
 export const getCreateFoodAnalysisMutationOptions = <
   TError =
-    CreateFoodAnalysis400 | CreateFoodAnalysis401 | FoodAnalysisQuotaError | FoodAnalysisError,
+    CreateFoodAnalysis400 | CreateFoodAnalysis401 | FoodAnalysisError | FoodAnalysisQuotaError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -181,14 +187,14 @@ export type CreateFoodAnalysisMutationResult = NonNullable<
 >;
 export type CreateFoodAnalysisMutationBody = FoodAnalysisRequestRequest;
 export type CreateFoodAnalysisMutationError =
-  CreateFoodAnalysis400 | CreateFoodAnalysis401 | FoodAnalysisQuotaError | FoodAnalysisError;
+  CreateFoodAnalysis400 | CreateFoodAnalysis401 | FoodAnalysisError | FoodAnalysisQuotaError;
 
 /**
  * @summary Create an itemized food analysis
  */
 export const useCreateFoodAnalysis = <
   TError =
-    CreateFoodAnalysis400 | CreateFoodAnalysis401 | FoodAnalysisQuotaError | FoodAnalysisError,
+    CreateFoodAnalysis400 | CreateFoodAnalysis401 | FoodAnalysisError | FoodAnalysisQuotaError,
   TContext = unknown,
 >(
   options?: {

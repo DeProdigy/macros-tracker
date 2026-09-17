@@ -136,6 +136,34 @@ describe("PhotoScreen", () => {
     expect(consoleError).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the no-food detail and keeps the photo and description", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    mockUploadAndAnalyze.mockRejectedValue(
+      new ApiError(422, {
+        code: "food_analysis_no_food_visible",
+        detail: "No food or drink was visible. Try another photo.",
+      }),
+    );
+    render(<PhotoScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
+    await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
+    fireEvent.changeText(screen.getByLabelText("Meal description"), "desk near a window");
+    fireEvent.press(screen.getByRole("button", { name: "ANALYZE PHOTO" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "No food or drink was visible. Try another photo. Manual entry is still available.",
+      ),
+    );
+    expect(screen.getByLabelText("Selected meal")).toBeTruthy();
+    expect(screen.getByDisplayValue("desk near a window")).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith("Photo analysis request failed.", {
+      status: 422,
+      code: "food_analysis_no_food_visible",
+    });
+    expect(consoleError).toHaveBeenCalledTimes(1);
+  });
+
   it("adds punctuation before the Manual hint", async () => {
     const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
     mockUploadAndAnalyze.mockRejectedValue(

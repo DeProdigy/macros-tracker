@@ -4,6 +4,10 @@ from datetime import datetime
 from .constants import FOOD_ANALYSIS_QUOTA_CODE, ROLLING_WINDOW
 
 
+class FoodAnalysisNoFoodVisible(Exception):
+    """The provider found no food or drink that can become an analysis."""
+
+
 @dataclass
 class FoodAnalysisQuotaExceeded(Exception):
     limit: int

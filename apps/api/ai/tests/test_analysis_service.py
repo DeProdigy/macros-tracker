@@ -3,9 +3,16 @@ from unittest import mock
 
 import pytest
 from django.contrib.auth import get_user_model
+from rest_framework.exceptions import ValidationError
 
+from ai.exceptions import FoodAnalysisNoFoodVisible
 from ai.models import FoodAnalysisCall
-from ai.provider import ProviderFoodAnalysis, ProviderOutputError, ProviderResult
+from ai.provider import (
+    FOOD_ANALYSIS_INSTRUCTIONS,
+    ProviderFoodAnalysis,
+    ProviderOutputError,
+    ProviderResult,
+)
 from ai.services import create_food_analysis
 
 User = get_user_model()
@@ -16,6 +23,7 @@ def test_service_retains_photo_and_records_validated_provider_result():
     user = User.objects.create_user(email="service@example.com", timezone="UTC")
     provider = ProviderResult(
         payload={
+            "no_food_visible": False,
             "items": [
                 {
                     "name": "Chicken",
@@ -31,7 +39,7 @@ def test_service_retains_photo_and_records_validated_provider_result():
                     "protein_g": "3.00",
                     "fiber_g": "8.00",
                 },
-            ]
+            ],
         },
         provider_request_id="resp_123",
         model="gpt-5-mini-2026-08-01",
@@ -63,6 +71,7 @@ def test_service_rounds_three_decimal_provider_values_before_recording_success()
     user = User.objects.create_user(email="rounding@example.com", timezone="UTC")
     provider = ProviderResult(
         payload={
+            "no_food_visible": False,
             "items": [
                 {
                     "name": "Yogurt",
@@ -71,7 +80,7 @@ def test_service_rounds_three_decimal_provider_values_before_recording_success()
                     "protein_g": "10.005",
                     "fiber_g": "0.333",
                 }
-            ]
+            ],
         },
         provider_request_id="resp_rounding",
         model="gpt-5-mini-2026-08-01",
@@ -103,6 +112,208 @@ def test_service_rounds_three_decimal_provider_values_before_recording_success()
 
 
 @pytest.mark.django_db
+def test_no_food_result_records_a_billable_failure_and_raises_domain_error():
+    user = User.objects.create_user(email="no-food@example.com", timezone="UTC")
+    provider = ProviderResult(
+        payload={"no_food_visible": True, "items": []},
+        provider_request_id="resp_no_food",
+        model="gpt-5-mini-2026-08-01",
+        input_tokens=800,
+        output_tokens=20,
+        usage={"input_tokens": 800, "output_tokens": 20},
+    )
+    with (
+        mock.patch(
+            "uploads.services.retain_analysis_object",
+            return_value=f"analyses/{user.pk}/desk.jpg",
+        ),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+        mock.patch("ai.services.analyze_food", return_value=provider),
+        pytest.raises(FoodAnalysisNoFoodVisible),
+    ):
+        create_food_analysis(
+            user=user,
+            photo_key=f"pending/{user.pk}/desk.jpg",
+            description="",
+        )
+
+    call = FoodAnalysisCall.objects.get()
+    assert call.status == FoodAnalysisCall.Status.FAILED
+    assert call.failure_category == "no_food_visible"
+    assert call.response_payload == provider.payload
+    assert call.provider_request_id == "resp_no_food"
+    assert call.input_tokens == 800
+    assert call.output_tokens == 20
+    assert call.quota_debited_at is not None
+    assert call.estimated_cost_usd is not None
+
+
+@pytest.mark.django_db
+def test_contradictory_no_food_result_is_invalid_and_keeps_provider_diagnostics():
+    user = User.objects.create_user(email="contradiction@example.com", timezone="UTC")
+    provider = ProviderResult(
+        payload={
+            "no_food_visible": True,
+            "items": [
+                {
+                    "name": "Coffee",
+                    "portion": "1 cup",
+                    "calories": 2,
+                    "protein_g": 0,
+                    "fiber_g": 0,
+                }
+            ],
+        },
+        provider_request_id="resp_contradiction",
+        model="gpt-5-mini-2026-08-01",
+        input_tokens=750,
+        output_tokens=30,
+        usage={"input_tokens": 750, "output_tokens": 30},
+    )
+    with (
+        mock.patch(
+            "uploads.services.retain_analysis_object",
+            return_value=f"analyses/{user.pk}/drink.jpg",
+        ),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+        mock.patch("ai.services.analyze_food", return_value=provider),
+        pytest.raises(ValidationError, match="contradicted no_food_visible"),
+    ):
+        create_food_analysis(
+            user=user,
+            photo_key=f"pending/{user.pk}/drink.jpg",
+            description="coffee",
+        )
+
+    call = FoodAnalysisCall.objects.get()
+    assert call.status == FoodAnalysisCall.Status.FAILED
+    assert call.failure_category == "invalid_model_output"
+    assert call.failure_message == "Provider result contradicted no_food_visible."
+    assert call.response_payload == provider.payload
+    assert call.provider_request_id == "resp_contradiction"
+    assert call.input_tokens == 750
+    assert call.output_tokens == 30
+    assert call.usage == provider.usage
+    assert call.estimated_cost_usd is not None
+    assert call.quota_debited_at is not None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"no_food_visible": "yes", "items": []},
+        {"no_food_visible": True, "items": None},
+    ],
+    ids=("non-boolean-flag", "non-list-items"),
+)
+def test_malformed_provider_payload_raises_the_public_invalid_output_error(payload):
+    user = User.objects.create_user(email="malformed@example.com", timezone="UTC")
+    provider = ProviderResult(
+        payload=payload,
+        provider_request_id="resp_malformed",
+        model="gpt-5-mini-2026-08-01",
+        input_tokens=600,
+        output_tokens=10,
+        usage={"input_tokens": 600, "output_tokens": 10},
+    )
+    with (
+        mock.patch(
+            "uploads.services.retain_analysis_object",
+            return_value=f"analyses/{user.pk}/meal.jpg",
+        ),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+        mock.patch("ai.services.analyze_food", return_value=provider),
+        pytest.raises(ValidationError, match="invalid structured output"),
+    ):
+        create_food_analysis(
+            user=user,
+            photo_key=f"pending/{user.pk}/meal.jpg",
+            description="",
+        )
+
+    call = FoodAnalysisCall.objects.get()
+    assert call.failure_category == "invalid_model_output"
+    assert call.failure_message == "Provider returned invalid structured output."
+    assert call.response_payload == provider.payload
+
+
+@pytest.mark.django_db
+def test_visible_zero_calorie_drink_remains_a_valid_analysis():
+    user = User.objects.create_user(email="zero-drink@example.com", timezone="UTC")
+    provider = ProviderResult(
+        payload={
+            "no_food_visible": False,
+            "items": [
+                {
+                    "name": "Diet soda",
+                    "portion": "1 can",
+                    "calories": 0,
+                    "protein_g": 0,
+                    "fiber_g": 0,
+                }
+            ],
+        },
+        provider_request_id="resp_zero_drink",
+        model="gpt-5-mini-2026-08-01",
+        input_tokens=700,
+        output_tokens=40,
+        usage={"input_tokens": 700, "output_tokens": 40},
+    )
+    with (
+        mock.patch(
+            "uploads.services.retain_analysis_object",
+            return_value=f"analyses/{user.pk}/drink.jpg",
+        ),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+        mock.patch("ai.services.analyze_food", return_value=provider),
+    ):
+        result = create_food_analysis(
+            user=user,
+            photo_key=f"pending/{user.pk}/drink.jpg",
+            description="diet soda",
+        )
+
+    call = FoodAnalysisCall.objects.get()
+    assert call.status == FoodAnalysisCall.Status.SUCCEEDED
+    assert result["calories"] == "0.00"
+    assert result["items"][0]["name"] == "Diet soda"
+
+
+@pytest.mark.django_db
+def test_empty_items_with_food_visible_false_remain_invalid_output():
+    user = User.objects.create_user(email="empty-visible@example.com", timezone="UTC")
+    provider = ProviderResult(
+        payload={"no_food_visible": False, "items": []},
+        provider_request_id="resp_empty",
+        model="gpt-5-mini-2026-08-01",
+        input_tokens=700,
+        output_tokens=10,
+        usage={"input_tokens": 700, "output_tokens": 10},
+    )
+    with (
+        mock.patch(
+            "uploads.services.retain_analysis_object",
+            return_value=f"analyses/{user.pk}/meal.jpg",
+        ),
+        mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
+        mock.patch("ai.services.analyze_food", return_value=provider),
+        pytest.raises(ValidationError),
+    ):
+        create_food_analysis(
+            user=user,
+            photo_key=f"pending/{user.pk}/meal.jpg",
+            description="",
+        )
+
+    call = FoodAnalysisCall.objects.get()
+    assert call.status == FoodAnalysisCall.Status.FAILED
+    assert call.failure_category == "invalid_model_output"
+    assert call.response_payload == provider.payload
+    assert call.quota_debited_at is not None
+
+
+@pytest.mark.django_db
 def test_incomplete_provider_output_keeps_usage_and_failure_details():
     user = User.objects.create_user(email="incomplete@example.com", timezone="UTC")
     error = ProviderOutputError(
@@ -124,7 +335,7 @@ def test_incomplete_provider_output_keeps_usage_and_failure_details():
         ),
         mock.patch("uploads.services.presign_download", return_value="https://signed.invalid"),
         mock.patch("ai.services.analyze_food", side_effect=error),
-        pytest.raises(ProviderOutputError),
+        pytest.raises(ValidationError, match="invalid structured output"),
     ):
         create_food_analysis(
             user=user,
@@ -195,6 +406,22 @@ def test_provider_schema_declares_one_type_per_field():
     ]
 
     assert unions == []
+
+
+def test_provider_schema_allows_an_honest_empty_no_food_result():
+    schema = ProviderFoodAnalysis.model_json_schema()
+    items = schema["properties"]["items"]
+
+    assert set(schema["required"]) == {"no_food_visible", "items"}
+    assert "minItems" not in items
+    assert items["maxItems"] == 30
+    assert ProviderFoodAnalysis(no_food_visible=True, items=[]).items == []
+
+
+def test_provider_instructions_keep_no_food_and_zero_calorie_rules():
+    """Guard prompt rules; only a live provider call can prove model behavior."""
+    assert "true only when the image shows no food or drink" in FOOD_ANALYSIS_INSTRUCTIONS
+    assert "including zero-calorie drinks" in FOOD_ANALYSIS_INSTRUCTIONS
 
 
 def test_provider_schema_carries_no_prose():
