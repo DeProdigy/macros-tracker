@@ -184,7 +184,7 @@ describe("EntryEditorScreen", () => {
   it("logs a fresh copy to Today without photo analysis", async () => {
     render(<EntryEditorScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "LOG AGAIN" }));
+    fireEvent.press(screen.getByRole("button", { name: "Log again" }));
 
     await waitFor(() =>
       expect(mockCreateEntry).toHaveBeenCalledWith({
@@ -203,10 +203,10 @@ describe("EntryEditorScreen", () => {
   it("confirms deletion and returns to the source day", async () => {
     render(<EntryEditorScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "DELETE ENTRY" }));
+    fireEvent.press(screen.getByRole("button", { name: "Delete entry" }));
     expect(screen.getByText("This removes Lunch and 280 calories from this day.")).toBeTruthy();
     expect(screen.queryByText(/streak/i)).toBeNull();
-    fireEvent.press(screen.getByRole("button", { name: "DELETE" }));
+    fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(mockDeleteEntry).toHaveBeenCalledWith(7));
     expect(mockRemoveQueries).toHaveBeenCalledWith({ queryKey: ["entry", 7] });
