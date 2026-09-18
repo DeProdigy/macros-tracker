@@ -63,6 +63,7 @@ def test_a_zero_calorie_item_is_a_valid_result():
                 {
                     "name": "Sunkist Zero Sugar orange soda",
                     "portion": "1 can (12 fl oz)",
+                    "quantity": "1.00",
                     "calories": "0.00",
                     "protein_g": "0.00",
                     "fiber_g": "0.00",

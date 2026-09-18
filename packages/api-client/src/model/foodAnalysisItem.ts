@@ -11,6 +11,8 @@ export interface FoodAnalysisItem {
   name: string;
   /** @maxLength 100 */
   portion: string;
+  /** @pattern ^-?\d{0,6}(?:\.\d{0,2})?$ */
+  quantity: string;
   /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
   calories: string;
   /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */

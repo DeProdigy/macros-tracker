@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import {
+  analysisItemToEditable,
   isValidEditableItem,
   itemTotals,
   itemUpdateRequest,
@@ -163,4 +164,53 @@ it("updates cached entry and day totals immediately, then restores them on failu
   await waitFor(() => expect(result.current.update.isError).toBe(true));
   unmount();
   queryClient.clear();
+});
+
+it("carries the count the analysis returned into the editable row", () => {
+  // Before MAC-76 this hardcoded "1.00", because the provider schema had no
+  // quantity field and the model put the count in the name instead.
+  const item = analysisItemToEditable(
+    {
+      name: "boiled egg",
+      portion: "1 egg",
+      quantity: "4.00",
+      calories: "78.00",
+      protein_g: "6.30",
+      fiber_g: "0.00",
+    },
+    0,
+  );
+
+  expect(item.name).toBe("boiled egg");
+  expect(item.portion_label).toBe("1 egg");
+  expect(item.quantity).toBe("4.00");
+  // The row holds one egg. The totals multiply.
+  expect(item.calories).toBe("78.00");
+  expect(itemTotals([item]).calories).toBe("312.00");
+});
+
+it("totals a count the same way the API does", () => {
+  /*
+   * The twin of `test_totals_round_the_sum_once_rather_than_each_product` in
+   * apps/api/ai/tests/test_analysis_service.py.
+   *
+   * Three items of 1.5 units at 1.01 kcal. Summing the exact products gives
+   * 4.5450, which rounds once to 4.55. Rounding each product first gives 1.52
+   * three times, which sums to 4.56. The Review screen and the saved entry show
+   * the same number only while both sides pick the same order, and a penny that
+   * moves when you save is the kind of bug nobody can explain.
+   */
+  const item = {
+    clientId: "a",
+    name: "sauce",
+    portion_label: "1 tsp",
+    quantity: "1.50",
+    calories: "1.01",
+    protein_g: "0.00",
+    fiber_g: "0.00",
+  };
+
+  expect(itemTotals([item, { ...item, clientId: "b" }, { ...item, clientId: "c" }]).calories).toBe(
+    "4.55",
+  );
 });
