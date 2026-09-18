@@ -35,9 +35,11 @@ export type EditableFoodItem = {
  * stepping the quantity then multiplied four eggs rather than one, and
  * re-logging it from Recents did the same.
  *
- * MAC-76 gave the provider a place to put the count. The value comes from the
- * API now, already validated and rounded to two places by
- * `FoodAnalysisItemSerializer`, so nothing here needs to parse or clamp it.
+ * MAC-76 gave the provider a place to put the count, so the value comes from
+ * the API now. Two different things upstream make it safe to use as-is.
+ * `create_food_analysis` rounds it to two places with `_rounded_macro`, and
+ * `FoodAnalysisItemSerializer` then rejects anything outside 0.01 to
+ * 999999.99. Nothing here needs to parse, round, or clamp it.
  */
 export const analysisItemToEditable = (
   item: FoodAnalysisItem,
