@@ -66,6 +66,10 @@ const mockCameraPermission = ImagePicker.requestCameraPermissionsAsync as jest.M
   typeof ImagePicker.requestCameraPermissionsAsync
 >;
 
+// Shaped the way MAC-76 asks the provider to answer: a singular name, a
+// one-unit portion, a count, and per-unit macros. The chicken is two pieces at
+// 180 kcal each, so the totals are the same 540 the old fixture asserted, and
+// every assertion below still reads the number a user would see.
 const result = {
   analysis_id: 17,
   calories: "540.00",
@@ -74,14 +78,16 @@ const result = {
   items: [
     {
       name: "Chicken thigh",
-      portion: "2 pieces",
-      calories: "360.00",
-      protein_g: "38.00",
+      portion: "1 piece",
+      quantity: "2.00",
+      calories: "180.00",
+      protein_g: "19.00",
       fiber_g: "0.00",
     },
     {
       name: "Broccoli",
       portion: "1 cup",
+      quantity: "1.00",
       calories: "180.00",
       protein_g: "3.00",
       fiber_g: "8.00",
@@ -285,10 +291,10 @@ describe("PhotoScreen", () => {
       expect(mockSavePhotoAnalysis).toHaveBeenCalledWith(17, expect.any(Object), [
         {
           name: "Chicken thigh",
-          portion_label: "2 pieces",
-          quantity: "1.00",
-          calories: "360.00",
-          protein_g: "38.00",
+          portion_label: "1 piece",
+          quantity: "2.00",
+          calories: "180.00",
+          protein_g: "19.00",
           fiber_g: "0.00",
         },
         {
@@ -310,6 +316,22 @@ describe("PhotoScreen", () => {
     });
   });
 
+  it("starts the quantity control from the count the API returned", async () => {
+    // Before MAC-76 the mapper hardcoded "1.00", so a photo of two chicken
+    // pieces opened Review claiming one item whose macros were secretly two.
+    render(<PhotoScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
+    await waitFor(() => expect(screen.getByLabelText("Selected meal")).toBeTruthy());
+    fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
+
+    await waitFor(() => expect(screen.getByDisplayValue("Chicken thigh")).toBeTruthy());
+    expect(screen.getByLabelText("Item 1 quantity").props.value).toBe("2.00");
+    expect(screen.getByLabelText("Item 2 quantity").props.value).toBe("1.00");
+    // The item macros describe one piece, and the totals describe both.
+    expect(screen.getByLabelText("Item 1 calories").props.value).toBe("180.00");
+    expect(screen.getByText("540")).toBeTruthy();
+  });
+
   it("updates totals and the save payload after correction", async () => {
     render(<PhotoScreen />);
     fireEvent.press(screen.getByRole("button", { name: "CHOOSE LIBRARY" }));
@@ -317,7 +339,10 @@ describe("PhotoScreen", () => {
     fireEvent.press(screen.getByRole("button", { name: "Analyze photo" }));
     await waitFor(() => expect(screen.getByDisplayValue("Chicken thigh")).toBeTruthy());
 
-    fireEvent.changeText(screen.getByLabelText("Item 1 quantity"), "2");
+    // The model said two pieces. Correcting it to four makes 4 x 180 plus the
+    // broccoli, so the totals row has to follow the edit rather than the
+    // returned count.
+    fireEvent.changeText(screen.getByLabelText("Item 1 quantity"), "4");
     expect(screen.getByText("900")).toBeTruthy();
     fireEvent.press(screen.getByRole("button", { name: "Save to this day" }));
 
@@ -326,7 +351,7 @@ describe("PhotoScreen", () => {
         17,
         expect.any(Object),
         expect.arrayContaining([
-          expect.objectContaining({ name: "Chicken thigh", quantity: "2.00" }),
+          expect.objectContaining({ name: "Chicken thigh", quantity: "4.00" }),
         ]),
       ),
     );

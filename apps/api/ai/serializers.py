@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from .constants import FOOD_ANALYSIS_QUOTA_CODE, ROLLING_WINDOW
@@ -30,6 +32,22 @@ class FoodAnalysisRequestSerializer(serializers.Serializer):
 class FoodAnalysisItemSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     portion = serializers.CharField(max_length=100)
+    # The real floor on quantity, because the provider schema cannot carry one.
+    # See the note above `ProviderFoodItem`: `gt` renders a keyword the decoder
+    # grammar may reject, and a rejected keyword fails every call rather than
+    # one.
+    #
+    # The bounds match `ManualItemWriteSerializer` and
+    # `RecentEntryCreateSerializer` on purpose. `FoodItem.quantity` is
+    # `max_digits=8, decimal_places=2`, so 999999.99 is what the column holds.
+    # A tighter limit here would pass review and then fail on save, which is
+    # the worst place to learn a number was too large.
+    quantity = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        max_value=Decimal("999999.99"),
+    )
     calories = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
     protein_g = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
     fiber_g = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)

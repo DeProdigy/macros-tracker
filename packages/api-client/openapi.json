@@ -1743,6 +1743,11 @@
                         "type": "string",
                         "maxLength": 100
                     },
+                    "quantity": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$"
+                    },
                     "calories": {
                         "type": "string",
                         "format": "decimal",
@@ -1764,7 +1769,8 @@
                     "fiber_g",
                     "name",
                     "portion",
-                    "protein_g"
+                    "protein_g",
+                    "quantity"
                 ]
             },
             "FoodAnalysisQuotaError": {

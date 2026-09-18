@@ -223,6 +223,33 @@ def _rounded_macro(value: Any) -> str:
     return format(Decimal(str(value)).quantize(TWOPLACES, rounding=ROUND_HALF_UP), "f")
 
 
+def _analysis_totals(items: list[dict[str, Any]]) -> dict[str, str]:
+    """Total the items the way the Review screen does.
+
+    Each item now carries a per-unit macro and a count, so a total is the sum of
+    quantity times macro. Before MAC-76 the provider had no quantity field, this
+    summed the macros directly, and the two agreed only because quantity was
+    always 1.
+
+    The rounding order is the part worth guarding. This sums exact products and
+    quantizes once, because `itemTotals` in `apps/mobile/lib/entry-items.ts`
+    does the same in integer hundredths. Rounding each product first and then
+    summing is a different function: three items of 1.5 units at 1.01 kcal give
+    4.55 one way and 4.56 the other. Two screens showing the same user the same
+    total have to pick the same order, and a reviewer will not catch the drift
+    by reading either side alone.
+    """
+
+    def total(field: str) -> str:
+        exact = sum(
+            (Decimal(item["quantity"]) * Decimal(item[field]) for item in items),
+            Decimal("0"),
+        )
+        return format(exact.quantize(TWOPLACES, rounding=ROUND_HALF_UP), "f")
+
+    return {field: total(field) for field in ("calories", "protein_g", "fiber_g")}
+
+
 def create_food_analysis(*, user: User, photo_key: str, description: str) -> dict[str, Any]:
     """Retain an image, call the provider, and return only locally validated output."""
     from uploads.services import presign_download, retain_analysis_object
@@ -317,17 +344,13 @@ def create_food_analysis(*, user: User, photo_key: str, description: str) -> dic
                 **item,
                 **{
                     field: _rounded_macro(item[field])
-                    for field in ("calories", "protein_g", "fiber_g")
+                    for field in ("quantity", "calories", "protein_g", "fiber_g")
                 },
             }
             for item in candidate["items"]
         ]
         candidate["items"] = items
-        candidate.update(
-            calories=_rounded_macro(sum(Decimal(item["calories"]) for item in items)),
-            protein_g=_rounded_macro(sum(Decimal(item["protein_g"]) for item in items)),
-            fiber_g=_rounded_macro(sum(Decimal(item["fiber_g"]) for item in items)),
-        )
+        candidate.update(_analysis_totals(items))
         serializer = FoodAnalysisResultSerializer(data=candidate)
         serializer.is_valid(raise_exception=True)
     except (InvalidOperation, KeyError, TypeError, ValueError, ValidationError) as exc:

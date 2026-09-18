@@ -25,6 +25,22 @@ export type EditableFoodItem = {
   fiber_g: string;
 };
 
+/**
+ * Turn one analysis item into a row the Review screen can edit.
+ *
+ * `quantity` used to be hardcoded to "1.00", because the provider schema had
+ * no count field. The model worked around that by writing the count into the
+ * name, so a photo of four eggs arrived as one item called "4 boiled eggs"
+ * with four eggs' macros. The screen read correctly and the row was wrong:
+ * stepping the quantity then multiplied four eggs rather than one, and
+ * re-logging it from Recents did the same.
+ *
+ * MAC-76 gave the provider a place to put the count, so the value comes from
+ * the API now. Two different things upstream make it safe to use as-is.
+ * `create_food_analysis` rounds it to two places with `_rounded_macro`, and
+ * `FoodAnalysisItemSerializer` then rejects anything outside 0.01 to
+ * 999999.99. Nothing here needs to parse, round, or clamp it.
+ */
 export const analysisItemToEditable = (
   item: FoodAnalysisItem,
   index: number,
@@ -32,7 +48,7 @@ export const analysisItemToEditable = (
   clientId: `analysis-${index}`,
   name: item.name,
   portion_label: item.portion,
-  quantity: "1.00",
+  quantity: item.quantity,
   calories: item.calories,
   protein_g: item.protein_g,
   fiber_g: item.fiber_g,
