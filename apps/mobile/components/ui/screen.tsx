@@ -14,12 +14,20 @@
  *
  * The escape hatch is `edges`. The camera screen wants its preview to run under
  * the notch, so it passes `edges={["bottom"]}` and takes the top itself.
+ *
+ * `keyboard` also owns every way to close the keyboard (MAC-77). A tap on empty
+ * space closes it. A drag down a scrolling page closes it. The Done bar closes
+ * it from a number pad, which has no Return key. A screen that turns
+ * `keyboard` on gets all three, so no screen can leave a user stuck behind a
+ * keyboard they cannot dismiss.
  */
 
 import type { ReactNode } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -28,6 +36,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { KeyboardDoneBar } from "@/components/ui/keyboard-done-bar";
 import { colors } from "@/lib/theme";
 
 type Edge = "top" | "bottom";
@@ -42,8 +51,8 @@ type Props = {
   /** Wraps the content in a ScrollView. Off for screens that must not scroll. */
   scroll?: boolean;
   /**
-   * Lifts the content above the keyboard. Turn this on for any screen holding
-   * a TextInput.
+   * Lifts the content and the footer above the keyboard, and lets the user
+   * close it. Turn this on for any screen holding a TextInput.
    */
   keyboard?: boolean;
   /** Which insets to apply. Both by default. */
@@ -78,17 +87,39 @@ export function Screen({
   const body = scroll ? (
     <ScrollView
       contentContainerStyle={[{ paddingBottom: contentBottom }, contentStyle]}
+      // "interactive" lets a drag pull the keyboard down with the finger, the
+      // same as Messages. "handled" already closes it on a tap in empty space.
+      keyboardDismissMode="interactive"
       keyboardShouldPersistTaps="handled"
       style={styles.fill}
       testID={testID}
     >
       {children}
     </ScrollView>
+  ) : keyboard ? (
+    // A plain View ignores a tap on empty space, so the keyboard stays up. This
+    // Pressable closes it instead. Buttons and inputs inside still take their
+    // own taps first, because the innermost touchable wins the responder.
+    //
+    // `accessible={false}` stops VoiceOver from reading the whole page as one
+    // button and hiding everything inside it.
+    <Pressable
+      accessible={false}
+      onPress={Keyboard.dismiss}
+      style={[styles.fill, { paddingBottom: contentBottom }, contentStyle]}
+      testID={testID}
+    >
+      {children}
+    </Pressable>
   ) : (
     <View style={[styles.fill, { paddingBottom: contentBottom }, contentStyle]} testID={testID}>
       {children}
     </View>
   );
+
+  const footerView = footer ? (
+    <View style={[styles.footer, { paddingBottom: bottom }]}>{footer}</View>
+  ) : null;
 
   return (
     <View style={[styles.page, { paddingTop: top }, style]}>
@@ -96,16 +127,25 @@ export function Screen({
         // iOS and Android report the keyboard differently. iOS gives a frame
         // the view can pad against. Android resizes the window itself, so
         // padding it a second time pushes the content twice as far.
+        //
+        // The footer sits inside this view, not after it. The view pads only
+        // its own children, so a footer outside it stayed under the keyboard.
+        // That hid Next on every onboarding question (MAC-77).
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.fill}
+          testID="screen-keyboard-avoider"
         >
           {body}
+          {footerView}
+          <KeyboardDoneBar />
         </KeyboardAvoidingView>
       ) : (
-        body
+        <>
+          {body}
+          {footerView}
+        </>
       )}
-      {footer ? <View style={[styles.footer, { paddingBottom: bottom }]}>{footer}</View> : null}
     </View>
   );
 }

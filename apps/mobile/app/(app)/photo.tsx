@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Image, Linking, Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Button } from "@/components/ui/button";
+import { KEYBOARD_DONE_ID } from "@/components/ui/keyboard-done-bar";
 import { Screen } from "@/components/ui/screen";
 import { Body, Caption, ErrorText, Label, Numeral, Title } from "@/components/ui/text";
 
@@ -202,6 +203,9 @@ export default function PhotoScreen() {
           <Label style={styles.label}>DESCRIPTION (OPTIONAL)</Label>
           <TextInput
             accessibilityLabel="Meal description"
+            // Return adds a new line in a multiline input, so it cannot
+            // close the keyboard. The Done bar can.
+            inputAccessoryViewID={KEYBOARD_DONE_ID}
             multiline
             onChangeText={setDescription}
             placeholder="Chicken thighs, rice, and broccoli"

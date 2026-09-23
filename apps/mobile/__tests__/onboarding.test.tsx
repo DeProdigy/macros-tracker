@@ -3,6 +3,7 @@ import { ApiError, createTarget, createTargetProposal, getCurrentUser } from "@m
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import Onboarding from "../app/onboarding";
+import { KEYBOARD_DONE_ID } from "../components/ui/keyboard-done-bar";
 import { useSession } from "../lib/session";
 
 const mockPush = jest.fn();
@@ -95,6 +96,26 @@ describe("mandatory onboarding", () => {
     expect(screen.getByText("How old are you?")).toBeTruthy();
     expect(screen.queryByText("BACK")).toBeNull();
     expect(screen.queryByText(/not now/i)).toBeNull();
+  });
+
+  it("connects every number input to the keyboard Done bar", () => {
+    // iOS number pads have no Return key. Without the bar, nothing closes the
+    // keyboard on these questions (MAC-77).
+    render(<Onboarding />);
+    expect(screen.getByLabelText("Age in years").props.inputAccessoryViewID).toBe(KEYBOARD_DONE_ID);
+    fireEvent.changeText(screen.getByLabelText("Age in years"), "34");
+    fireEvent.press(screen.getByText("NEXT"));
+    fireEvent.press(screen.getByText("Male"));
+    fireEvent.press(screen.getByText("NEXT"));
+    for (const label of ["Height feet", "Height inches"]) {
+      expect(screen.getByLabelText(label).props.inputAccessoryViewID).toBe(KEYBOARD_DONE_ID);
+    }
+    fireEvent.changeText(screen.getByLabelText("Height feet"), "5");
+    fireEvent.changeText(screen.getByLabelText("Height inches"), "11");
+    fireEvent.press(screen.getByText("NEXT"));
+    expect(screen.getByLabelText("Weight in pounds").props.inputAccessoryViewID).toBe(
+      KEYBOARD_DONE_ID,
+    );
   });
 
   it("validates before advancing", () => {
