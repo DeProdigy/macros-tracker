@@ -28,5 +28,8 @@
         "EXPO_PUBLIC_API_URL": "https://api-production-2884.up.railway.app"
       }
     }
+  },
+  "submit": {
+    "production": {}
   }
 }
