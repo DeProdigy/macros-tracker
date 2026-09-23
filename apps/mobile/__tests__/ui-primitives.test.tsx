@@ -7,8 +7,8 @@
  */
 
 import { describe, expect, it, jest } from "@jest/globals";
-import { fireEvent, screen } from "@testing-library/react-native";
-import { Text } from "react-native";
+import { fireEvent, screen, within } from "@testing-library/react-native";
+import { Keyboard, Text, TextInput } from "react-native";
 
 import { Button } from "@/components/ui/button";
 import { Screen } from "@/components/ui/screen";
@@ -128,6 +128,49 @@ describe("Screen", () => {
     );
 
     expect(styleOf(screen.getByTestId("content")).paddingBottom).toBe(TEST_INSETS.bottom);
+  });
+
+  it("closes the keyboard on a tap in empty space", () => {
+    const dismiss = jest.spyOn(Keyboard, "dismiss");
+    renderWithProviders(
+      <Screen keyboard testID="content">
+        <TextInput accessibilityLabel="Age in years" />
+      </Screen>,
+    );
+
+    fireEvent.press(screen.getByTestId("content"));
+
+    expect(dismiss).toHaveBeenCalled();
+    dismiss.mockRestore();
+  });
+
+  it("lifts the footer with the content when the keyboard opens", () => {
+    renderWithProviders(
+      <Screen footer={<Button onPress={jest.fn()} title="Next" />} keyboard>
+        <Text>How old are you?</Text>
+      </Screen>,
+    );
+
+    // A footer outside the keyboard-avoiding view stays under the keyboard.
+    // That hid Next on every onboarding question (MAC-77).
+    const avoider = screen.getByTestId("screen-keyboard-avoider");
+    expect(within(avoider).getByText("NEXT")).toBeTruthy();
+  });
+
+  it("lets a drag close the keyboard only on a keyboard screen", () => {
+    renderWithProviders(
+      <>
+        <Screen keyboard scroll testID="with-keyboard">
+          <TextInput accessibilityLabel="Food name" />
+        </Screen>
+        <Screen scroll testID="without-keyboard">
+          <Text>Settings</Text>
+        </Screen>
+      </>,
+    );
+
+    expect(screen.getByTestId("with-keyboard").props.keyboardDismissMode).toBe("interactive");
+    expect(screen.getByTestId("without-keyboard").props.keyboardDismissMode).toBe("none");
   });
 });
 

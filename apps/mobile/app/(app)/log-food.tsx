@@ -299,6 +299,7 @@ export default function LogFoodScreen() {
                       </Pressable>
                       <TextInput
                         accessibilityLabel="Recent quantity"
+                        returnKeyType="done"
                         keyboardType="decimal-pad"
                         value={recentQuantity}
                         onChangeText={(value) => {
@@ -384,6 +385,7 @@ function Field({
       <Label style={styles.label}>{label}</Label>
       <TextInput
         accessibilityLabel={label}
+        returnKeyType="done"
         keyboardType="decimal-pad"
         onChangeText={onChange}
         style={styles.input}

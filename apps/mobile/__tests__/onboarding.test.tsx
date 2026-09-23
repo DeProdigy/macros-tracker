@@ -97,6 +97,25 @@ describe("mandatory onboarding", () => {
     expect(screen.queryByText(/not now/i)).toBeNull();
   });
 
+  it("gives every number input its own Done button", () => {
+    // iOS number pads have no Return key. `returnKeyType="done"` makes React
+    // Native add a Done toolbar to each input (MAC-77). A shared accessory
+    // view bound only to the first input, so this walks every question.
+    render(<Onboarding />);
+    expect(screen.getByLabelText("Age in years").props.returnKeyType).toBe("done");
+    fireEvent.changeText(screen.getByLabelText("Age in years"), "34");
+    fireEvent.press(screen.getByText("NEXT"));
+    fireEvent.press(screen.getByText("Male"));
+    fireEvent.press(screen.getByText("NEXT"));
+    for (const label of ["Height feet", "Height inches"]) {
+      expect(screen.getByLabelText(label).props.returnKeyType).toBe("done");
+    }
+    fireEvent.changeText(screen.getByLabelText("Height feet"), "5");
+    fireEvent.changeText(screen.getByLabelText("Height inches"), "11");
+    fireEvent.press(screen.getByText("NEXT"));
+    expect(screen.getByLabelText("Weight in pounds").props.returnKeyType).toBe("done");
+  });
+
   it("validates before advancing", () => {
     render(<Onboarding />);
     fireEvent.changeText(screen.getByLabelText("Age in years"), "12");

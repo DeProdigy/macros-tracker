@@ -329,6 +329,7 @@ function QuestionControl({
       <TextInput
         accessibilityLabel="Age in years"
         autoFocus
+        returnKeyType="done"
         keyboardType="number-pad"
         maxLength={3}
         onChangeText={(value) => update("age", value)}
@@ -354,6 +355,7 @@ function QuestionControl({
       <View style={styles.inline}>
         <TextInput
           accessibilityLabel="Height feet"
+          returnKeyType="done"
           keyboardType="number-pad"
           maxLength={1}
           onChangeText={(value) => update("heightFeet", value)}
@@ -364,6 +366,7 @@ function QuestionControl({
         />
         <TextInput
           accessibilityLabel="Height inches"
+          returnKeyType="done"
           keyboardType="number-pad"
           maxLength={2}
           onChangeText={(value) => update("heightInches", value)}
@@ -378,6 +381,7 @@ function QuestionControl({
     return (
       <TextInput
         accessibilityLabel="Weight in pounds"
+        returnKeyType="done"
         keyboardType="decimal-pad"
         maxLength={6}
         onChangeText={(value) => update("weight", value)}

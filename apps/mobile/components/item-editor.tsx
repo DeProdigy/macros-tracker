@@ -119,6 +119,7 @@ function NumberField({
       <Label style={styles.numberLabel}>{title}</Label>
       <TextInput
         accessibilityLabel={label}
+        returnKeyType="done"
         keyboardType="decimal-pad"
         onChangeText={onChange}
         style={styles.input}
