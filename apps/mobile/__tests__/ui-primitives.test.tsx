@@ -11,7 +11,6 @@ import { fireEvent, screen, within } from "@testing-library/react-native";
 import { Keyboard, Text, TextInput } from "react-native";
 
 import { Button } from "@/components/ui/button";
-import { KEYBOARD_DONE_ID } from "@/components/ui/keyboard-done-bar";
 import { Screen } from "@/components/ui/screen";
 import { Body, Display, Label } from "@/components/ui/text";
 import { numeralScaleCap, tapTarget, type } from "@/lib/theme";
@@ -158,28 +157,20 @@ describe("Screen", () => {
     expect(within(avoider).getByText("NEXT")).toBeTruthy();
   });
 
-  it("offers a Done button for keyboards with no Return key", () => {
-    const dismiss = jest.spyOn(Keyboard, "dismiss");
+  it("lets a drag close the keyboard only on a keyboard screen", () => {
     renderWithProviders(
-      <Screen keyboard>
-        <TextInput inputAccessoryViewID={KEYBOARD_DONE_ID} keyboardType="number-pad" />
-      </Screen>,
+      <>
+        <Screen keyboard scroll testID="with-keyboard">
+          <TextInput accessibilityLabel="Food name" />
+        </Screen>
+        <Screen scroll testID="without-keyboard">
+          <Text>Settings</Text>
+        </Screen>
+      </>,
     );
 
-    fireEvent.press(screen.getByLabelText("Close keyboard"));
-
-    expect(dismiss).toHaveBeenCalled();
-    dismiss.mockRestore();
-  });
-
-  it("adds no Done button to a screen without text input", () => {
-    renderWithProviders(
-      <Screen>
-        <Text>Today</Text>
-      </Screen>,
-    );
-
-    expect(screen.queryByLabelText("Close keyboard")).toBeNull();
+    expect(screen.getByTestId("with-keyboard").props.keyboardDismissMode).toBe("interactive");
+    expect(screen.getByTestId("without-keyboard").props.keyboardDismissMode).toBe("none");
   });
 });
 

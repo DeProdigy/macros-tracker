@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
-import { KEYBOARD_DONE_ID } from "@/components/ui/keyboard-done-bar";
 import { Caption, Label } from "@/components/ui/text";
 import type { EditableFoodItem } from "@/lib/entry-items";
 import { colors, radius, space, tapTarget, type } from "@/lib/theme";
@@ -120,7 +119,7 @@ function NumberField({
       <Label style={styles.numberLabel}>{title}</Label>
       <TextInput
         accessibilityLabel={label}
-        inputAccessoryViewID={KEYBOARD_DONE_ID}
+        returnKeyType="done"
         keyboardType="decimal-pad"
         onChangeText={onChange}
         style={styles.input}

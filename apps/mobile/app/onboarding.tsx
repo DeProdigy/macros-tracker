@@ -23,7 +23,6 @@ import { useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Button } from "@/components/ui/button";
-import { KEYBOARD_DONE_ID } from "@/components/ui/keyboard-done-bar";
 import { Screen } from "@/components/ui/screen";
 import { Body, Caption, ErrorText, Label, Muted, Numeral, Title } from "@/components/ui/text";
 import { needsOnboarding } from "@/lib/onboarding";
@@ -330,7 +329,7 @@ function QuestionControl({
       <TextInput
         accessibilityLabel="Age in years"
         autoFocus
-        inputAccessoryViewID={KEYBOARD_DONE_ID}
+        returnKeyType="done"
         keyboardType="number-pad"
         maxLength={3}
         onChangeText={(value) => update("age", value)}
@@ -356,7 +355,7 @@ function QuestionControl({
       <View style={styles.inline}>
         <TextInput
           accessibilityLabel="Height feet"
-          inputAccessoryViewID={KEYBOARD_DONE_ID}
+          returnKeyType="done"
           keyboardType="number-pad"
           maxLength={1}
           onChangeText={(value) => update("heightFeet", value)}
@@ -367,7 +366,7 @@ function QuestionControl({
         />
         <TextInput
           accessibilityLabel="Height inches"
-          inputAccessoryViewID={KEYBOARD_DONE_ID}
+          returnKeyType="done"
           keyboardType="number-pad"
           maxLength={2}
           onChangeText={(value) => update("heightInches", value)}
@@ -382,7 +381,7 @@ function QuestionControl({
     return (
       <TextInput
         accessibilityLabel="Weight in pounds"
-        inputAccessoryViewID={KEYBOARD_DONE_ID}
+        returnKeyType="done"
         keyboardType="decimal-pad"
         maxLength={6}
         onChangeText={(value) => update("weight", value)}

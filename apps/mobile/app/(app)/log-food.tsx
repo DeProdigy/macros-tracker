@@ -12,7 +12,6 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Button } from "@/components/ui/button";
-import { KEYBOARD_DONE_ID } from "@/components/ui/keyboard-done-bar";
 import { Screen } from "@/components/ui/screen";
 import { Body, Caption, ErrorText, Heading, Label, Muted, Title } from "@/components/ui/text";
 
@@ -300,7 +299,7 @@ export default function LogFoodScreen() {
                       </Pressable>
                       <TextInput
                         accessibilityLabel="Recent quantity"
-                        inputAccessoryViewID={KEYBOARD_DONE_ID}
+                        returnKeyType="done"
                         keyboardType="decimal-pad"
                         value={recentQuantity}
                         onChangeText={(value) => {
@@ -386,7 +385,7 @@ function Field({
       <Label style={styles.label}>{label}</Label>
       <TextInput
         accessibilityLabel={label}
-        inputAccessoryViewID={KEYBOARD_DONE_ID}
+        returnKeyType="done"
         keyboardType="decimal-pad"
         onChangeText={onChange}
         style={styles.input}

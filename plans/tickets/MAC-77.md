@@ -103,3 +103,27 @@ generated client change.
 
 Before and after of an onboarding question with the keyboard open, from the iOS
 simulator.
+
+## Review changes (23 Sep 2026)
+
+Alex's review found a P1 in the shared Done bar. On Fabric,
+`RCTInputAccessoryComponentView` binds once, when it mounts, to the first input
+that carries its ID. It never rebinds. `Screen` mounts once for all six
+onboarding questions, so the bar bound to the age input. Height, weight, and
+every macro field got no Done button.
+
+The fix removes `KeyboardDoneBar`. Every number input now sets
+`returnKeyType="done"`. React Native then builds a native toolbar with a Done
+button for each input, and the Done button ends editing. Each input owns its
+toolbar, so nothing can bind to the wrong input. It is also less code.
+
+The plan above rejected `returnKeyType` because a number pad has no Return key.
+That reason was wrong. `RCTTextInputComponentView` checks for exactly this case.
+When a number or decimal pad has a `returnKeyType` such as `done`, it adds its
+own toolbar with that button.
+
+The photo description is multiline, so Return adds a new line there. That
+screen scrolls, so a tap on empty space or a drag down closes its keyboard.
+
+Copilot found that every scrolling `Screen` got drag-to-close, even without
+`keyboard`. The drag now depends on `keyboard`, so the prop keeps one meaning.

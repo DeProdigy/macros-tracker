@@ -15,11 +15,19 @@
  * The escape hatch is `edges`. The camera screen wants its preview to run under
  * the notch, so it passes `edges={["bottom"]}` and takes the top itself.
  *
- * `keyboard` also owns every way to close the keyboard (MAC-77). A tap on empty
- * space closes it. A drag down a scrolling page closes it. The Done bar closes
- * it from a number pad, which has no Return key. A screen that turns
- * `keyboard` on gets all three, so no screen can leave a user stuck behind a
- * keyboard they cannot dismiss.
+ * `keyboard` also owns the ways to close the keyboard from the page (MAC-77). A
+ * tap on empty space closes it. A drag down a scrolling page closes it.
+ *
+ * A number pad has no Return key, so each number input also sets
+ * `returnKeyType="done"`. On iOS, React Native then gives that input its own
+ * native toolbar with a Done button. The input owns its toolbar, so it cannot
+ * lose it.
+ *
+ * MAC-77 first used one shared `InputAccessoryView` for every input on the
+ * screen. That was wrong on Fabric. The view binds, once, to the first input
+ * with its ID when it mounts. Every later input, such as the height and weight
+ * questions, got no Done button. One shared accessory view is the right choice
+ * only for a screen that holds one input for its whole life.
  */
 
 import type { ReactNode } from "react";
@@ -36,7 +44,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { KeyboardDoneBar } from "@/components/ui/keyboard-done-bar";
 import { colors } from "@/lib/theme";
 
 type Edge = "top" | "bottom";
@@ -89,7 +96,8 @@ export function Screen({
       contentContainerStyle={[{ paddingBottom: contentBottom }, contentStyle]}
       // "interactive" lets a drag pull the keyboard down with the finger, the
       // same as Messages. "handled" already closes it on a tap in empty space.
-      keyboardDismissMode="interactive"
+      // Only a `keyboard` screen gets the drag, so the prop keeps one meaning.
+      keyboardDismissMode={keyboard ? "interactive" : "none"}
       keyboardShouldPersistTaps="handled"
       style={styles.fill}
       testID={testID}
@@ -138,7 +146,6 @@ export function Screen({
         >
           {body}
           {footerView}
-          <KeyboardDoneBar />
         </KeyboardAvoidingView>
       ) : (
         <>
